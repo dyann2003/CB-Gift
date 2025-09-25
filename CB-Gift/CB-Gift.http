@@ -1,0 +1,6 @@
+@CB_Gift_HostAddress = http://localhost:5216
+
+GET {{CB_Gift_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
