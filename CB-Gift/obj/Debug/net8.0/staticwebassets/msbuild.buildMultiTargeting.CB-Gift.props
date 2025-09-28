@@ -1,0 +1,3 @@
+﻿<Project>
+  <Import Project="..\build\CB-Gift.props" />
+</Project>
