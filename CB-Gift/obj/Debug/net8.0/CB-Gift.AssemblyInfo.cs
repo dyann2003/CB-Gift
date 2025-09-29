@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("CB-Gift")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+883777052cc0a38db487a90eb9511ae08148ed1e")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+39ca7957114cf43c6a4bd675eb7d1d4dea196b32")]
 [assembly: System.Reflection.AssemblyProductAttribute("CB-Gift")]
 [assembly: System.Reflection.AssemblyTitleAttribute("CB-Gift")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
