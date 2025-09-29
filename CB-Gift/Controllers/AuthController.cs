@@ -1,6 +1,7 @@
-﻿using CB_Gift.Data;          
-using CB_Gift.DTOs;         
-using CB_Gift.Services;      
+using CB_Gift.Data;
+using CB_Gift.DTOs;
+using CB_Gift.Services;
+using CB_Gift.Services.IService;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -16,18 +17,16 @@ public class AuthController : ControllerBase
     private readonly SignInManager<AppUser> _signIn;
     private readonly UserManager<AppUser> _users;
     private readonly ITokenService _tokens;
+    private readonly IAccountService _accountService;
     private readonly IConfiguration _config;
 
-    public AuthController(
-        SignInManager<AppUser> signIn,
-        UserManager<AppUser> users,
-        ITokenService tokens,
-        IConfiguration config)
+    public AuthController(SignInManager<AppUser> signIn, UserManager<AppUser> users, ITokenService tokens, IConfiguration config, IAccountService accountService)
     {
         _signIn = signIn;
         _users = users;
         _tokens = tokens;
         _config = config;
+        _accountService = accountService;
     }
 
     // POST: /api/auth/login
@@ -95,5 +94,19 @@ public class AuthController : ControllerBase
             });
 
         return Ok(new { message = "Password changed." });
+    }
+
+    // POST: /api/Auth/Register
+    //[Authorize(Roles = "Manager")]
+    [HttpPost("register")]
+    public async Task<IActionResult> Register([FromBody] RegisterRequestDto request)
+    {
+        var result = await _accountService.RegisterAsync(request);
+        if (!result.Success)
+        {
+            return BadRequest(result.Message);
+        }
+
+        return Ok(result.Data);
     }
 }
