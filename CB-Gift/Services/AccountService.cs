@@ -83,22 +83,43 @@ namespace CB_Gift.Services
 
         private async Task SendWelcomeEmailAsync(string email, string password)
         {
-            var smtpServer = "smtp.gmail.com";
-            var smtpPort = 587;
-            var senderEmail = _config["Email:Sender"];
-            var senderPassword = _config["Email:Password"];
-
             var subject = "Welcome to CB-Gift";
             var body = $@"
-                <h2>Welcome to CB-Gift!</h2>
-                <p>Dear {email},</p>
-                <p>Your account has been successfully created.</p>
-                <p><strong>Email:</strong> {email}</p>
-                <p><strong>Password:</strong> {password}</p>
-                <p>Please change your password after logging in for the first time.</p>
-                <br/>
-                <p>Best regards,</p>
-                <p>The Team</p>";
+        <h2>Welcome to CB-Gift!</h2>
+        <p>Dear {email},</p>
+        <p>Your account has been successfully created.</p>
+        <p><strong>Email:</strong> {email}</p>
+        <p><strong>Password:</strong> {password}</p>
+        <p>Please change your password after logging in for the first time.</p>
+        <br/>
+        <p>Best regards,</p>
+        <p>The CB-Gift Team</p>";
+
+            await SendEmailAsync(email, subject, body);
+        }
+
+        public async Task SendResetPasswordEmailAsync(string email, string resetLink)
+        {
+            var subject = "Reset your CB-Gift password";
+            var body = $@"
+        <h2>Password Reset Request</h2>
+        <p>Dear {email},</p>
+        <p>We received a request to reset your password. Please click the link below:</p>
+        <p><a href='{resetLink}'>Reset Password</a></p>
+        <p>If you did not request this, please ignore this email.</p>
+        <br/>
+        <p>Best regards,</p>
+        <p>The CB-Gift Team</p>";
+
+            await SendEmailAsync(email, subject, body);
+        }
+
+        private async Task SendEmailAsync(string toEmail, string subject, string body)
+        {
+            var smtpServer = _config["Email:SmtpServer"] ?? "smtp.gmail.com";
+            var smtpPort = int.Parse(_config["Email:SmtpPort"] ?? "587");
+            var senderEmail = _config["Email:Sender"];
+            var senderPassword = _config["Email:Password"];
 
             using var client = new SmtpClient(smtpServer, smtpPort)
             {
@@ -108,14 +129,16 @@ namespace CB_Gift.Services
 
             var mailMessage = new MailMessage
             {
-                From = new MailAddress(senderEmail),
+                From = new MailAddress(senderEmail, "CB-Gift Support"),
                 Subject = subject,
                 Body = body,
                 IsBodyHtml = true,
             };
-            mailMessage.To.Add(email);
+            mailMessage.To.Add(toEmail);
 
             await client.SendMailAsync(mailMessage);
         }
+
+
     }
 }
