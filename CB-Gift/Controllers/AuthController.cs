@@ -1,4 +1,4 @@
-using CB_Gift.Data;
+﻿using CB_Gift.Data;
 using CB_Gift.DTOs;
 using CB_Gift.Services.IService;
 using Microsoft.AspNetCore.Authorization;
@@ -111,4 +111,53 @@ public class AuthController : ControllerBase
 
         return Ok(result.Data);
     }
+
+    // POST: /api/auth/forgot-password
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
+    {
+        var user = await _users.FindByEmailAsync(dto.Email);
+        if (user == null || !(await _users.IsEmailConfirmedAsync(user)))
+        {
+            return BadRequest(new { message = "User not found or email not confirmed" });
+        }
+
+        var token = await _users.GeneratePasswordResetTokenAsync(user);
+
+        // Link reset (frontend nhận link này để cho user nhập password mới)
+        var resetLink = $"{_config["App:ClientUrl"]}/reset-password?email={Uri.EscapeDataString(dto.Email)}&token={Uri.EscapeDataString(token)}";
+
+        await _accountService.SendResetPasswordEmailAsync(dto.Email, resetLink);
+
+        return Ok(new
+        {
+            message = "Password reset link has been sent to your email.",
+            token = token,
+            resetLink = resetLink
+        });
+    }
+
+    // POST: /api/auth/reset-password
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
+    {
+        var user = await _users.FindByEmailAsync(dto.Email);
+        if (user == null) return BadRequest(new { message = "User not found" });
+
+        var result = await _users.ResetPasswordAsync(user, dto.Token, dto.NewPassword);
+
+        if (!result.Succeeded)
+        {
+            return BadRequest(new
+            {
+                message = "Reset password failed",
+                errors = result.Errors.Select(e => e.Description)
+            });
+        }
+
+        return Ok(new { message = "Password has been reset successfully." });
+    }
+
 }
