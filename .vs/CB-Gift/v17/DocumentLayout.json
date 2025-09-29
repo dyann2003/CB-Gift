@@ -7,6 +7,14 @@
       "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\services\\accountservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
+      "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|c:\\users\\nduya\\onedrive\\documents\\github\\cb-gift\\cb-gift\\properties\\launchsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\properties\\launchsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|c:\\users\\nduya\\onedrive\\documents\\github\\cb-gift\\cb-gift\\dtos\\registerrequestdto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\dtos\\registerrequestdto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|c:\\users\\nduya\\onedrive\\documents\\github\\cb-gift\\cb-gift\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
       "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
     },
@@ -29,10 +37,6 @@
     {
       "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|c:\\users\\nduya\\onedrive\\documents\\github\\cb-gift\\cb-gift\\dtos\\registerresponsedto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\dtos\\registerresponsedto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|c:\\users\\nduya\\onedrive\\documents\\github\\cb-gift\\cb-gift\\dtos\\registerrequestdto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\dtos\\registerrequestdto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|c:\\users\\nduya\\onedrive\\documents\\github\\cb-gift\\cb-gift\\dtos\\changepassworddto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -82,11 +86,24 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 1,
+          "SelectedChildIndex": 2,
           "Children": [
             {
               "$type": "Bookmark",
-              "Name": "ST:0:0:{cce594b6-0c39-4442-ba28-10c64ac7e89f}"
+              "Name": "ST:0:0:{1c4feeaa-4718-4aa9-859d-94ce25d182ba}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "launchSettings.json",
+              "DocumentMoniker": "C:\\Users\\nduya\\OneDrive\\Documents\\GitHub\\CB-Gift\\CB-Gift\\Properties\\launchSettings.json",
+              "RelativeDocumentMoniker": "CB-Gift\\Properties\\launchSettings.json",
+              "ToolTip": "C:\\Users\\nduya\\OneDrive\\Documents\\GitHub\\CB-Gift\\CB-Gift\\Properties\\launchSettings.json",
+              "RelativeToolTip": "CB-Gift\\Properties\\launchSettings.json",
+              "ViewState": "AgIAABgAAAAAAAAAAAAAABAAAAAwAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2025-09-28T16:54:16.819Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
@@ -96,14 +113,14 @@
               "RelativeDocumentMoniker": "CB-Gift\\Services\\AccountService.cs",
               "ToolTip": "C:\\Users\\nduya\\OneDrive\\Documents\\GitHub\\CB-Gift\\CB-Gift\\Services\\AccountService.cs",
               "RelativeToolTip": "CB-Gift\\Services\\AccountService.cs",
-              "ViewState": "AgIAAB4AAAAAAAAAAAAYwDIAAAASAAAAAAAAAA==",
+              "ViewState": "AgIAADkAAAAAAAAAAAAYwFEAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-09-28T15:38:05.218Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
+              "DocumentIndex": 7,
               "Title": "ServiceResult.cs",
               "DocumentMoniker": "C:\\Users\\nduya\\OneDrive\\Documents\\GitHub\\CB-Gift\\CB-Gift\\DTOs\\ServiceResult.cs",
               "RelativeDocumentMoniker": "CB-Gift\\DTOs\\ServiceResult.cs",
@@ -111,23 +128,25 @@
               "RelativeToolTip": "CB-Gift\\DTOs\\ServiceResult.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAArAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T15:36:07.083Z"
+              "WhenOpened": "2025-09-28T15:36:07.083Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 7,
+              "DocumentIndex": 2,
               "Title": "RegisterRequestDto.cs",
               "DocumentMoniker": "C:\\Users\\nduya\\OneDrive\\Documents\\GitHub\\CB-Gift\\CB-Gift\\DTOs\\RegisterRequestDto.cs",
               "RelativeDocumentMoniker": "CB-Gift\\DTOs\\RegisterRequestDto.cs",
               "ToolTip": "C:\\Users\\nduya\\OneDrive\\Documents\\GitHub\\CB-Gift\\CB-Gift\\DTOs\\RegisterRequestDto.cs",
               "RelativeToolTip": "CB-Gift\\DTOs\\RegisterRequestDto.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAQAAAApAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAYAAAASAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T15:35:49.143Z"
+              "WhenOpened": "2025-09-28T15:35:49.143Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 5,
               "Title": "IAccountService.cs",
               "DocumentMoniker": "C:\\Users\\nduya\\OneDrive\\Documents\\GitHub\\CB-Gift\\CB-Gift\\Services\\IService\\IAccountService.cs",
               "RelativeDocumentMoniker": "CB-Gift\\Services\\IService\\IAccountService.cs",
@@ -135,11 +154,12 @@
               "RelativeToolTip": "CB-Gift\\Services\\IService\\IAccountService.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAoAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T15:35:01.152Z"
+              "WhenOpened": "2025-09-28T15:35:01.152Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 3,
               "Title": "appsettings.json",
               "DocumentMoniker": "C:\\Users\\nduya\\OneDrive\\Documents\\GitHub\\CB-Gift\\CB-Gift\\appsettings.json",
               "RelativeDocumentMoniker": "CB-Gift\\appsettings.json",
@@ -147,11 +167,12 @@
               "RelativeToolTip": "CB-Gift\\appsettings.json",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAwBYAAAAkAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
-              "WhenOpened": "2025-09-28T10:19:22.016Z"
+              "WhenOpened": "2025-09-28T10:19:22.016Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 4,
               "Title": "AuthController.cs",
               "DocumentMoniker": "C:\\Users\\nduya\\OneDrive\\Documents\\GitHub\\CB-Gift\\CB-Gift\\Controllers\\AuthController.cs",
               "RelativeDocumentMoniker": "CB-Gift\\Controllers\\AuthController.cs",
@@ -159,11 +180,12 @@
               "RelativeToolTip": "CB-Gift\\Controllers\\AuthController.cs",
               "ViewState": "AgIAAAEAAAAAAAAAAAAUwAsAAAAbAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T11:03:56.311Z"
+              "WhenOpened": "2025-09-28T11:03:56.311Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 6,
               "Title": "Program.cs",
               "DocumentMoniker": "C:\\Users\\nduya\\OneDrive\\Documents\\GitHub\\CB-Gift\\CB-Gift\\Program.cs",
               "RelativeDocumentMoniker": "CB-Gift\\Program.cs",
@@ -171,11 +193,12 @@
               "RelativeToolTip": "CB-Gift\\Program.cs",
               "ViewState": "AgIAAEYAAAAAAAAAAAAiwFQAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T03:24:26.588Z"
+              "WhenOpened": "2025-09-28T03:24:26.588Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 6,
+              "DocumentIndex": 8,
               "Title": "RegisterResponseDto.cs",
               "DocumentMoniker": "C:\\Users\\nduya\\OneDrive\\Documents\\GitHub\\CB-Gift\\CB-Gift\\DTOs\\RegisterResponseDto.cs",
               "RelativeDocumentMoniker": "CB-Gift\\DTOs\\RegisterResponseDto.cs",
@@ -183,11 +206,12 @@
               "RelativeToolTip": "CB-Gift\\DTOs\\RegisterResponseDto.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAYAAAArAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T15:39:18.384Z"
+              "WhenOpened": "2025-09-28T15:39:18.384Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 8,
+              "DocumentIndex": 9,
               "Title": "ChangePasswordDto.cs",
               "DocumentMoniker": "C:\\Users\\nduya\\OneDrive\\Documents\\GitHub\\CB-Gift\\CB-Gift\\DTOs\\ChangePasswordDto.cs",
               "RelativeDocumentMoniker": "CB-Gift\\DTOs\\ChangePasswordDto.cs",
@@ -195,11 +219,12 @@
               "RelativeToolTip": "CB-Gift\\DTOs\\ChangePasswordDto.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T11:09:21.198Z"
+              "WhenOpened": "2025-09-28T11:09:21.198Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 9,
+              "DocumentIndex": 10,
               "Title": "WeatherForecast.cs",
               "DocumentMoniker": "C:\\Users\\nduya\\OneDrive\\Documents\\GitHub\\CB-Gift\\CB-Gift\\WeatherForecast.cs",
               "RelativeDocumentMoniker": "CB-Gift\\WeatherForecast.cs",
@@ -207,11 +232,12 @@
               "RelativeToolTip": "CB-Gift\\WeatherForecast.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T15:20:38.238Z"
+              "WhenOpened": "2025-09-28T15:20:38.238Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 12,
+              "DocumentIndex": 13,
               "Title": "AuthResponse.cs",
               "DocumentMoniker": "C:\\Users\\nduya\\OneDrive\\Documents\\GitHub\\CB-Gift\\CB-Gift\\DTOs\\AuthResponse.cs",
               "RelativeDocumentMoniker": "CB-Gift\\DTOs\\AuthResponse.cs",
@@ -223,7 +249,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 10,
+              "DocumentIndex": 11,
               "Title": "AppUser.cs",
               "DocumentMoniker": "C:\\Users\\nduya\\OneDrive\\Documents\\GitHub\\CB-Gift\\CB-Gift\\Data\\AppUser.cs",
               "RelativeDocumentMoniker": "CB-Gift\\Data\\AppUser.cs",
@@ -231,11 +257,12 @@
               "RelativeToolTip": "CB-Gift\\Data\\AppUser.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAgAAAAFAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T08:41:17.532Z"
+              "WhenOpened": "2025-09-28T08:41:17.532Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 11,
+              "DocumentIndex": 12,
               "Title": "CBGiftDbContext.cs",
               "DocumentMoniker": "C:\\Users\\nduya\\OneDrive\\Documents\\GitHub\\CB-Gift\\CB-Gift\\Data\\CBGiftDbContext.cs",
               "RelativeDocumentMoniker": "CB-Gift\\Data\\CBGiftDbContext.cs",
@@ -247,7 +274,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 13,
+              "DocumentIndex": 14,
               "Title": "WeatherForecastController.cs",
               "DocumentMoniker": "C:\\Users\\nduya\\OneDrive\\Documents\\GitHub\\CB-Gift\\CB-Gift\\Controllers\\WeatherForecastController.cs",
               "RelativeDocumentMoniker": "CB-Gift\\Controllers\\WeatherForecastController.cs",
@@ -259,7 +286,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 15,
+              "DocumentIndex": 16,
               "Title": "LoginDto.cs",
               "DocumentMoniker": "C:\\Users\\nduya\\OneDrive\\Documents\\GitHub\\CB-Gift\\CB-Gift\\DTOs\\LoginDto.cs",
               "RelativeDocumentMoniker": "CB-Gift\\DTOs\\LoginDto.cs",
@@ -271,7 +298,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 14,
+              "DocumentIndex": 15,
               "Title": "CB-Gift.http",
               "DocumentMoniker": "C:\\Users\\nduya\\OneDrive\\Documents\\GitHub\\CB-Gift\\CB-Gift\\CB-Gift.http",
               "RelativeDocumentMoniker": "CB-Gift\\CB-Gift.http",
@@ -283,7 +310,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 16,
+              "DocumentIndex": 17,
               "Title": "JwtTokenService.cs",
               "DocumentMoniker": "C:\\Users\\nduya\\OneDrive\\Documents\\GitHub\\CB-Gift\\CB-Gift\\Services\\JwtTokenService.cs",
               "RelativeDocumentMoniker": "CB-Gift\\Services\\JwtTokenService.cs",
@@ -295,7 +322,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 17,
+              "DocumentIndex": 18,
               "Title": "ITokenService.cs",
               "DocumentMoniker": "C:\\Users\\nduya\\OneDrive\\Documents\\GitHub\\CB-Gift\\CB-Gift\\Services\\ITokenService.cs",
               "RelativeDocumentMoniker": "CB-Gift\\Services\\ITokenService.cs",
