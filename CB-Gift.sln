@@ -1,9 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.14.36429.23 d17.14
+VisualStudioVersion = 17.14.36429.23
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CB-Gift", "CB-Gift\CB-Gift.csproj", "{606647A2-C454-4205-A20C-FD3A2822D4A7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CBGift.Tests", "CBGift.Tests\CBGift.Tests.csproj", "{D0B7BB6A-4F65-43C4-9E41-D3F82077A9D6}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +17,10 @@ Global
 		{606647A2-C454-4205-A20C-FD3A2822D4A7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{606647A2-C454-4205-A20C-FD3A2822D4A7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{606647A2-C454-4205-A20C-FD3A2822D4A7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D0B7BB6A-4F65-43C4-9E41-D3F82077A9D6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D0B7BB6A-4F65-43C4-9E41-D3F82077A9D6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D0B7BB6A-4F65-43C4-9E41-D3F82077A9D6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D0B7BB6A-4F65-43C4-9E41-D3F82077A9D6}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

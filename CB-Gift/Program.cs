@@ -1,13 +1,14 @@
-﻿using System.Text;
+﻿using CB_Gift.Data;
 using CB_Gift.Data;
 using CB_Gift.Services;
+using CB_Gift.Services.Email;
 using CB_Gift.Services.IService;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using CB_Gift.Data;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -92,7 +93,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
 
 builder.Services.AddScoped<IAccountService, AccountService>();
-
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 var app = builder.Build();
 
 // Swagger
