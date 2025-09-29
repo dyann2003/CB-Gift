@@ -99,47 +99,93 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
-// 👇 Thứ tự đúng cho auth
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
 
-// ===== Seed 1 tài khoản demo để login =====
+// Seed Roles + user
 using (var scope = app.Services.CreateScope())
 {
-    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
-
-    var seedEmail = builder.Configuration["Seed:Email"] ?? "demo@cbgift.local";
-    var seedPass = builder.Configuration["Seed:Password"] ?? "Demo@123!";
-
-    var user = await userManager.FindByEmailAsync(seedEmail);
-    if (user is null)
-    {
-        user = new AppUser
-        {
-            UserName = seedEmail,
-            Email = seedEmail,
-            EmailConfirmed = true,
-            FullName = "Demo User",
-            IsActive = true
-        };
-        var create = await userManager.CreateAsync(user, seedPass);
-        if (!create.Succeeded)
-        {
-            Console.WriteLine("Seed user failed: " +
-                string.Join("; ", create.Errors.Select(e => $"{e.Code}:{e.Description}")));
-        }
-        else
-        {
-            Console.WriteLine($"Seed user created: {seedEmail} / {seedPass}");
-        }
-    }
-    else
-    {
-        Console.WriteLine($"Seed user exists: {seedEmail}");
-    }
+    var services = scope.ServiceProvider;
+    await SeedRolesAsync(services);
+    await SeedAdminAsync(services);
+    await SeedSellerAsync(services);
 }
 
 app.Run();
+
+
+// ⚙️ Seed Roles
+static async Task SeedRolesAsync(IServiceProvider serviceProvider)
+{
+    var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+    string[] roles = { "Admin", "Seller", "Designer", "QC","Staff", "Manager" };
+
+    foreach (var role in roles)
+    {
+        if (!await roleManager.RoleExistsAsync(role))
+        {
+            await roleManager.CreateAsync(new IdentityRole(role));
+        }
+    }
+}
+static async Task SeedAdminAsync(IServiceProvider serviceProvider)
+{
+    var userManager = serviceProvider.GetRequiredService<UserManager<AppUser>>();
+    var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+
+    string adminEmail = "admin@example.com";
+    string adminPassword = "Admin@123";
+
+    if (!await roleManager.RoleExistsAsync("Admin"))
+    {
+        await roleManager.CreateAsync(new IdentityRole("Admin"));
+    }
+
+    var adminUser = await userManager.FindByEmailAsync(adminEmail);
+    if (adminUser == null)
+    {
+        var user = new AppUser
+        {
+            UserName = adminEmail,
+            Email = adminEmail,
+            EmailConfirmed = true
+        };
+
+        var result = await userManager.CreateAsync(user, adminPassword);
+        if (result.Succeeded)
+        {
+            await userManager.AddToRoleAsync(user, "Admin");
+        }
+    }
+}
+async Task SeedSellerAsync(IServiceProvider serviceProvider)
+{
+    var userManager = serviceProvider.GetRequiredService<UserManager<AppUser>>();
+    var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+
+    string sellerEmail = "seller@example.com";
+    string sellerPassword = "seller@123";
+
+    if(!await roleManager.RoleExistsAsync("Seller"))
+    {
+        await roleManager.CreateAsync(new IdentityRole("Seller"));
+    }
+    var sellerUser = await userManager.FindByEmailAsync(sellerEmail);
+    if (sellerUser == null)
+    {
+        var user = new AppUser
+        {
+            UserName = sellerEmail,
+            Email = sellerEmail,
+            EmailConfirmed = true
+        };
+        var result =await userManager.CreateAsync(user, sellerPassword);
+        if (result.Succeeded)
+        {
+            await userManager.AddToRoleAsync(user, "Seller");
+        }
+    }
+}
+

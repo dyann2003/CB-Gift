@@ -21,7 +21,7 @@ namespace CB_Gift.Services
         public async Task<string> CreateTokenAsync(AppUser user)
         {
             var roles = await _userManager.GetRolesAsync(user);
-
+            Console.WriteLine("Roles:"+roles.ToString());
             var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, user.Id),
