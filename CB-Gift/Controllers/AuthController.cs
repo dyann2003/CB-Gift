@@ -17,6 +17,7 @@ public class AuthController : ControllerBase
     private readonly SignInManager<AppUser> _signIn;
     private readonly UserManager<AppUser> _users;
     private readonly ITokenService _tokens;
+    private readonly IAccountService _accountService;
     private readonly IConfiguration _config;
     private readonly IAccountService _accountService;
 
@@ -98,7 +99,7 @@ public class AuthController : ControllerBase
 
         return Ok(new { message = "Password changed." });
     }
-
+    
     // POST: /api/Auth/register
     //[Authorize(Roles = "Manager")]
     [HttpPost("register")]

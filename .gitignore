@@ -1,0 +1,60 @@
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Visual Studio directories
+.vs/
+.vs/*
+
+# Build results
+bin/
+obj/
+
+# Backup & generated files
+*.backup
+*.log
+*.ncb
+*.aps
+*.pch
+*.pdb
+*.pidb
+*.svclog
+*.sdf
+*.dbmdl
+*.dbproj.schemaview
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Rider
+.idea/
+
+# ASP.NET Scaffolding
+ScaffoldingReadMe.txt
+
+# DotCover
+*.dotCover
+
+# Visual Studio Code
+.vscode/
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+*.DS_Store
+Thumbs.db
+
+# Azure Functions
+.local.settings.json
+
+# Entity Framework
+*.efmodel
