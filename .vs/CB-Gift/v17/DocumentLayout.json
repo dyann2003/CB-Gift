@@ -3,7 +3,11 @@
   "WorkspaceRootPath": "D:\\CB-Gift\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|D:\\CB-Gift\\cb-gift\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|d:\\cb-gift\\cb-gift\\models\\order.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\models\\order.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|d:\\cb-gift\\cb-gift\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
@@ -11,36 +15,24 @@
       "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\controllers\\authcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|d:\\cb-gift\\cb-gift\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
-      "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+      "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|D:\\CB-Gift\\cb-gift\\cb-gift.http||{5703B403-55E7-4C63-8C88-A8F52C7A45C5}",
+      "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\cb-gift.http||{5703B403-55E7-4C63-8C88-A8F52C7A45C5}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|D:\\CB-Gift\\cb-gift\\services\\jwttokenservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\services\\jwttokenservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|D:\\CB-Gift\\cb-gift\\dtos\\authresponse.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\dtos\\authresponse.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|D:\\CB-Gift\\cb-gift\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|d:\\cb-gift\\cb-gift\\data\\migrations\\cbgiftdbcontextmodelsnapshot.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\data\\migrations\\cbgiftdbcontextmodelsnapshot.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|D:\\CB-Gift\\cb-gift\\data\\cbgiftdbcontext.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\data\\cbgiftdbcontext.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|D:\\CB-Gift\\cb-gift\\data\\appuser.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\data\\appuser.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|D:\\CB-Gift\\cb-gift\\services\\itokenservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\services\\itokenservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|D:\\CB-Gift\\cb-gift\\controllers\\weatherforecastcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\controllers\\weatherforecastcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|D:\\CB-Gift\\cb-gift\\cb-gift.http||{5703B403-55E7-4C63-8C88-A8F52C7A45C5}",
-      "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\cb-gift.http||{5703B403-55E7-4C63-8C88-A8F52C7A45C5}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|D:\\CB-Gift\\cb-gift\\dtos\\logindto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -49,10 +41,6 @@
     {
       "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|D:\\CB-Gift\\cb-gift\\dtos\\changepassworddto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\dtos\\changepassworddto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|D:\\CB-Gift\\cb-gift\\services\\itokenservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\services\\itokenservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
@@ -62,7 +50,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 11,
+          "SelectedChildIndex": 6,
           "Children": [
             {
               "$type": "Bookmark",
@@ -90,161 +78,59 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
-              "Title": "AuthResponse.cs",
-              "DocumentMoniker": "D:\\CB-Gift\\CB-Gift\\DTOs\\AuthResponse.cs",
-              "RelativeDocumentMoniker": "CB-Gift\\DTOs\\AuthResponse.cs",
-              "ToolTip": "D:\\CB-Gift\\CB-Gift\\DTOs\\AuthResponse.cs",
-              "RelativeToolTip": "CB-Gift\\DTOs\\AuthResponse.cs",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAcAAABJAAAA",
+              "DocumentIndex": 0,
+              "Title": "Order.cs",
+              "DocumentMoniker": "D:\\CB-Gift\\CB-Gift\\Models\\Order.cs",
+              "RelativeDocumentMoniker": "CB-Gift\\Models\\Order.cs",
+              "ToolTip": "D:\\CB-Gift\\CB-Gift\\Models\\Order.cs",
+              "RelativeToolTip": "CB-Gift\\Models\\Order.cs",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAABMAAAAvAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T11:21:51.7Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 3,
-              "Title": "JwtTokenService.cs",
-              "DocumentMoniker": "D:\\CB-Gift\\CB-Gift\\Services\\JwtTokenService.cs",
-              "RelativeDocumentMoniker": "CB-Gift\\Services\\JwtTokenService.cs",
-              "ToolTip": "D:\\CB-Gift\\CB-Gift\\Services\\JwtTokenService.cs",
-              "RelativeToolTip": "CB-Gift\\Services\\JwtTokenService.cs",
-              "ViewState": "AQIAAAsAAAAAAAAAAAAAwCUAAAAtAAAA",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T10:21:57.302Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 5,
-              "Title": "CBGiftDbContextModelSnapshot.cs",
-              "DocumentMoniker": "D:\\CB-Gift\\CB-Gift\\Data\\Migrations\\CBGiftDbContextModelSnapshot.cs",
-              "RelativeDocumentMoniker": "CB-Gift\\Data\\Migrations\\CBGiftDbContextModelSnapshot.cs",
-              "ToolTip": "D:\\CB-Gift\\CB-Gift\\Data\\Migrations\\CBGiftDbContextModelSnapshot.cs",
-              "RelativeToolTip": "CB-Gift\\Data\\Migrations\\CBGiftDbContextModelSnapshot.cs",
-              "ViewState": "AQIAAA4BAAAAAAAAAAAAAAAAAAAAAAAA",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T15:25:54.807Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 2,
-              "Title": "appsettings.json",
-              "DocumentMoniker": "D:\\CB-Gift\\CB-Gift\\appsettings.json",
-              "RelativeDocumentMoniker": "CB-Gift\\appsettings.json",
-              "ToolTip": "D:\\CB-Gift\\CB-Gift\\appsettings.json",
-              "RelativeToolTip": "CB-Gift\\appsettings.json",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAwAAAAbAAAA",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
-              "WhenOpened": "2025-09-28T10:19:22.016Z",
+              "WhenOpened": "2025-09-29T07:20:14.775Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
               "DocumentIndex": 1,
-              "Title": "AuthController.cs",
-              "DocumentMoniker": "D:\\CB-Gift\\CB-Gift\\Controllers\\AuthController.cs",
-              "RelativeDocumentMoniker": "CB-Gift\\Controllers\\AuthController.cs",
-              "ToolTip": "D:\\CB-Gift\\CB-Gift\\Controllers\\AuthController.cs",
-              "RelativeToolTip": "CB-Gift\\Controllers\\AuthController.cs",
-              "ViewState": "AQIAAC4AAAAAAAAAAAAIwEMAAAAPAAAA",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T11:03:56.311Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 0,
               "Title": "Program.cs",
               "DocumentMoniker": "D:\\CB-Gift\\CB-Gift\\Program.cs",
               "RelativeDocumentMoniker": "CB-Gift\\Program.cs",
               "ToolTip": "D:\\CB-Gift\\CB-Gift\\Program.cs",
               "RelativeToolTip": "CB-Gift\\Program.cs",
-              "ViewState": "AQIAABEAAAAAAAAAAAAcwCMAAAADAAAA",
+              "ViewState": "AQIAAH0AAAAAAAAAAAAwwIwAAAA0AAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-09-28T03:24:26.588Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 7,
-              "Title": "AppUser.cs",
-              "DocumentMoniker": "D:\\CB-Gift\\CB-Gift\\Data\\AppUser.cs",
-              "RelativeDocumentMoniker": "CB-Gift\\Data\\AppUser.cs",
-              "ToolTip": "D:\\CB-Gift\\CB-Gift\\Data\\AppUser.cs",
-              "RelativeToolTip": "CB-Gift\\Data\\AppUser.cs",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAgAAAAFAAAA",
+              "DocumentIndex": 2,
+              "Title": "AuthController.cs",
+              "DocumentMoniker": "D:\\CB-Gift\\CB-Gift\\Controllers\\AuthController.cs",
+              "RelativeDocumentMoniker": "CB-Gift\\Controllers\\AuthController.cs",
+              "ToolTip": "D:\\CB-Gift\\CB-Gift\\Controllers\\AuthController.cs",
+              "RelativeToolTip": "CB-Gift\\Controllers\\AuthController.cs",
+              "ViewState": "AQIAABkAAAAAAAAAAAAQwFQAAAAFAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T08:41:17.532Z"
+              "WhenOpened": "2025-09-28T11:03:56.311Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 11,
-              "Title": "ChangePasswordDto.cs",
-              "DocumentMoniker": "D:\\CB-Gift\\CB-Gift\\DTOs\\ChangePasswordDto.cs",
-              "RelativeDocumentMoniker": "CB-Gift\\DTOs\\ChangePasswordDto.cs",
-              "ToolTip": "D:\\CB-Gift\\CB-Gift\\DTOs\\ChangePasswordDto.cs",
-              "RelativeToolTip": "CB-Gift\\DTOs\\ChangePasswordDto.cs",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAgAAAAAAAAA",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T11:09:21.198Z"
-            },
-            {
-              "$type": "Bookmark",
-              "Name": "ST:0:0:{d78612c7-9962-4b83-95d9-268046dad23a}"
+              "DocumentIndex": 5,
+              "Title": "appsettings.json",
+              "DocumentMoniker": "D:\\CB-Gift\\CB-Gift\\appsettings.json",
+              "RelativeDocumentMoniker": "CB-Gift\\appsettings.json",
+              "ToolTip": "D:\\CB-Gift\\CB-Gift\\appsettings.json",
+              "RelativeToolTip": "CB-Gift\\appsettings.json",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAA0AAAAEAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2025-09-28T10:19:22.016Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
               "DocumentIndex": 6,
-              "Title": "CBGiftDbContext.cs",
-              "DocumentMoniker": "D:\\CB-Gift\\CB-Gift\\Data\\CBGiftDbContext.cs",
-              "RelativeDocumentMoniker": "CB-Gift\\Data\\CBGiftDbContext.cs",
-              "ToolTip": "D:\\CB-Gift\\CB-Gift\\Data\\CBGiftDbContext.cs",
-              "RelativeToolTip": "CB-Gift\\Data\\CBGiftDbContext.cs",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAAA0AAAAAAAAA",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T10:17:36.934Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 8,
-              "Title": "WeatherForecastController.cs",
-              "DocumentMoniker": "D:\\CB-Gift\\CB-Gift\\Controllers\\WeatherForecastController.cs",
-              "RelativeDocumentMoniker": "CB-Gift\\Controllers\\WeatherForecastController.cs",
-              "ToolTip": "D:\\CB-Gift\\CB-Gift\\Controllers\\WeatherForecastController.cs",
-              "RelativeToolTip": "CB-Gift\\Controllers\\WeatherForecastController.cs",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAwAAABNAAAA",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T11:31:58.916Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 10,
-              "Title": "LoginDto.cs",
-              "DocumentMoniker": "D:\\CB-Gift\\CB-Gift\\DTOs\\LoginDto.cs",
-              "RelativeDocumentMoniker": "CB-Gift\\DTOs\\LoginDto.cs",
-              "ToolTip": "D:\\CB-Gift\\CB-Gift\\DTOs\\LoginDto.cs",
-              "RelativeToolTip": "CB-Gift\\DTOs\\LoginDto.cs",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAgAAAAAAAAA",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T11:02:56.088Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 9,
-              "Title": "CB-Gift.http",
-              "DocumentMoniker": "D:\\CB-Gift\\CB-Gift\\CB-Gift.http",
-              "RelativeDocumentMoniker": "CB-Gift\\CB-Gift.http",
-              "ToolTip": "D:\\CB-Gift\\CB-Gift\\CB-Gift.http",
-              "RelativeToolTip": "CB-Gift\\CB-Gift.http",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003502|",
-              "WhenOpened": "2025-09-28T11:15:21.354Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 12,
               "Title": "ITokenService.cs",
               "DocumentMoniker": "D:\\CB-Gift\\CB-Gift\\Services\\ITokenService.cs",
               "RelativeDocumentMoniker": "CB-Gift\\Services\\ITokenService.cs",
@@ -252,7 +138,73 @@
               "RelativeToolTip": "CB-Gift\\Services\\ITokenService.cs",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAAAgAAAABAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T10:21:25.109Z"
+              "WhenOpened": "2025-09-28T10:21:25.109Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "CB-Gift.http",
+              "DocumentMoniker": "D:\\CB-Gift\\CB-Gift\\CB-Gift.http",
+              "RelativeDocumentMoniker": "CB-Gift\\CB-Gift.http",
+              "ToolTip": "D:\\CB-Gift\\CB-Gift\\CB-Gift.http",
+              "RelativeToolTip": "CB-Gift\\CB-Gift.http",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003502|",
+              "WhenOpened": "2025-09-28T11:15:21.354Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "JwtTokenService.cs",
+              "DocumentMoniker": "D:\\CB-Gift\\CB-Gift\\Services\\JwtTokenService.cs",
+              "RelativeDocumentMoniker": "CB-Gift\\Services\\JwtTokenService.cs",
+              "ToolTip": "D:\\CB-Gift\\CB-Gift\\Services\\JwtTokenService.cs",
+              "RelativeToolTip": "CB-Gift\\Services\\JwtTokenService.cs",
+              "ViewState": "AQIAAA4AAAAAAAAAAAAAwBgAAAAoAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-09-28T10:21:57.302Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "ChangePasswordDto.cs",
+              "DocumentMoniker": "D:\\CB-Gift\\CB-Gift\\DTOs\\ChangePasswordDto.cs",
+              "RelativeDocumentMoniker": "CB-Gift\\DTOs\\ChangePasswordDto.cs",
+              "ToolTip": "D:\\CB-Gift\\CB-Gift\\DTOs\\ChangePasswordDto.cs",
+              "RelativeToolTip": "CB-Gift\\DTOs\\ChangePasswordDto.cs",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAgAAAAAAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-09-28T11:09:21.198Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "WeatherForecastController.cs",
+              "DocumentMoniker": "D:\\CB-Gift\\CB-Gift\\Controllers\\WeatherForecastController.cs",
+              "RelativeDocumentMoniker": "CB-Gift\\Controllers\\WeatherForecastController.cs",
+              "ToolTip": "D:\\CB-Gift\\CB-Gift\\Controllers\\WeatherForecastController.cs",
+              "RelativeToolTip": "CB-Gift\\Controllers\\WeatherForecastController.cs",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAwAAABNAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-09-28T11:31:58.916Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "LoginDto.cs",
+              "DocumentMoniker": "D:\\CB-Gift\\CB-Gift\\DTOs\\LoginDto.cs",
+              "RelativeDocumentMoniker": "CB-Gift\\DTOs\\LoginDto.cs",
+              "ToolTip": "D:\\CB-Gift\\CB-Gift\\DTOs\\LoginDto.cs",
+              "RelativeToolTip": "CB-Gift\\DTOs\\LoginDto.cs",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAgAAAAAAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-09-28T11:02:56.088Z",
+              "EditorCaption": ""
             }
           ]
         }

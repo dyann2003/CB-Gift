@@ -149,3 +149,4 @@ D:\CB-Gift\CB-Gift\obj\Debug\net8.0\refint\CB-Gift.dll
 D:\CB-Gift\CB-Gift\obj\Debug\net8.0\CB-Gift.pdb
 D:\CB-Gift\CB-Gift\obj\Debug\net8.0\CB-Gift.genruntimeconfig.cache
 D:\CB-Gift\CB-Gift\obj\Debug\net8.0\ref\CB-Gift.dll
+D:\CB-Gift\CB-Gift\bin\Debug\net8.0\efpt.config.json
