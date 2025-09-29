@@ -1,7 +1,6 @@
-﻿// File: Controllers/AuthController.cs
-using CB_Gift.Data;           // AppUser
-using CB_Gift.DTOs;           // LoginDto, ChangePasswordDto
-using CB_Gift.Services;       // ITokenService
+﻿using CB_Gift.Data;          
+using CB_Gift.DTOs;         
+using CB_Gift.Services;      
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
