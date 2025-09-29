@@ -4,11 +4,12 @@ namespace CB_Gift.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class SellerController : Controller
+    public class SellerController : ControllerBase
     {
+        [HttpGet("index")]
         public IActionResult Index()
         {
-            return View();
+            return Ok(new { message = "This is seller index API" });
         }
     }
 }
