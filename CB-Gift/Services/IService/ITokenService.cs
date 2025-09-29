@@ -1,6 +1,6 @@
 ﻿using CB_Gift.Data;
 
-namespace CB_Gift.Services
+namespace CB_Gift.Services.IService
 {
     public interface ITokenService
     {

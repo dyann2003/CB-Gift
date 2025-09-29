@@ -163,6 +163,7 @@ CREATE TABLE [dbo].[OrderDetail](
     [Note]             NVARCHAR(200) NULL,
     [CreatedDate]      DATETIME NULL CONSTRAINT [DF_OrderDetail_CreatedDate] DEFAULT(GETDATE()),
     [Quantity]         INT NOT NULL,
+	[Price]            DECIMAL(18,2) NULL,
     CONSTRAINT [PK_OrderDetail] PRIMARY KEY CLUSTERED([OrderDetailID] ASC)
 );
 GO

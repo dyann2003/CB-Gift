@@ -1,6 +1,5 @@
 using CB_Gift.Data;
 using CB_Gift.DTOs;
-using CB_Gift.Services;
 using CB_Gift.Services.IService;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -19,7 +18,6 @@ public class AuthController : ControllerBase
     private readonly ITokenService _tokens;
     private readonly IAccountService _accountService;
     private readonly IConfiguration _config;
-    private readonly IAccountService _accountService;
 
     public AuthController(
         SignInManager<AppUser> signIn,
