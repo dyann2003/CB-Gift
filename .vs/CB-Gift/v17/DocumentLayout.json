@@ -7,7 +7,7 @@
       "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\models\\order.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|d:\\cb-gift\\cb-gift\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "AbsoluteMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|D:\\CB-Gift\\cb-gift\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{606647A2-C454-4205-A20C-FD3A2822D4A7}|CB-Gift\\CB-Gift.csproj|solutionrelative:cb-gift\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
@@ -84,7 +84,7 @@
               "RelativeDocumentMoniker": "CB-Gift\\Models\\Order.cs",
               "ToolTip": "D:\\CB-Gift\\CB-Gift\\Models\\Order.cs",
               "RelativeToolTip": "CB-Gift\\Models\\Order.cs",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAABMAAAAvAAAA",
+              "ViewState": "AQIAAB8AAAAAAAAAAAAcwAgAAAABAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-09-29T07:20:14.775Z",
               "EditorCaption": ""
@@ -99,8 +99,7 @@
               "RelativeToolTip": "CB-Gift\\Program.cs",
               "ViewState": "AQIAAH0AAAAAAAAAAAAwwIwAAAA0AAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T03:24:26.588Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-09-28T03:24:26.588Z"
             },
             {
               "$type": "Document",
@@ -112,8 +111,7 @@
               "RelativeToolTip": "CB-Gift\\Controllers\\AuthController.cs",
               "ViewState": "AQIAABkAAAAAAAAAAAAQwFQAAAAFAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T11:03:56.311Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-09-28T11:03:56.311Z"
             },
             {
               "$type": "Document",
@@ -125,8 +123,7 @@
               "RelativeToolTip": "CB-Gift\\appsettings.json",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAAA0AAAAEAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
-              "WhenOpened": "2025-09-28T10:19:22.016Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-09-28T10:19:22.016Z"
             },
             {
               "$type": "Document",
@@ -138,8 +135,7 @@
               "RelativeToolTip": "CB-Gift\\Services\\ITokenService.cs",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAAAgAAAABAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T10:21:25.109Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-09-28T10:21:25.109Z"
             },
             {
               "$type": "Document",
@@ -151,8 +147,7 @@
               "RelativeToolTip": "CB-Gift\\CB-Gift.http",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003502|",
-              "WhenOpened": "2025-09-28T11:15:21.354Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-09-28T11:15:21.354Z"
             },
             {
               "$type": "Document",
@@ -164,8 +159,7 @@
               "RelativeToolTip": "CB-Gift\\Services\\JwtTokenService.cs",
               "ViewState": "AQIAAA4AAAAAAAAAAAAAwBgAAAAoAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T10:21:57.302Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-09-28T10:21:57.302Z"
             },
             {
               "$type": "Document",
@@ -177,8 +171,7 @@
               "RelativeToolTip": "CB-Gift\\DTOs\\ChangePasswordDto.cs",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAAAgAAAAAAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T11:09:21.198Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-09-28T11:09:21.198Z"
             },
             {
               "$type": "Document",
@@ -190,8 +183,7 @@
               "RelativeToolTip": "CB-Gift\\Controllers\\WeatherForecastController.cs",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAAAwAAABNAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T11:31:58.916Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-09-28T11:31:58.916Z"
             },
             {
               "$type": "Document",
@@ -203,8 +195,7 @@
               "RelativeToolTip": "CB-Gift\\DTOs\\LoginDto.cs",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAAAgAAAAAAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-28T11:02:56.088Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-09-28T11:02:56.088Z"
             }
           ]
         }
