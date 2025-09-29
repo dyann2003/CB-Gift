@@ -1,6 +1,7 @@
-﻿using CB_Gift.Data;          
-using CB_Gift.DTOs;         
-using CB_Gift.Services;      
+using CB_Gift.Data;
+using CB_Gift.DTOs;
+using CB_Gift.Services;
+using CB_Gift.Services.IService;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -17,17 +18,20 @@ public class AuthController : ControllerBase
     private readonly UserManager<AppUser> _users;
     private readonly ITokenService _tokens;
     private readonly IConfiguration _config;
+    private readonly IAccountService _accountService;
 
     public AuthController(
         SignInManager<AppUser> signIn,
         UserManager<AppUser> users,
         ITokenService tokens,
-        IConfiguration config)
+        IConfiguration config,
+        IAccountService accountService)
     {
         _signIn = signIn;
         _users = users;
         _tokens = tokens;
         _config = config;
+        _accountService = accountService;
     }
 
     // POST: /api/auth/login
@@ -50,25 +54,23 @@ public class AuthController : ControllerBase
         var minutes = int.Parse(_config["Jwt:ExpiresMinutes"] ?? "60");
         var expires = DateTimeOffset.UtcNow.AddMinutes(minutes);
 
-        // Set JWT vào HttpOnly cookie
         Response.Cookies.Append(AccessTokenCookieName, token, new CookieOptions
         {
             HttpOnly = true,
-            Secure = true,                     // true trong production (HTTPS)
-            SameSite = SameSiteMode.Strict,    // nếu FE khác domain, đổi sang None (+ HTTPS)
+            Secure = true,
+            SameSite = SameSiteMode.Strict,
             Expires = expires,
-            IsEssential = true                 // tránh bị chặn bởi cookie consent
+            IsEssential = true
         });
 
         return Ok(new AuthResponse(token, user.UserName!, user.Email));
     }
 
-    // POST: /api/auth/logout  -> xoá cookie
+    // POST: /api/auth/logout
     [Authorize]
     [HttpPost("logout")]
     public IActionResult Logout()
     {
-        // Xoá cookie access token
         Response.Cookies.Delete(AccessTokenCookieName, new CookieOptions
         {
             Secure = true,
@@ -95,5 +97,19 @@ public class AuthController : ControllerBase
             });
 
         return Ok(new { message = "Password changed." });
+    }
+
+    // POST: /api/Auth/register
+    //[Authorize(Roles = "Manager")]
+    [HttpPost("register")]
+    public async Task<IActionResult> Register([FromBody] RegisterRequestDto request)
+    {
+        var result = await _accountService.RegisterAsync(request);
+        if (!result.Success)
+        {
+            return BadRequest(result.Message);
+        }
+
+        return Ok(result.Data);
     }
 }
