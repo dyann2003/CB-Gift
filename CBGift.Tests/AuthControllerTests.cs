@@ -10,12 +10,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
-using System.Collections.Generic;
-using System.Linq;
 using System.Security.Claims;
-using System.Security.Claims;
-using System.Threading.Tasks;
-using Xunit;
 using IdentitySignInResult = Microsoft.AspNetCore.Identity.SignInResult;
 public class AuthControllerTests
 {
@@ -192,6 +187,9 @@ public class AuthControllerTests
 
         var r = await ctl.ChangePassword(new ChangePasswordDto { CurrentPassword = "old", NewPassword = "new" });
         r.Should().BeOfType<BadRequestObjectResult>();
+        var bad = (BadRequestObjectResult)r;
+        var json = System.Text.Json.JsonSerializer.Serialize(bad.Value);
+        json.Should().Contain("boom");
     }
 
     [Fact]
@@ -368,6 +366,9 @@ public class AuthControllerTests
 
         var r = await ctl.ResetPassword(new ResetPasswordDto { Email = "u@x.com", Token = "tok", NewPassword = "NewP@ss1" });
         r.Should().BeOfType<BadRequestObjectResult>();
+        var bad = (BadRequestObjectResult)r;
+        var json = System.Text.Json.JsonSerializer.Serialize(bad.Value);
+        json.Should().Contain("invalid token");
     }
     [Fact]
     public async Task ResetPassword_Returns_Ok_On_Success()
@@ -389,5 +390,91 @@ public class AuthControllerTests
         var r = await ctl.ResetPassword(new ResetPasswordDto { Email = "ok@x.com", Token = "tok", NewPassword = "NewP@ss1" });
         r.Should().BeOfType<OkObjectResult>();
     }
+    [Fact]
+    public async Task Login_DefaultExpiry_Sets_Cookie_And_Returns_Token()
+    {
+        var http = new DefaultHttpContext();
+        var um = CreateUserManagerWithOptions();
+        var sm = CreateSignInManagerMock(um.Object, http);
+        var tokens = new Mock<ITokenService>();
+        var accounts = new Mock<IAccountService>();
+
+        // KHÔNG set Jwt:ExpiresMinutes -> rẽ nhánh mặc định "60"
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["App:ClientUrl"] = "https://example.com"
+        }).Build();
+
+        var user = new AppUser { UserName = "ok", Email = "ok@x.com", IsActive = true };
+        um.Setup(m => m.FindByNameAsync("ok")).ReturnsAsync(user);
+        um.Setup(m => m.FindByEmailAsync("ok")).ReturnsAsync((AppUser)null!);
+        sm.Setup(s => s.CheckPasswordSignInAsync(user, "good", false)).ReturnsAsync(IdentitySignInResult.Success);
+        tokens.Setup(t => t.CreateTokenAsync(user)).ReturnsAsync("jwt-token");
+
+        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
+        { ControllerContext = new ControllerContext { HttpContext = http } };
+
+        var r = await ctl.Login(new LoginDto { UserNameOrEmail = "ok", Password = "good" });
+        r.Should().BeOfType<OkObjectResult>();
+
+        http.Response.Headers.TryGetValue("Set-Cookie", out var setCookies).Should().BeTrue();
+        setCookies.ToString().Should().Contain("access_token=");
+    }
+    [Fact]
+    public async Task Login_ByEmail_Sets_Cookie_And_Returns_Token()
+    {
+        var http = new DefaultHttpContext();
+        var um = CreateUserManagerWithOptions();
+        var sm = CreateSignInManagerMock(um.Object, http);
+        var tokens = new Mock<ITokenService>();
+        var accounts = new Mock<IAccountService>();
+        var config = BuildConfig(); // có Jwt:ExpiresMinutes=60
+
+        // Không tìm thấy theo UserName -> null
+        um.Setup(m => m.FindByNameAsync("mailuser")).ReturnsAsync((AppUser)null!);
+
+        // Nhưng tìm thấy theo Email
+        var user = new AppUser { UserName = "mailuser", Email = "mailuser@x.com", IsActive = true };
+        um.Setup(m => m.FindByEmailAsync("mailuser")).ReturnsAsync(user);
+
+        sm.Setup(s => s.CheckPasswordSignInAsync(user, "good", false))
+          .ReturnsAsync(IdentitySignInResult.Success);
+        tokens.Setup(t => t.CreateTokenAsync(user)).ReturnsAsync("jwt-token");
+
+        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
+        { ControllerContext = new ControllerContext { HttpContext = http } };
+
+        var r = await ctl.Login(new LoginDto { UserNameOrEmail = "mailuser", Password = "good" });
+        r.Should().BeOfType<OkObjectResult>();
+
+        http.Response.Headers.TryGetValue("Set-Cookie", out var setCookies).Should().BeTrue();
+        setCookies.ToString().Should().Contain("access_token=");
+    }
+    [Fact]
+    public async Task Login_Returns_Unauthorized_When_LockedOut()
+    {
+        var http = new DefaultHttpContext();
+        var um = CreateUserManagerWithOptions();
+        var sm = CreateSignInManagerMock(um.Object, http);
+        var tokens = new Mock<ITokenService>();
+        var accounts = new Mock<IAccountService>();
+        var config = BuildConfig(); // có Jwt:ExpiresMinutes
+
+        // Tìm thấy user theo UserName
+        var user = new AppUser { UserName = "lock", Email = "lock@x.com", IsActive = true };
+        um.Setup(m => m.FindByNameAsync("lock")).ReturnsAsync(user);
+        um.Setup(m => m.FindByEmailAsync("lock")).ReturnsAsync((AppUser)null!);
+
+        // Kết quả sign-in KHÔNG thành công nhưng khác Failed (LockedOut)
+        sm.Setup(s => s.CheckPasswordSignInAsync(user, "pwd", false))
+          .ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.LockedOut);
+
+        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
+        { ControllerContext = new ControllerContext { HttpContext = http } };
+
+        var r = await ctl.Login(new LoginDto { UserNameOrEmail = "lock", Password = "pwd" });
+        r.Should().BeOfType<UnauthorizedObjectResult>();
+    }
+
 
 }
