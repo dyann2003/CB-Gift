@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Moq;
 using Xunit;
-using CB_Gift.Services.IService;
+using CB_Gift.Services.Email;
 
 public class EmailAndJwtTests
 {
@@ -39,15 +39,15 @@ public class EmailAndJwtTests
         return new Mock<UserManager<AppUser>>(store.Object, null!, null!, null!, null!, null!, null!, null!, null!);
     }
 
-    //[Fact]
-    //public async Task SmtpEmailSender_SendAsync_ThrowsWithoutServer_But_Covers_Path()
-    //{
-    //    var sender = new SmtpEmailSender(BuildEmailCfg());
+    [Fact]
+    public async Task SmtpEmailSender_SendAsync_ThrowsWithoutServer_But_Covers_Path()
+    {
+        var sender = new global::CB_Gift.Services.Email.SmtpEmailSender(BuildEmailCfg());
 
-     
-    //    Func<Task> act = async () => await sender.SendAsync("u@test.com", "subj", "<b>body</b>");
-    //    await act.Should().ThrowAsync<Exception>();
-    //}
+
+        Func<Task> act = async () => await sender.SendAsync("u@test.com", "subj", "<b>body</b>");
+        await act.Should().ThrowAsync<Exception>();
+    }
 
     [Fact]
     public async Task AccountService_SendResetPasswordEmailAsync_Calls_IEmailSender()
@@ -64,8 +64,22 @@ public class EmailAndJwtTests
                 It.Is<string>(b => b.Contains("https://reset.link"))),
             Times.Once);
     }
+    [Fact]
+    public async Task SmtpEmailSender_Uses_Defaults_When_Config_Missing()
+    {
+      
+        var cfgMissing = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>())  // trống
+            .Build();
 
-   
+        var sender = new global::CB_Gift.Services.Email.SmtpEmailSender(cfgMissing);
+
+
+        Func<Task> act = async () => await sender.SendAsync("u@test.com", "subj", "<b>body</b>");
+        await act.Should().ThrowAsync<Exception>();
+    }
+
+
     [Fact]
     public async Task JwtTokenService_CreateTokenAsync_Branches_With_And_Without_Roles()
     {

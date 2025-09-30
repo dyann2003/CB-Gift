@@ -2,7 +2,7 @@
 using CB_Gift.Data;
 using CB_Gift.Services;
 using CB_Gift.Services.Email;
-using CB_Gift.Services.IService;
+using CB_Gift.Services.Email;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;

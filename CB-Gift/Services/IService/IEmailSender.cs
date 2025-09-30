@@ -1,4 +1,4 @@
-﻿namespace CB_Gift.Services.IService
+﻿namespace CB_Gift.Services.Email
 {
 
         public interface IEmailSender

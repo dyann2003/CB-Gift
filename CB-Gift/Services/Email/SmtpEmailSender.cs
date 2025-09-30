@@ -1,11 +1,11 @@
-﻿using CB_Gift.Services.IService;
+﻿using CB_Gift.Services.Email;
 using System.Net;
 using System.Net.Mail;
 
 namespace CB_Gift.Services.Email
 {
 
-      class SmtpEmailSender : IEmailSender
+    public class SmtpEmailSender : IEmailSender
         {
             private readonly IConfiguration _config;
             public SmtpEmailSender(IConfiguration config)
