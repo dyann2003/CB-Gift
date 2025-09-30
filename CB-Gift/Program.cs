@@ -55,6 +55,9 @@ builder.Services
     .AddSignInManager()
     .AddDefaultTokenProviders();
 
+// Add AutoMapper
+builder.Services.AddAutoMapper(typeof(Program));
+
 // ================== JWT ==================
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -102,6 +105,7 @@ builder.Services.AddCors(options =>
 // ================== Custom services ==================
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
+builder.Services.AddScoped<IOrderService, OrderService>();
 
 var app = builder.Build();
 
@@ -184,12 +188,12 @@ static async Task SeedSellerAsync(IServiceProvider serviceProvider)
     var userManager = serviceProvider.GetRequiredService<UserManager<AppUser>>();
     var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
 
-    string sellerEmail = "seller@example.com";
+    string sellerEmail = "seller123@example.com";
     string sellerPassword = "Seller@123";
 
-    if (!await roleManager.RoleExistsAsync("Seller"))
+    if (!await roleManager.RoleExistsAsync("Admin"))
     {
-        await roleManager.CreateAsync(new IdentityRole("Seller"));
+        await roleManager.CreateAsync(new IdentityRole("Admin"));
     }
 
     var sellerUser = await userManager.FindByEmailAsync(sellerEmail);
@@ -201,6 +205,7 @@ static async Task SeedSellerAsync(IServiceProvider serviceProvider)
             Email = sellerEmail,
             EmailConfirmed = true
         };
+
         var result = await userManager.CreateAsync(user, sellerPassword);
         if (result.Succeeded)
         {
