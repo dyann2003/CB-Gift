@@ -109,6 +109,8 @@ builder.Services.AddCors(options =>
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IQrCodeService, QrCodeService>();
+builder.Services.AddScoped<IOrderDetailService, OrderDetailService>();
 
 var app = builder.Build();
 

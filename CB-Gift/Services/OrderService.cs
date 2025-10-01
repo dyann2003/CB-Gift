@@ -1,6 +1,6 @@
 
-﻿using CB_Gift.Data;
-﻿using AutoMapper;
+using CB_Gift.Data;
+using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using CB_Gift.Data;
 using CB_Gift.DTOs;
@@ -23,11 +23,11 @@ namespace CB_Gift.Services
         }
         public async Task<List<Order>> GetAllOrders()
         {
-           return await _context.Orders
-                .Include(o => o.OrderDetails)
-                .Include(o => o.StatusOrderNavigation)
-                .ToListAsync();
-        }   
+            return await _context.Orders
+                 .Include(o => o.OrderDetails)
+                 .Include(o => o.StatusOrderNavigation)
+                 .ToListAsync();
+        }
         public async Task<List<OrderDto>> GetOrdersForSellerAsync(string sellerUserId)
         {
             return await _context.Orders
@@ -53,7 +53,7 @@ namespace CB_Gift.Services
             .Include(o => o.EndCustomer)
             .Include(o => o.StatusOrderNavigation)
             .Include(o => o.OrderDetails)
-                 .ThenInclude(od=>od.ProductVariant)
+                 .ThenInclude(od => od.ProductVariant)
             .Where(o => o.SellerUserId == sellerUserId)
             .OrderByDescending(o => o.OrderDate)
              .ProjectTo<OrderWithDetailsDto>(_mapper.ConfigurationProvider)
@@ -94,7 +94,14 @@ namespace CB_Gift.Services
         {
             var query = _context.Orders
                 .Include(o => o.OrderDetails)
-            .Where(o => o.OrderId == orderId && o.SellerUserId == sellerUserId);
+                .Where(o => o.OrderId == orderId);
+
+            if (!string.IsNullOrEmpty(sellerUserId))
+            {
+                query = query.Where(o => o.SellerUserId == sellerUserId);
+            }
+
+
             // Map trực tiếp sang DTO gồm cả collection Details
             var dto = await query
             .ProjectTo<OrderWithDetailsDto>(_mapper.ConfigurationProvider)
@@ -102,7 +109,6 @@ namespace CB_Gift.Services
 
             return dto;
         }
-
 
         public async Task AddOrderDetailAsync(int orderId, OrderDetailCreateRequest request, string sellerUserId)
         {
