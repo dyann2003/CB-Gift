@@ -1,9 +1,12 @@
+
+﻿using CB_Gift.Models;
 ﻿using CB_Gift.DTOs;
 
 namespace CB_Gift.Services.IService
 {
     public interface IOrderService
     {
+        Task<List<Order>> GetAllOrders();
         Task<List<OrderDto>> GetOrdersForSellerAsync(string sellerUserId);
         Task<int> CreateOrderAsync(OrderCreateRequest request, string sellerUserId);
         Task<OrderWithDetailsDto?> GetOrderDetailAsync(int orderId, string sellerUserId);

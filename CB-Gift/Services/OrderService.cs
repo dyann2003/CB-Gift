@@ -1,3 +1,5 @@
+
+﻿using CB_Gift.Data;
 ﻿using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using CB_Gift.Data;
@@ -19,7 +21,13 @@ namespace CB_Gift.Services
             _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
-
+        public async Task<List<Order>> GetAllOrders()
+        {
+           return await _context.Orders
+                .Include(o => o.OrderDetails)
+                .Include(o => o.StatusOrderNavigation)
+                .ToListAsync();
+        }   
         public async Task<List<OrderDto>> GetOrdersForSellerAsync(string sellerUserId)
         {
             return await _context.Orders
