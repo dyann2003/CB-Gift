@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Diagnostics.HealthChecks;
+using System.Text.Json.Serialization;
 
 namespace CB_Gift.DTOs
 {
@@ -29,6 +30,7 @@ namespace CB_Gift.DTOs
     }
     public class OrderWithDetailsDto : OrderDto
     {
+        [JsonPropertyOrder(99)] // đẩy xuống cuối
         public List<OrderDetailDto> Details { get; set; } = new();
     }
     public class OrderDetailDto
@@ -39,6 +41,13 @@ namespace CB_Gift.DTOs
         public decimal? Price { get; set; }
         public string? LinkImg { get; set; }
         public bool NeedDesign { get; set; }
+        public string LinkThanksCard { get; set; }
+
+        public string LinkFileDesign { get; set; }
+
+        public string Accessory { get; set; }
+
+        public string Note { get; set; }
     }
     public class OrderCreateRequest
     {

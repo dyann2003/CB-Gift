@@ -23,11 +23,9 @@ namespace CB_Gift.Controllers
         public async Task<IActionResult> GetMyOrders()
         {
             string sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var orders = await _orderService.GetOrdersForSellerAsync(sellerId);
+            var orders = await _orderService.GetOrdersAndOrderDetailForSellerAsync(sellerId);
             return Ok(orders);
         }
-
-
         [HttpPost]
         public async Task<IActionResult> CreateOrder([FromBody] OrderCreateRequest request)
         {

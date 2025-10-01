@@ -31,19 +31,34 @@ namespace CB_Gift.Services
         public async Task<List<OrderDto>> GetOrdersForSellerAsync(string sellerUserId)
         {
             return await _context.Orders
+            .Include(o => o.EndCustomer)
+            .Include(o => o.StatusOrderNavigation)
+            .Include(o => o.OrderDetails)
             .Where(o => o.SellerUserId == sellerUserId)
             .OrderByDescending(o => o.OrderDate)
-             .Select(o => new OrderDto
-             {
-                 OrderId = o.OrderId,
-                 OrderCode = o.OrderCode,
-                 OrderDate = o.OrderDate,
-                 TotalCost = o.TotalCost,
-                 ProductionStatus = o.ProductionStatus // hoặc PaymentStatus tùy bạn
-             })
-        .ToListAsync();
+            .Select(o => new OrderDto
+            {
+                OrderId = o.OrderId,
+                OrderDate = o.OrderDate,
+                CustomerName = o.EndCustomer.Name,
+                TotalCost = o.TotalCost,
+                Tracking = o.Tracking,
+                StatusOderName = o.StatusOrderNavigation.NameVi
+            })
+            .ToListAsync();
         }
-
+        public async Task<List<OrderWithDetailsDto>> GetOrdersAndOrderDetailForSellerAsync(string sellerUserId)
+        {
+            return await _context.Orders
+            .Include(o => o.EndCustomer)
+            .Include(o => o.StatusOrderNavigation)
+            .Include(o => o.OrderDetails)
+                 .ThenInclude(od=>od.ProductVariant)
+            .Where(o => o.SellerUserId == sellerUserId)
+            .OrderByDescending(o => o.OrderDate)
+             .ProjectTo<OrderWithDetailsDto>(_mapper.ConfigurationProvider)
+            .ToListAsync();
+        }
 
         public async Task<int> CreateOrderAsync(OrderCreateRequest request, string sellerUserId)
         {
@@ -80,13 +95,10 @@ namespace CB_Gift.Services
             var query = _context.Orders
                 .Include(o => o.OrderDetails)
             .Where(o => o.OrderId == orderId && o.SellerUserId == sellerUserId);
-
-
             // Map trực tiếp sang DTO gồm cả collection Details
             var dto = await query
             .ProjectTo<OrderWithDetailsDto>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync();
-
 
             return dto;
         }

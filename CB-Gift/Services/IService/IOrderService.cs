@@ -8,6 +8,7 @@ namespace CB_Gift.Services.IService
     {
         Task<List<Order>> GetAllOrders();
         Task<List<OrderDto>> GetOrdersForSellerAsync(string sellerUserId);
+        Task<List<OrderWithDetailsDto>> GetOrdersAndOrderDetailForSellerAsync(string sellerUserId);
         Task<int> CreateOrderAsync(OrderCreateRequest request, string sellerUserId);
         Task<OrderWithDetailsDto?> GetOrderDetailAsync(int orderId, string sellerUserId);
         Task AddOrderDetailAsync(int orderId, OrderDetailCreateRequest request, string sellerUserId);
