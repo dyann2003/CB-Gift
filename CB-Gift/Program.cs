@@ -191,9 +191,9 @@ static async Task SeedSellerAsync(IServiceProvider serviceProvider)
     string sellerEmail = "seller123@example.com";
     string sellerPassword = "Seller@123";
 
-    if (!await roleManager.RoleExistsAsync("Admin"))
+    if (!await roleManager.RoleExistsAsync("Seller"))
     {
-        await roleManager.CreateAsync(new IdentityRole("Admin"));
+        await roleManager.CreateAsync(new IdentityRole("Seller"));
     }
 
     var sellerUser = await userManager.FindByEmailAsync(sellerEmail);
