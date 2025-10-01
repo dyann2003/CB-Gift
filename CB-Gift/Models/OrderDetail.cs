@@ -33,6 +33,7 @@ public partial class OrderDetail
 
     public DateTime? AssignedAt { get; set; }
 
+    public Decimal? Price { get; set; }
     public virtual Order Order { get; set; }
 
     public virtual OrderDetailDesign OrderDetailDesign { get; set; }

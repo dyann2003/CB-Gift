@@ -58,6 +58,9 @@ builder.Services
     .AddSignInManager()
     .AddDefaultTokenProviders();
 
+// Add AutoMapper
+builder.Services.AddAutoMapper(typeof(Program));
+
 // ================== JWT ==================
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -188,7 +191,7 @@ static async Task SeedSellerAsync(IServiceProvider serviceProvider)
     var userManager = serviceProvider.GetRequiredService<UserManager<AppUser>>();
     var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
 
-    string sellerEmail = "seller@example.com";
+    string sellerEmail = "seller123@example.com";
     string sellerPassword = "Seller@123";
 
     if (!await roleManager.RoleExistsAsync("Seller"))
@@ -205,6 +208,7 @@ static async Task SeedSellerAsync(IServiceProvider serviceProvider)
             Email = sellerEmail,
             EmailConfirmed = true
         };
+
         var result = await userManager.CreateAsync(user, sellerPassword);
         if (result.Succeeded)
         {
