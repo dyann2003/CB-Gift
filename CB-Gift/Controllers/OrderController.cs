@@ -20,5 +20,14 @@ namespace CB_Gift.Controllers
             var orders = await _orderService.GetAllOrders();
             return Ok(orders);
         }
+
+        [HttpGet("{orderId}")]
+        public async Task<IActionResult> GetOrderWithDetails(int orderId)
+        {
+            var order = await _orderService.GetOrderDetailAsync(orderId, null);
+            if (order == null) return NotFound("Order not found");
+
+            return Ok(order);
+        }
     }
 }
