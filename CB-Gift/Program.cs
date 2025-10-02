@@ -1,5 +1,5 @@
-﻿using System.Text;
-using CB_Gift.Data;
+﻿using CB_Gift.Data;
+using CB_Gift.Jobs;
 using CB_Gift.Services;
 using CB_Gift.Services.IService;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Quartz;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -111,6 +113,32 @@ builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IQrCodeService, QrCodeService>();
 builder.Services.AddScoped<IOrderDetailService, OrderDetailService>();
+builder.Services.AddScoped<IPlanService, PlanService>();
+
+// --- Quartz ---
+builder.Services.AddQuartz(q =>
+{
+    // Job factory được DI tự động
+    q.SchedulerId = "Scheduler-Core";
+
+    // Đăng ký Job
+    var jobKey = new JobKey("groupOrdersJob");
+    q.AddJob<GroupOrdersJob>(opts => opts.WithIdentity(jobKey));
+
+    // Trigger hằng ngày 00:05
+    q.AddTrigger(opts => opts
+        .ForJob(jobKey)
+        .WithIdentity("groupOrdersTrigger")
+        .StartNow()
+        .WithSchedule(CronScheduleBuilder.DailyAtHourAndMinute(0, 5)) // chạy 00:05 hàng ngày
+    );
+});
+
+// Quartz hosted service chạy cùng ứng dụng
+builder.Services.AddQuartzHostedService(options =>
+{
+    options.WaitForJobsToComplete = true;
+});
 
 var app = builder.Build();
 
