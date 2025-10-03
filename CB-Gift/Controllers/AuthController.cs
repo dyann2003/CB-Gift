@@ -159,5 +159,24 @@ public class AuthController : ControllerBase
 
         return Ok(new { message = "Password has been reset successfully." });
     }
+    // GET: /api/auth/profile
+    [Authorize]
+    [HttpGet("profile")]
+    public async Task<IActionResult> Profile()
+    {
+        var user = await _users.GetUserAsync(User);
+        if (user == null) return Unauthorized();
+
+        return Ok(new
+        {
+            user.Id,
+            user.UserName,
+            user.Email,
+            user.PhoneNumber,
+            user.IsActive,
+            user.FullName
+        });
+    }
+
 
 }

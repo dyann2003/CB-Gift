@@ -1,5 +1,5 @@
 ﻿using CB_Gift.Data;
-using CB_Gift.Data;
+using CB_Gift.Jobs;
 using CB_Gift.Services;
 using CB_Gift.Services.Email;
 using CB_Gift.Services.Email;
@@ -8,12 +8,16 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Quartz;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Controllers + Swagger
-builder.Services.AddControllers();
+// ================== Controllers + Swagger ==================
+builder.Services.AddControllers()
+    .AddJsonOptions(x =>
+        x.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles);
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -38,11 +42,11 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// DbContext
+// ================== DbContext ==================
 builder.Services.AddDbContext<CBGiftDbContext>(opt =>
     opt.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Identity
+// ================== Identity ==================
 builder.Services
     .AddIdentityCore<AppUser>(opt =>
     {
@@ -57,7 +61,10 @@ builder.Services
     .AddSignInManager()
     .AddDefaultTokenProviders();
 
-// JWT
+// Add AutoMapper
+builder.Services.AddAutoMapper(typeof(Program));
+
+// ================== JWT ==================
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opt =>
@@ -89,14 +96,55 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
-// Token service
-builder.Services.AddScoped<ITokenService, JwtTokenService>();
+// ================== CORS (cho Next.js FE) ==================
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins("http://localhost:3000") // FE URL
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
 
+// ================== Custom services ==================
+builder.Services.AddScoped<ITokenService, JwtTokenService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IQrCodeService, QrCodeService>();
+builder.Services.AddScoped<IOrderDetailService, OrderDetailService>();
+builder.Services.AddScoped<IPlanService, PlanService>();
+
+// --- Quartz ---
+builder.Services.AddQuartz(q =>
+{
+    // Job factory được DI tự động
+    q.SchedulerId = "Scheduler-Core";
+
+    // Đăng ký Job
+    var jobKey = new JobKey("groupOrdersJob");
+    q.AddJob<GroupOrdersJob>(opts => opts.WithIdentity(jobKey));
+
+    // Trigger hằng ngày 00:05
+    q.AddTrigger(opts => opts
+        .ForJob(jobKey)
+        .WithIdentity("groupOrdersTrigger")
+        .StartNow()
+        .WithSchedule(CronScheduleBuilder.DailyAtHourAndMinute(0, 5)) // chạy 00:05 hàng ngày
+    );
+});
+
+// Quartz hosted service chạy cùng ứng dụng
+builder.Services.AddQuartzHostedService(options =>
+{
+    options.WaitForJobsToComplete = true;
+});
+
 var app = builder.Build();
 
-// Swagger
+// ================== Middleware ==================
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -104,12 +152,16 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// bật CORS trước Authentication
+app.UseCors("AllowFrontend");
+
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
 
-// Seed Roles + user
+// ================== Seed Roles + User ==================
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
@@ -120,12 +172,11 @@ using (var scope = app.Services.CreateScope())
 
 app.Run();
 
-
-// ⚙️ Seed Roles
+// ================== Seed functions ==================
 static async Task SeedRolesAsync(IServiceProvider serviceProvider)
 {
     var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-    string[] roles = { "Admin", "Seller", "Designer", "QC","Staff", "Manager" };
+    string[] roles = { "Admin", "Seller", "Designer", "QC", "Staff", "Manager" };
 
     foreach (var role in roles)
     {
@@ -135,6 +186,7 @@ static async Task SeedRolesAsync(IServiceProvider serviceProvider)
         }
     }
 }
+
 static async Task SeedAdminAsync(IServiceProvider serviceProvider)
 {
     var userManager = serviceProvider.GetRequiredService<UserManager<AppUser>>();
@@ -165,18 +217,20 @@ static async Task SeedAdminAsync(IServiceProvider serviceProvider)
         }
     }
 }
-async Task SeedSellerAsync(IServiceProvider serviceProvider)
+
+static async Task SeedSellerAsync(IServiceProvider serviceProvider)
 {
     var userManager = serviceProvider.GetRequiredService<UserManager<AppUser>>();
     var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
 
-    string sellerEmail = "seller@example.com";
-    string sellerPassword = "seller@123";
+    string sellerEmail = "seller123@example.com";
+    string sellerPassword = "Seller@123";
 
-    if(!await roleManager.RoleExistsAsync("Seller"))
+    if (!await roleManager.RoleExistsAsync("Seller"))
     {
         await roleManager.CreateAsync(new IdentityRole("Seller"));
     }
+
     var sellerUser = await userManager.FindByEmailAsync(sellerEmail);
     if (sellerUser == null)
     {
@@ -186,11 +240,11 @@ async Task SeedSellerAsync(IServiceProvider serviceProvider)
             Email = sellerEmail,
             EmailConfirmed = true
         };
-        var result =await userManager.CreateAsync(user, sellerPassword);
+
+        var result = await userManager.CreateAsync(user, sellerPassword);
         if (result.Succeeded)
         {
             await userManager.AddToRoleAsync(user, "Seller");
         }
     }
 }
-
