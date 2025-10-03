@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Identity.Data;
 using CB_Gift.DTOs;
 
-namespace CB_Gift.Services.IService
+namespace CB_Gift.Services.Email
 {
     public interface IAccountService
     {

@@ -1,7 +1,8 @@
 ﻿using CB_Gift.Data;
 using CB_Gift.Jobs;
 using CB_Gift.Services;
-using CB_Gift.Services.IService;
+using CB_Gift.Services.Email;
+using CB_Gift.Services.Email;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -110,6 +111,7 @@ builder.Services.AddCors(options =>
 // ================== Custom services ==================
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IQrCodeService, QrCodeService>();
 builder.Services.AddScoped<IOrderDetailService, OrderDetailService>();

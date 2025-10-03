@@ -1,6 +1,6 @@
 ﻿using CB_Gift.Data;
 using CB_Gift.DTOs;
-using CB_Gift.Services.IService;
+using CB_Gift.Services.Email;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
