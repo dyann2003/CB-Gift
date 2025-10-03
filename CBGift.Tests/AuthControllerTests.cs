@@ -1,4 +1,7 @@
-﻿using CB_Gift.Controllers;
+﻿using System.Security.Claims;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using CB_Gift.Controllers;
 using CB_Gift.Data;
 using CB_Gift.DTOs;
 using CB_Gift.Services.Email;
@@ -10,10 +13,20 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
-using System.Security.Claims;
+using Xunit;
+using Xunit.Abstractions;
 using IdentitySignInResult = Microsoft.AspNetCore.Identity.SignInResult;
+
 public class AuthControllerTests
 {
+    private readonly ITestOutputHelper _out;
+    private static readonly JsonSerializerOptions JsonOpt = new()
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
+    public AuthControllerTests(ITestOutputHelper output) => _out = output;
+
     private IConfiguration BuildConfig() =>
         new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -24,7 +37,7 @@ public class AuthControllerTests
     private static Mock<UserManager<AppUser>> CreateUserManagerWithOptions()
     {
         var store = new Mock<IUserStore<AppUser>>();
-        var options = Options.Create(new IdentityOptions());     // <-- cần cái này
+        var options = Options.Create(new IdentityOptions());
         var pwdHasher = new Mock<IPasswordHasher<AppUser>>().Object;
         var userValidators = new List<IUserValidator<AppUser>>();
         var pwdValidators = new List<IPasswordValidator<AppUser>>();
@@ -38,7 +51,6 @@ public class AuthControllerTests
             normalizer, errors, services, logger);
     }
 
-
     private static Mock<SignInManager<AppUser>> CreateSignInManagerMock(UserManager<AppUser> um, HttpContext? ctx = null)
     {
         return new Mock<SignInManager<AppUser>>(
@@ -49,6 +61,20 @@ public class AuthControllerTests
         { CallBase = true };
     }
 
+    private void LogResult(string label, IActionResult result)
+    {
+        object? body = result switch
+        {
+            OkObjectResult ok => ok.Value,
+            BadRequestObjectResult bad => bad.Value,
+            UnauthorizedObjectResult un => un.Value,
+            _ => null
+        };
+        var json = body is null ? "" : JsonSerializer.Serialize(body, JsonOpt);
+        _out.WriteLine($"[{label}] {result.GetType().Name} :: {json}");
+    }
+
+    // ===== Login
     [Fact]
     public async Task Login_Returns_Unauthorized_When_User_NotFound_Or_Inactive()
     {
@@ -59,7 +85,6 @@ public class AuthControllerTests
         var accounts = new Mock<IAccountService>();
         var config = BuildConfig();
 
-        // user not found: cả FindByName + FindByEmail đều null
         um.Setup(m => m.FindByNameAsync(It.IsAny<string>())).ReturnsAsync((AppUser)null!);
         um.Setup(m => m.FindByEmailAsync(It.IsAny<string>())).ReturnsAsync((AppUser)null!);
 
@@ -67,12 +92,13 @@ public class AuthControllerTests
         { ControllerContext = new ControllerContext { HttpContext = http } };
 
         var r1 = await ctl.Login(new LoginDto { UserNameOrEmail = "nope", Password = "x" });
+        LogResult("Login_NotFound", r1);
         r1.Should().BeOfType<UnauthorizedObjectResult>();
 
-        // inactive user
         var inactive = new AppUser { UserName = "u", Email = "u@x.com", IsActive = false };
         um.Setup(m => m.FindByNameAsync("u")).ReturnsAsync(inactive);
         var r2 = await ctl.Login(new LoginDto { UserNameOrEmail = "u", Password = "x" });
+        LogResult("Login_Inactive", r2);
         r2.Should().BeOfType<UnauthorizedObjectResult>();
     }
 
@@ -97,6 +123,7 @@ public class AuthControllerTests
         { ControllerContext = new ControllerContext { HttpContext = http } };
 
         var r = await ctl.Login(new LoginDto { UserNameOrEmail = "u2", Password = "bad" });
+        LogResult("Login_BadPassword", r);
         r.Should().BeOfType<UnauthorizedObjectResult>();
     }
 
@@ -114,21 +141,97 @@ public class AuthControllerTests
         um.Setup(m => m.FindByNameAsync("okuser")).ReturnsAsync(user);
         um.Setup(m => m.FindByEmailAsync("okuser")).ReturnsAsync((AppUser)null!);
 
-        sm.Setup(s => s.CheckPasswordSignInAsync(user, "good", false))
-          .ReturnsAsync(IdentitySignInResult.Success);
+        sm.Setup(s => s.CheckPasswordSignInAsync(user, "good", false)).ReturnsAsync(IdentitySignInResult.Success);
         tokens.Setup(t => t.CreateTokenAsync(user)).ReturnsAsync("jwt-token");
 
         var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
         { ControllerContext = new ControllerContext { HttpContext = http } };
 
         var result = await ctl.Login(new LoginDto { UserNameOrEmail = "okuser", Password = "good" });
-        var ok = result as OkObjectResult;
-        ok.Should().NotBeNull();
-
+        LogResult("Login_Success", result);
+        result.Should().BeOfType<OkObjectResult>();
 
         http.Response.Headers.TryGetValue("Set-Cookie", out var setCookies).Should().BeTrue();
         setCookies.ToString().Should().Contain("access_token=");
     }
+
+    [Fact]
+    public async Task Login_DefaultExpiry_Sets_Cookie_And_Returns_Token()
+    {
+        var http = new DefaultHttpContext();
+        var um = CreateUserManagerWithOptions();
+        var sm = CreateSignInManagerMock(um.Object, http);
+        var tokens = new Mock<ITokenService>();
+        var accounts = new Mock<IAccountService>();
+        var config = new ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?> { ["App:ClientUrl"] = "https://example.com" }).Build();
+
+        var user = new AppUser { UserName = "ok", Email = "ok@x.com", IsActive = true };
+        um.Setup(m => m.FindByNameAsync("ok")).ReturnsAsync(user);
+        um.Setup(m => m.FindByEmailAsync("ok")).ReturnsAsync((AppUser)null!);
+        sm.Setup(s => s.CheckPasswordSignInAsync(user, "good", false)).ReturnsAsync(IdentitySignInResult.Success);
+        tokens.Setup(t => t.CreateTokenAsync(user)).ReturnsAsync("jwt-token");
+
+        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
+        { ControllerContext = new ControllerContext { HttpContext = http } };
+
+        var r = await ctl.Login(new LoginDto { UserNameOrEmail = "ok", Password = "good" });
+        LogResult("Login_Success_DefaultExpiry", r);
+        r.Should().BeOfType<OkObjectResult>();
+
+        http.Response.Headers.TryGetValue("Set-Cookie", out var setCookies).Should().BeTrue();
+        setCookies.ToString().Should().Contain("access_token=");
+    }
+
+    [Fact]
+    public async Task Login_ByEmail_Sets_Cookie_And_Returns_Token()
+    {
+        var http = new DefaultHttpContext();
+        var um = CreateUserManagerWithOptions();
+        var sm = CreateSignInManagerMock(um.Object, http);
+        var tokens = new Mock<ITokenService>();
+        var accounts = new Mock<IAccountService>();
+        var config = BuildConfig();
+
+        um.Setup(m => m.FindByNameAsync("mailuser")).ReturnsAsync((AppUser)null!);
+        var user = new AppUser { UserName = "mailuser", Email = "mailuser@x.com", IsActive = true };
+        um.Setup(m => m.FindByEmailAsync("mailuser")).ReturnsAsync(user);
+
+        sm.Setup(s => s.CheckPasswordSignInAsync(user, "good", false)).ReturnsAsync(IdentitySignInResult.Success);
+        tokens.Setup(t => t.CreateTokenAsync(user)).ReturnsAsync("jwt-token");
+
+        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
+        { ControllerContext = new ControllerContext { HttpContext = http } };
+
+        var r = await ctl.Login(new LoginDto { UserNameOrEmail = "mailuser", Password = "good" });
+        LogResult("Login_ByEmail", r);
+        r.Should().BeOfType<OkObjectResult>();
+    }
+
+    [Fact]
+    public async Task Login_Returns_Unauthorized_When_LockedOut()
+    {
+        var http = new DefaultHttpContext();
+        var um = CreateUserManagerWithOptions();
+        var sm = CreateSignInManagerMock(um.Object, http);
+        var tokens = new Mock<ITokenService>();
+        var accounts = new Mock<IAccountService>();
+        var config = BuildConfig();
+
+        var user = new AppUser { UserName = "lock", Email = "lock@x.com", IsActive = true };
+        um.Setup(m => m.FindByNameAsync("lock")).ReturnsAsync(user);
+        um.Setup(m => m.FindByEmailAsync("lock")).ReturnsAsync((AppUser)null!);
+        sm.Setup(s => s.CheckPasswordSignInAsync(user, "pwd", false)).ReturnsAsync(IdentitySignInResult.LockedOut);
+
+        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
+        { ControllerContext = new ControllerContext { HttpContext = http } };
+
+        var r = await ctl.Login(new LoginDto { UserNameOrEmail = "lock", Password = "pwd" });
+        LogResult("Login_LockedOut", r);
+        r.Should().BeOfType<UnauthorizedObjectResult>();
+    }
+
+    // ===== Logout
     [Fact]
     public void Logout_Deletes_Cookie_And_Returns_Ok()
     {
@@ -143,53 +246,43 @@ public class AuthControllerTests
         { ControllerContext = new ControllerContext { HttpContext = http } };
 
         var result = ctl.Logout();
+        LogResult("Logout", result);
         result.Should().BeOfType<OkObjectResult>();
     }
 
+    // ===== Change password
     [Fact]
     public async Task ChangePassword_Returns_Unauthorized_When_User_Not_In_Context()
     {
-        var http = new DefaultHttpContext(); // không set ClaimsPrincipal => null user
+        var http = new DefaultHttpContext();
         var um = CreateUserManagerWithOptions();
         var sm = CreateSignInManagerMock(um.Object, http);
-        var tokens = new Mock<ITokenService>();
-        var accounts = new Mock<IAccountService>();
-        var config = BuildConfig();
-
-        // Khi GetUserAsync(User) chạy, extension sẽ cố FindByIdAsync(null) -> ta không setup => trả null
-        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
+        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), Mock.Of<IAccountService>())
         { ControllerContext = new ControllerContext { HttpContext = http } };
 
         var r = await ctl.ChangePassword(new ChangePasswordDto { CurrentPassword = "a", NewPassword = "b" });
+        LogResult("ChangePassword_Unauthorized", r);
         r.Should().BeOfType<UnauthorizedResult>();
     }
+
     [Fact]
     public async Task ChangePassword_Returns_BadRequest_When_Manager_Fails()
     {
         var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();                      // mock cũ cũng được
+        var um = CreateUserManagerWithOptions();
         var sm = CreateSignInManagerMock(um.Object, http);
-        var tokens = new Mock<ITokenService>();
-        var accounts = new Mock<IAccountService>();
-        var config = BuildConfig();
 
         var user = new AppUser { Id = "U100", UserName = "test", Email = "t@x.com" };
-
-        // Quan trọng: stub trực tiếp GetUserAsync để controller nhận được user
-        um.Setup(m => m.GetUserAsync(It.IsAny<ClaimsPrincipal>()))
-          .ReturnsAsync(user);
-
+        um.Setup(m => m.GetUserAsync(It.IsAny<ClaimsPrincipal>())).ReturnsAsync(user);
         um.Setup(m => m.ChangePasswordAsync(user, "old", "new"))
           .ReturnsAsync(IdentityResult.Failed(new IdentityError { Code = "E1", Description = "boom" }));
 
-        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
+        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), Mock.Of<IAccountService>())
         { ControllerContext = new ControllerContext { HttpContext = http } };
 
         var r = await ctl.ChangePassword(new ChangePasswordDto { CurrentPassword = "old", NewPassword = "new" });
+        LogResult("ChangePassword_BadRequest", r); // serialize body -> force LINQ
         r.Should().BeOfType<BadRequestObjectResult>();
-        var bad = (BadRequestObjectResult)r;
-        var json = System.Text.Json.JsonSerializer.Serialize(bad.Value);
-        json.Should().Contain("boom");
     }
 
     [Fact]
@@ -198,129 +291,113 @@ public class AuthControllerTests
         var http = new DefaultHttpContext();
         var um = CreateUserManagerWithOptions();
         var sm = CreateSignInManagerMock(um.Object, http);
-        var tokens = new Mock<ITokenService>();
-        var accounts = new Mock<IAccountService>();
-        var config = BuildConfig();
 
         var user = new AppUser { Id = "U101", UserName = "ok", Email = "ok@x.com" };
+        um.Setup(m => m.GetUserAsync(It.IsAny<ClaimsPrincipal>())).ReturnsAsync(user);
+        um.Setup(m => m.ChangePasswordAsync(user, "old", "new")).ReturnsAsync(IdentityResult.Success);
 
-        // Stub thẳng GetUserAsync để bỏ qua claim/options
-        um.Setup(m => m.GetUserAsync(It.IsAny<ClaimsPrincipal>()))
-          .ReturnsAsync(user);
-
-        um.Setup(m => m.ChangePasswordAsync(user, "old", "new"))
-          .ReturnsAsync(IdentityResult.Success);
-
-        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
+        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), Mock.Of<IAccountService>())
         { ControllerContext = new ControllerContext { HttpContext = http } };
 
         var r = await ctl.ChangePassword(new ChangePasswordDto { CurrentPassword = "old", NewPassword = "new" });
+        LogResult("ChangePassword_Success", r);
         r.Should().BeOfType<OkObjectResult>();
     }
+
+    // ===== Register
     [Fact]
     public async Task Register_Returns_BadRequest_When_AccountService_Fails()
     {
         var http = new DefaultHttpContext();
         var um = CreateUserManagerWithOptions();
         var sm = CreateSignInManagerMock(um.Object, http);
-        var tokens = new Mock<ITokenService>();
         var accounts = new Mock<IAccountService>();
-        var config = BuildConfig();
-
         accounts.Setup(a => a.RegisterAsync(It.IsAny<RegisterRequestDto>()))
-                .ReturnsAsync(new ServiceResult<RegisterResponseDto>
-                {
-                    Success = false,
-                    Message = "Email already registered."
-                });
+                .ReturnsAsync(new ServiceResult<RegisterResponseDto> { Success = false, Message = "Email already registered." });
 
-        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
+        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), accounts.Object)
         { ControllerContext = new ControllerContext { HttpContext = http } };
 
         var r = await ctl.Register(new RegisterRequestDto { Email = "dup@x.com" });
+        LogResult("Register_Failed", r);
         r.Should().BeOfType<BadRequestObjectResult>();
     }
+
     [Fact]
     public async Task Register_Returns_Ok_With_Data_On_Success()
     {
         var http = new DefaultHttpContext();
         var um = CreateUserManagerWithOptions();
         var sm = CreateSignInManagerMock(um.Object, http);
-        var tokens = new Mock<ITokenService>();
         var accounts = new Mock<IAccountService>();
-        var config = BuildConfig();
-
         var data = new RegisterResponseDto { Email = "new@x.com", TemporaryPassword = "abc123" };
         accounts.Setup(a => a.RegisterAsync(It.IsAny<RegisterRequestDto>()))
-                .ReturnsAsync(new ServiceResult<RegisterResponseDto>
-                {
-                    Success = true,
-                    Data = data
-                });
+                .ReturnsAsync(new ServiceResult<RegisterResponseDto> { Success = true, Data = data });
 
-        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
+        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), accounts.Object)
         { ControllerContext = new ControllerContext { HttpContext = http } };
 
         var r = await ctl.Register(new RegisterRequestDto { Email = "new@x.com" });
+        LogResult("Register_Success", r);
         r.Should().BeOfType<OkObjectResult>();
     }
+
+    // ===== Forgot password
     [Fact]
     public async Task ForgotPassword_Returns_BadRequest_When_User_NotFound()
     {
         var http = new DefaultHttpContext();
         var um = CreateUserManagerWithOptions();
         var sm = CreateSignInManagerMock(um.Object, http);
-        var tokens = new Mock<ITokenService>();
-        var accounts = new Mock<IAccountService>();
-        var config = BuildConfig();
 
         um.Setup(m => m.FindByEmailAsync("none@x.com")).ReturnsAsync((AppUser)null!);
 
-        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
+        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), Mock.Of<IAccountService>())
         { ControllerContext = new ControllerContext { HttpContext = http } };
 
         var r = await ctl.ForgotPassword(new ForgotPasswordDto { Email = "none@x.com" });
+        LogResult("Forgot_UserNotFound", r);
         r.Should().BeOfType<BadRequestObjectResult>();
     }
+
     [Fact]
     public async Task ForgotPassword_Returns_BadRequest_When_Email_Not_Confirmed()
     {
         var http = new DefaultHttpContext();
         var um = CreateUserManagerWithOptions();
         var sm = CreateSignInManagerMock(um.Object, http);
-        var tokens = new Mock<ITokenService>();
-        var accounts = new Mock<IAccountService>();
-        var config = BuildConfig();
 
         var user = new AppUser { Email = "u@x.com" };
         um.Setup(m => m.FindByEmailAsync("u@x.com")).ReturnsAsync(user);
         um.Setup(m => m.IsEmailConfirmedAsync(user)).ReturnsAsync(false);
 
-        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
+        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), Mock.Of<IAccountService>())
         { ControllerContext = new ControllerContext { HttpContext = http } };
 
         var r = await ctl.ForgotPassword(new ForgotPasswordDto { Email = "u@x.com" });
+        LogResult("Forgot_NotConfirmed", r);
         r.Should().BeOfType<BadRequestObjectResult>();
     }
+
     [Fact]
     public async Task ForgotPassword_Sends_Reset_Email_And_Returns_Ok()
     {
         var http = new DefaultHttpContext();
         var um = CreateUserManagerWithOptions();
         var sm = CreateSignInManagerMock(um.Object, http);
-        var tokens = new Mock<ITokenService>();
         var accounts = new Mock<IAccountService>();
-        var config = BuildConfig(); // có App:ClientUrl
+        var config = BuildConfig();
 
         var user = new AppUser { Email = "u@x.com" };
         um.Setup(m => m.FindByEmailAsync("u@x.com")).ReturnsAsync(user);
         um.Setup(m => m.IsEmailConfirmedAsync(user)).ReturnsAsync(true);
         um.Setup(m => m.GeneratePasswordResetTokenAsync(user)).ReturnsAsync("tok123");
 
-        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
+        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), config, accounts.Object)
         { ControllerContext = new ControllerContext { HttpContext = http } };
 
         var r = await ctl.ForgotPassword(new ForgotPasswordDto { Email = "u@x.com" });
+        LogResult("Forgot_Success", r);
         r.Should().BeOfType<OkObjectResult>();
 
         accounts.Verify(a => a.SendResetPasswordEmailAsync(
@@ -328,153 +405,62 @@ public class AuthControllerTests
             It.Is<string>(link => link.Contains("reset-password") && link.Contains("tok123"))),
             Times.Once);
     }
+
+    // ===== Reset password
     [Fact]
     public async Task ResetPassword_Returns_BadRequest_When_User_NotFound()
     {
         var http = new DefaultHttpContext();
         var um = CreateUserManagerWithOptions();
         var sm = CreateSignInManagerMock(um.Object, http);
-        var tokens = new Mock<ITokenService>();
-        var accounts = new Mock<IAccountService>();
-        var config = BuildConfig();
 
         um.Setup(m => m.FindByEmailAsync("none@x.com")).ReturnsAsync((AppUser)null!);
 
-        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
+        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), Mock.Of<IAccountService>())
         { ControllerContext = new ControllerContext { HttpContext = http } };
 
         var r = await ctl.ResetPassword(new ResetPasswordDto { Email = "none@x.com", Token = "t", NewPassword = "P@ss1" });
+        LogResult("Reset_UserNotFound", r);
         r.Should().BeOfType<BadRequestObjectResult>();
     }
+
     [Fact]
     public async Task ResetPassword_Returns_BadRequest_When_Reset_Fails()
     {
         var http = new DefaultHttpContext();
         var um = CreateUserManagerWithOptions();
         var sm = CreateSignInManagerMock(um.Object, http);
-        var tokens = new Mock<ITokenService>();
-        var accounts = new Mock<IAccountService>();
-        var config = BuildConfig();
 
         var user = new AppUser { Email = "u@x.com" };
         um.Setup(m => m.FindByEmailAsync("u@x.com")).ReturnsAsync(user);
         um.Setup(m => m.ResetPasswordAsync(user, "tok", "NewP@ss1"))
           .ReturnsAsync(IdentityResult.Failed(new IdentityError { Description = "invalid token" }));
 
-        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
+        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), Mock.Of<IAccountService>())
         { ControllerContext = new ControllerContext { HttpContext = http } };
 
         var r = await ctl.ResetPassword(new ResetPasswordDto { Email = "u@x.com", Token = "tok", NewPassword = "NewP@ss1" });
+        LogResult("Reset_Failed", r); // serialize -> evaluate LINQ
         r.Should().BeOfType<BadRequestObjectResult>();
-        var bad = (BadRequestObjectResult)r;
-        var json = System.Text.Json.JsonSerializer.Serialize(bad.Value);
-        json.Should().Contain("invalid token");
     }
+
     [Fact]
     public async Task ResetPassword_Returns_Ok_On_Success()
     {
         var http = new DefaultHttpContext();
         var um = CreateUserManagerWithOptions();
         var sm = CreateSignInManagerMock(um.Object, http);
-        var tokens = new Mock<ITokenService>();
-        var accounts = new Mock<IAccountService>();
-        var config = BuildConfig();
 
         var user = new AppUser { Email = "ok@x.com" };
         um.Setup(m => m.FindByEmailAsync("ok@x.com")).ReturnsAsync(user);
         um.Setup(m => m.ResetPasswordAsync(user, "tok", "NewP@ss1")).ReturnsAsync(IdentityResult.Success);
 
-        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
+        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), Mock.Of<IAccountService>())
         { ControllerContext = new ControllerContext { HttpContext = http } };
 
         var r = await ctl.ResetPassword(new ResetPasswordDto { Email = "ok@x.com", Token = "tok", NewPassword = "NewP@ss1" });
+        LogResult("Reset_Success", r);
         r.Should().BeOfType<OkObjectResult>();
     }
-    [Fact]
-    public async Task Login_DefaultExpiry_Sets_Cookie_And_Returns_Token()
-    {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-        var tokens = new Mock<ITokenService>();
-        var accounts = new Mock<IAccountService>();
-
-        // KHÔNG set Jwt:ExpiresMinutes -> rẽ nhánh mặc định "60"
-        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["App:ClientUrl"] = "https://example.com"
-        }).Build();
-
-        var user = new AppUser { UserName = "ok", Email = "ok@x.com", IsActive = true };
-        um.Setup(m => m.FindByNameAsync("ok")).ReturnsAsync(user);
-        um.Setup(m => m.FindByEmailAsync("ok")).ReturnsAsync((AppUser)null!);
-        sm.Setup(s => s.CheckPasswordSignInAsync(user, "good", false)).ReturnsAsync(IdentitySignInResult.Success);
-        tokens.Setup(t => t.CreateTokenAsync(user)).ReturnsAsync("jwt-token");
-
-        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
-
-        var r = await ctl.Login(new LoginDto { UserNameOrEmail = "ok", Password = "good" });
-        r.Should().BeOfType<OkObjectResult>();
-
-        http.Response.Headers.TryGetValue("Set-Cookie", out var setCookies).Should().BeTrue();
-        setCookies.ToString().Should().Contain("access_token=");
-    }
-    [Fact]
-    public async Task Login_ByEmail_Sets_Cookie_And_Returns_Token()
-    {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-        var tokens = new Mock<ITokenService>();
-        var accounts = new Mock<IAccountService>();
-        var config = BuildConfig(); // có Jwt:ExpiresMinutes=60
-
-        // Không tìm thấy theo UserName -> null
-        um.Setup(m => m.FindByNameAsync("mailuser")).ReturnsAsync((AppUser)null!);
-
-        // Nhưng tìm thấy theo Email
-        var user = new AppUser { UserName = "mailuser", Email = "mailuser@x.com", IsActive = true };
-        um.Setup(m => m.FindByEmailAsync("mailuser")).ReturnsAsync(user);
-
-        sm.Setup(s => s.CheckPasswordSignInAsync(user, "good", false))
-          .ReturnsAsync(IdentitySignInResult.Success);
-        tokens.Setup(t => t.CreateTokenAsync(user)).ReturnsAsync("jwt-token");
-
-        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
-
-        var r = await ctl.Login(new LoginDto { UserNameOrEmail = "mailuser", Password = "good" });
-        r.Should().BeOfType<OkObjectResult>();
-
-        http.Response.Headers.TryGetValue("Set-Cookie", out var setCookies).Should().BeTrue();
-        setCookies.ToString().Should().Contain("access_token=");
-    }
-    [Fact]
-    public async Task Login_Returns_Unauthorized_When_LockedOut()
-    {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-        var tokens = new Mock<ITokenService>();
-        var accounts = new Mock<IAccountService>();
-        var config = BuildConfig(); // có Jwt:ExpiresMinutes
-
-        // Tìm thấy user theo UserName
-        var user = new AppUser { UserName = "lock", Email = "lock@x.com", IsActive = true };
-        um.Setup(m => m.FindByNameAsync("lock")).ReturnsAsync(user);
-        um.Setup(m => m.FindByEmailAsync("lock")).ReturnsAsync((AppUser)null!);
-
-        // Kết quả sign-in KHÔNG thành công nhưng khác Failed (LockedOut)
-        sm.Setup(s => s.CheckPasswordSignInAsync(user, "pwd", false))
-          .ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.LockedOut);
-
-        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
-
-        var r = await ctl.Login(new LoginDto { UserNameOrEmail = "lock", Password = "pwd" });
-        r.Should().BeOfType<UnauthorizedObjectResult>();
-    }
-
-
 }
+

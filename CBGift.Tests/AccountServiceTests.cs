@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using CB_Gift.Data;
 using CB_Gift.DTOs;
 using CB_Gift.Services;
@@ -7,9 +7,24 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Identity;
 using Moq;
 using Xunit;
+using Xunit.Abstractions;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 public class AccountServiceTests
 {
+    private readonly ITestOutputHelper _out;
+    private static readonly JsonSerializerOptions JsonOpt = new()
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+    public AccountServiceTests(ITestOutputHelper output) => _out = output;
+
+    private void LogResult(string label, object obj)
+    {
+        _out.WriteLine($"[{label}] {JsonSerializer.Serialize(obj, JsonOpt)}");
+    }
+
     private static Mock<UserManager<AppUser>> CreateUserManagerMock()
     {
         var store = new Mock<IUserStore<AppUser>>();
@@ -26,6 +41,8 @@ public class AccountServiceTests
         var svc = new AccountService(um.Object, emailSender.Object);
 
         var rs = await svc.RegisterAsync(new RegisterRequestDto { Email = "e@x.com" });
+
+        LogResult(nameof(RegisterAsync_Returns_Error_When_Email_Already_Exists), rs);
         rs.Success.Should().BeFalse();
         rs.Message.Should().Contain("Email already registered");
         emailSender.VerifyNoOtherCalls();
@@ -43,6 +60,8 @@ public class AccountServiceTests
         var svc = new AccountService(um.Object, emailSender.Object);
 
         var rs = await svc.RegisterAsync(new RegisterRequestDto { Email = "new@x.com" });
+
+        LogResult(nameof(RegisterAsync_Returns_Error_When_Create_Fails), rs);
         rs.Success.Should().BeFalse();
         rs.Message.Should().Contain("User creation failed");
         emailSender.VerifyNoOtherCalls();
@@ -61,6 +80,7 @@ public class AccountServiceTests
 
         var rs = await svc.RegisterAsync(new RegisterRequestDto { Email = "ok@x.com" });
 
+        LogResult(nameof(RegisterAsync_Succeeds_And_Sends_Welcome_Email), rs);
         rs.Success.Should().BeTrue();
         rs.Data.Email.Should().Be("ok@x.com");
         rs.Data.TemporaryPassword.Should().NotBeNullOrEmpty();
@@ -72,6 +92,7 @@ public class AccountServiceTests
             It.Is<string>(b => b.Contains("ok@x.com") && b.Contains(rs.Data.TemporaryPassword))),
             Times.Once);
     }
+
     [Fact]
     public async Task SendResetPasswordEmailAsync_Sends_Email_With_Reset_Link()
     {
@@ -81,6 +102,8 @@ public class AccountServiceTests
 
         await svc.SendResetPasswordEmailAsync("u@x.com", "https://x/reset?token=abc");
 
+        // log nội dung verify để xem subject/body đã khớp
+        _out.WriteLine("[SendResetPasswordEmailAsync] to=u@x.com link=https://x/reset?token=abc");
         emailSender.Verify(es => es.SendAsync(
             "u@x.com",
             It.Is<string>(s => s.Contains("Reset", StringComparison.OrdinalIgnoreCase)),

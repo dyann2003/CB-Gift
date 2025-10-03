@@ -1,19 +1,22 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IdentityModel.Tokens.Jwt;
-using System.Linq;
-using System.Security.Claims;
-using System.Threading.Tasks;
-using CB_Gift.Data;
+﻿using CB_Gift.Data;
 using CB_Gift.Services;
 using FluentAssertions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Moq;
+using System;
+using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
+using System.Security.Claims;
+using System.Threading.Tasks;
 using Xunit;
+using Xunit.Abstractions;
 
 public class JwtTokenServiceTests
 {
+    private readonly ITestOutputHelper _out;
+    public JwtTokenServiceTests(ITestOutputHelper output) => _out = output;
     private IConfiguration BuildConfig()
     {
         var dict = new Dictionary<string, string?>
@@ -50,7 +53,7 @@ public class JwtTokenServiceTests
 
     
         var token = await svc.CreateTokenAsync(user);
-
+        _out.WriteLine($"[JWT_WithRoles] {token[..24]}...");
         // Assert
         token.Should().NotBeNullOrEmpty();
 
@@ -85,7 +88,7 @@ public class JwtTokenServiceTests
 
         var svc = new JwtTokenService(cfg, um.Object);
         var token = await svc.CreateTokenAsync(user);
-
+        _out.WriteLine($"[JWT_NoRoles] {token[..24]}...");
         token.Should().NotBeNullOrEmpty();
 
         var jwt = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().ReadJwtToken(token);
