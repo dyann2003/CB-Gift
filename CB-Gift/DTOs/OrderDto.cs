@@ -51,19 +51,56 @@ namespace CB_Gift.DTOs
     }
     public class OrderCreateRequest
     {
-        public string OrderCode { get; set; } = string.Empty;
+        public string? OrderCode { get; set; } = string.Empty;
         public int EndCustomerID { get; set; }
         public decimal? TotalCost { get; set; }
+
+        public string? SellerUserId { get; set; }
+
+        public DateTime? OrderDate { get; set; }
+
+        public Decimal? CostScan { get; set; }
+
+        public bool ActiveTTS { get; set; } = false;
+
+        public string? Tracking {  get; set; }
+        public string? ProductionStatus { get; set; }
+        public string? PaymentStatus { get; set; }
         public List<OrderDetailCreateRequest>? OrderDetails { get; set; }
+
+
+        public OrderCreateRequest()
+        {
+            CostScan = 1;
+        }
     }
 
 
     public class OrderDetailCreateRequest
     {
+        public int OrderId { get; set; }
         public int ProductVariantID { get; set; }
-        public int Quantity { get; set; }
+        public int Quantity { get; set; } = 1;
         public decimal? Price { get; set; }
         public string? LinkImg { get; set; }
-        public bool NeedDesign { get; set; }
+        public bool NeedDesign { get; set; } = false;
+        public string? LinkThanksCard { get; set; }
+        public string? LinkDesign {  get; set; }
+        public string? Accessory { get; set; }
+        public string? Note { get; set; }
+        
+    }
+
+    public class EndCustomerCreateRequest
+    {
+        public string Name { get; set; }
+        public string? Phone { get; set; }
+        public string? Email { get; set; }
+        public string? Address { get; set; }
+        public string? Address1 { get; set; }
+        public string? ZipCode { get; set; }
+        public string? ShipState { get; set; }
+        public string? ShipCity { get; set; }
+        public string? ShipCountry { get; set; }
     }
 }

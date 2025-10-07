@@ -12,5 +12,6 @@ namespace CB_Gift.Services.IService
         Task<int> CreateOrderAsync(OrderCreateRequest request, string sellerUserId);
         Task<OrderWithDetailsDto?> GetOrderDetailAsync(int orderId, string sellerUserId);
         Task AddOrderDetailAsync(int orderId, OrderDetailCreateRequest request, string sellerUserId);
+        Task<EndCustomer> CreateCustomerAsync(EndCustomerCreateRequest request);
     }
 }
