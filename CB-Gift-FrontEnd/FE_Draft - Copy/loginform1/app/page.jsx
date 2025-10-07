@@ -40,6 +40,7 @@ export default function LoginPage() {
           userNameOrEmail: email,
           password: password,
         }),
+        credentials: "include",
       });
 
       if (!res.ok) {
