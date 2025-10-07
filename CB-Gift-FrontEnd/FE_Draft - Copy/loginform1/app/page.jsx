@@ -6,18 +6,27 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { jwtDecode } from "jwt-decode";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
+  const [error, setError] = useState("");
+  const [open, setOpen] = useState(false);
   const router = useRouter();
 
   const handleLogin = async (e) => {
     e.preventDefault();
 
     if (!email || !password) {
-      alert("Please enter both email and password");
+      setError("Please enter both email and password");
+      setOpen(true);
       return;
     }
 
@@ -35,15 +44,17 @@ export default function LoginPage() {
 
       if (!res.ok) {
         const err = await res.json();
-        alert(err.message || "Login failed");
+        setError(err.message || "Login failed");
+        setOpen(true);
         return;
       }
 
       const data = await res.json();
-      const token = data.accessToken; // 👈 fix ở đây
+      const token = data.accessToken;
 
       if (!token) {
-        alert("No token received from server");
+        setError("No token received from server");
+        setOpen(true);
         return;
       }
 
@@ -63,7 +74,7 @@ export default function LoginPage() {
       }
 
       // Điều hướng theo role
-      if (roles?.includes("Seller")) {
+      if (roles?.includes("Admin")) {
         router.push("/seller/dashboard");
       } else if (roles?.includes("Manager")) {
         router.push("/manager/dashboard");
@@ -75,8 +86,8 @@ export default function LoginPage() {
         router.push("/"); // fallback
       }
     } catch (error) {
-      console.error("Login error:", error);
-      alert("Something went wrong!");
+      setError("Something went wrong!");
+      setOpen(true);
     }
   };
 
@@ -87,7 +98,7 @@ export default function LoginPage() {
         <div className="w-full max-w-md space-y-6">
           {/* Logo */}
           <div className="flex items-center space-x-2 mb-8">
-            <div className="w-8 h-8 bg-cyan-400 rounded"></div>
+            <div className="w-8 h-8 bg-cyan-400 rounded"></div>s
           </div>
 
           {/* Login Form */}
@@ -129,15 +140,23 @@ export default function LoginPage() {
               </div>
 
               {/* Remember Me */}
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="remember"
-                  checked={rememberMe}
-                  onCheckedChange={setRememberMe}
-                />
-                <label htmlFor="remember" className="text-sm text-gray-600">
-                  Remember me
-                </label>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="remember"
+                    checked={rememberMe}
+                    onCheckedChange={setRememberMe}
+                  />
+                  <label htmlFor="remember" className="text-sm text-gray-600">
+                    Remember me
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  className="text-sm text-gray-600 hover:text-gray-800"
+                >
+                  Forgot password?
+                </button>
               </div>
 
               {/* Login Button */}
@@ -162,6 +181,14 @@ export default function LoginPage() {
           />
         </div>
       </div>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-red-600">Login Error</DialogTitle>
+          </DialogHeader>
+          <p className="text-gray-700">{error}</p>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
