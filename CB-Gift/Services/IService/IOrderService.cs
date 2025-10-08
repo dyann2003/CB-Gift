@@ -7,11 +7,21 @@ namespace CB_Gift.Services.IService
     public interface IOrderService
     {
         Task<List<Order>> GetAllOrders();
+        // Get Order theo SellerId
         Task<List<OrderDto>> GetOrdersForSellerAsync(string sellerUserId);
+        //Get Order and OrderDetail theo SellerId
         Task<List<OrderWithDetailsDto>> GetOrdersAndOrderDetailForSellerAsync(string sellerUserId);
-        Task<int> CreateOrderAsync(OrderCreateRequest request, string sellerUserId);
+        //Get OrderDetail theo OrderId va SellerId
         Task<OrderWithDetailsDto?> GetOrderDetailAsync(int orderId, string sellerUserId);
-        Task AddOrderDetailAsync(int orderId, OrderDetailCreateRequest request, string sellerUserId);
+        //Step1: Create EndCustomer
         Task<EndCustomer> CreateCustomerAsync(EndCustomerCreateRequest request);
+        //Step2: Create Order 
+        Task<int> CreateOrderAsync(OrderCreateRequest request, string sellerUserId);
+        //Step3: Add OrderDetail vao OrderId
+        Task AddOrderDetailAsync(int orderId, OrderDetailCreateRequest request, string sellerUserId);
+
+        //Create Order: Gửi tổng Json: Customer,Order,OrderDetail.
+        Task<MakeOrderResponse> MakeOrder(MakeOrderDto request, string sellerUserId);
+        
     }
 }

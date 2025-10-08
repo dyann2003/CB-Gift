@@ -214,6 +214,80 @@ namespace CB_Gift.Services
                 await _context.SaveChangesAsync();
             }
         }
+
+        public async Task<MakeOrderResponse> MakeOrder(MakeOrderDto request, string sellerUserId)
+        {  // Step1: Tạo Endcustomer
+            int customerId;
+            var newEndCustomer = _mapper.Map<EndCustomer>(request.CustomerInfo);
+            _context.EndCustomers.Add(newEndCustomer);
+            await _context.SaveChangesAsync();
+            customerId = newEndCustomer.CustId;
+           //Step2: tạo order
+           var order = _mapper.Map<Order>(request.OrderCreate);
+            order.SellerUserId = sellerUserId;
+            order.EndCustomerId=customerId;
+            order.OrderDate = DateTime.Now;
+            order.ProductionStatus = "Created";
+            order.StatusOrder = 1;
+            // Nếu ActiveTTS = true thì cộng thêm CostScan vào tổng
+            decimal totalCost = 0;
+            if (order.ActiveTts ==true)
+            {
+                totalCost += 1;
+            }
+            _context.Orders.Add(order);
+            await _context.SaveChangesAsync();
+            // Step 3: Thêm các OrderDetail
+            var details = new List<OrderDetail>();
+
+            foreach (var item in request.OrderDetails)
+            {
+                var variant = await _context.ProductVariants
+                    .FirstOrDefaultAsync(v => v.ProductVariantId == item.ProductVariantID);
+
+                if (variant == null) throw new Exception("ProductVariant not found.");
+
+                decimal price = (variant.BaseCost ?? 0) + (variant.ShipCost ?? 0);
+                totalCost += price * item.Quantity;
+
+                var detail = new OrderDetail
+                {
+                    OrderId = order.OrderId,
+                    ProductVariantId = item.ProductVariantID,
+                    Quantity = item.Quantity,
+                    LinkImg = item.LinkImg,
+                    NeedDesign = item.NeedDesign,
+                    LinkThanksCard = item.LinkThanksCard,
+                    LinkFileDesign = item.LinkDesign,
+                    Accessory = item.Accessory,
+                    Note = item.Note,
+                    Price = price,
+                    CreatedDate = DateTime.UtcNow
+                };
+                details.Add(detail);
+            }
+
+            _context.OrderDetails.AddRange(details);
+            order.TotalCost = totalCost;
+            await _context.SaveChangesAsync();
+
+            // Step 4: Chuẩn bị dữ liệu trả về
+            var response = new MakeOrderResponse
+            {
+                OrderId = order.OrderId,
+                OrderCode = order.OrderCode ?? $"ORD-{DateTime.UtcNow:yyyyMMddHHmmss}",
+                TotalCost = totalCost,
+                CustomerName = request.CustomerInfo.Name,
+                Details = details.Select(d => new MakeOrderDetailResponse
+                {
+                    ProductVariantID = d.ProductVariantId,
+                    Quantity = d.Quantity,
+                    Price = d.Price ?? 0
+                }).ToList()
+            };
+
+            return response;
+        }
     }
 }
 

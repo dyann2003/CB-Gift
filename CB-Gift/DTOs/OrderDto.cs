@@ -61,7 +61,7 @@ namespace CB_Gift.DTOs
 
         public Decimal? CostScan { get; set; }
 
-        public bool ActiveTTS { get; set; } = false;
+        public bool? ActiveTTS { get; set; } = false;
 
         public string? Tracking {  get; set; }
         public string? ProductionStatus { get; set; }
@@ -102,5 +102,27 @@ namespace CB_Gift.DTOs
         public string? ShipState { get; set; }
         public string? ShipCity { get; set; }
         public string? ShipCountry { get; set; }
+    }
+    public class MakeOrderDto
+    {
+        public EndCustomerCreateRequest CustomerInfo { get; set; }
+        public OrderCreateRequest OrderCreate { get; set; }
+        public List<OrderDetailCreateRequest>? OrderDetails { get; set; }
+
+    }
+    public class MakeOrderResponse
+    {
+        public int OrderId { get; set; }
+        public string OrderCode { get; set; }
+        public decimal TotalCost { get; set; }
+        public string CustomerName { get; set; }
+        public List<MakeOrderDetailResponse> Details { get; set; } = new();
+    }
+
+    public class MakeOrderDetailResponse
+    {
+        public int ProductVariantID { get; set; }
+        public int Quantity { get; set; }
+        public decimal Price { get; set; }
     }
 }

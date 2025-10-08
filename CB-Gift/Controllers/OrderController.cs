@@ -62,6 +62,20 @@ namespace CB_Gift.Controllers
             return Ok(new { Message = "Order detail added successfully" });
             
         }
-
+        // Make Order Tổng
+        [HttpPost("make-order")]
+        public async Task<IActionResult> MakeOrder([FromBody] MakeOrderDto request)
+        {
+            try
+            {
+                var sellerUserId = GetSellerUserId();
+                await _orderService.MakeOrder(request, sellerUserId);
+                return Ok(new { message = "Order created susscessfully!" });
+            }catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            
+        }
     }
 }

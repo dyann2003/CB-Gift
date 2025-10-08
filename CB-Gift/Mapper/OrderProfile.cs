@@ -49,6 +49,8 @@ namespace CB_Gift.Mapper
                 .ForMember(dest => dest.NeedDesign, opt => opt.MapFrom(src => src.NeedDesign))
                 .ForMember(dest => dest.Price, opt => opt.MapFrom(src => src.Price ?? 0))
                 .ForMember(dest => dest.CreatedDate, opt => opt.MapFrom(_ => DateTime.UtcNow));
+            // test MakeOrder
+            CreateMap<EndCustomerCreateRequest, EndCustomer>();
         }
         }
 
