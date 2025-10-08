@@ -117,6 +117,7 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IQrCodeService, QrCodeService>();
 builder.Services.AddScoped<IOrderDetailService, OrderDetailService>();
 builder.Services.AddScoped<IPlanService, PlanService>();
+builder.Services.AddScoped<IProductService, ProductService>();
 
 // --- Quartz ---
 builder.Services.AddQuartz(q =>

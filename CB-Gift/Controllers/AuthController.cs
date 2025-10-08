@@ -58,7 +58,7 @@ public class AuthController : ControllerBase
         {
             HttpOnly = true,
             Secure = true,
-            SameSite = SameSiteMode.None,
+            SameSite = SameSiteMode.None, // Be và Fe khác domain thì None sẽ gửi được cookie từ Be qua Fe.
             Expires = expires,
             IsEssential = true
         });
