@@ -1,31 +1,51 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function ProfileModal({ open, onOpenChange }) {
   const [profile, setProfile] = useState({
-    name: "Bach Nguyen",
-    email: "bach@example.com",
-    phone: "+1234567890",
-    address: "123 Main St, City, Country",
-  })
+    id: "",
+    userName: "",
+    email: "",
+    phoneNumber: "",
+    fullName: "",
+  });
 
-  const handleSave = () => {
-    console.log("Profile updated:", profile)
-    onOpenChange(false)
-    alert("Profile updated successfully!")
-  }
+  // Gọi API khi modal được mở
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const res = await fetch("https://localhost:7015/api/auth/profile", {
+          method: "GET",
+          credentials: "include", // 👈 quan trọng để gửi cookie lên BE
+        });
 
-  const handleChange = (field, value) => {
-    setProfile((prev) => ({
-      ...prev,
-      [field]: value,
-    }))
-  }
+        if (res.ok) {
+          const data = await res.json();
+          setProfile(data);
+        } else if (res.status === 401) {
+          console.warn("Unauthorized - token hết hạn hoặc không hợp lệ");
+        } else {
+          console.error("Lỗi khi lấy profile:", await res.text());
+        }
+      } catch (err) {
+        console.error("Fetch profile error:", err);
+      }
+    };
+
+    if (open) {
+      fetchProfile();
+    }
+  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -35,34 +55,33 @@ export default function ProfileModal({ open, onOpenChange }) {
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
-            <Input id="name" value={profile.name} onChange={(e) => handleChange("name", e.target.value)} />
+            <Label htmlFor="fullName">Full Name</Label>
+            <Input id="fullName" value={profile.fullName || ""} readOnly />
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input
               id="email"
               type="email"
-              value={profile.email}
-              onChange={(e) => handleChange("email", e.target.value)}
+              value={profile.email || ""}
+              readOnly
             />
           </div>
           <div className="space-y-2">
             <Label htmlFor="phone">Phone</Label>
-            <Input id="phone" value={profile.phone} onChange={(e) => handleChange("phone", e.target.value)} />
+            <Input id="phone" value={profile.phoneNumber || ""} readOnly />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="address">Address</Label>
-            <Input id="address" value={profile.address} onChange={(e) => handleChange("address", e.target.value)} />
+            <Label htmlFor="userName">User Name</Label>
+            <Input id="userName" value={profile.userName || ""} readOnly />
           </div>
-          <div className="flex justify-end space-x-2">
+          <div className="flex justify-end">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              Close
             </Button>
-            <Button onClick={handleSave}>Save Changes</Button>
           </div>
         </div>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

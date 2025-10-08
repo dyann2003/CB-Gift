@@ -38,6 +38,7 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Login([FromBody] LoginDto dto)
     {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
         var user = await _users.FindByNameAsync(dto.UserNameOrEmail)
                    ?? await _users.FindByEmailAsync(dto.UserNameOrEmail);
 
@@ -73,7 +74,7 @@ public class AuthController : ControllerBase
         Response.Cookies.Delete(AccessTokenCookieName, new CookieOptions
         {
             Secure = true,
-            SameSite = SameSiteMode.Strict
+            SameSite = SameSiteMode.None
         });
 
         return Ok(new { message = "Logged out" });
@@ -84,6 +85,7 @@ public class AuthController : ControllerBase
     [HttpPost("change-password")]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
     {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
         var user = await _users.GetUserAsync(User);
         if (user is null) return Unauthorized();
 
@@ -103,6 +105,7 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequestDto request)
     {
+
         var result = await _accountService.RegisterAsync(request);
         if (!result.Success)
         {
@@ -124,6 +127,8 @@ public class AuthController : ControllerBase
         }
 
         var token = await _users.GeneratePasswordResetTokenAsync(user);
+        if (!user.IsActive)
+            return Unauthorized(new { message = "User is inactive" });
 
         // Link reset (frontend nhận link này để cho user nhập password mới)
         var resetLink = $"{_config["App:ClientUrl"]}/reset-password?email={Uri.EscapeDataString(dto.Email)}&token={Uri.EscapeDataString(token)}";
@@ -143,6 +148,7 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
     {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
         var user = await _users.FindByEmailAsync(dto.Email);
         if (user == null) return BadRequest(new { message = "User not found" });
 
