@@ -26,7 +26,7 @@ export default function ProfileModal({ open, onOpenChange }) {
       try {
         const res = await fetch("https://localhost:7015/api/auth/profile", {
           method: "GET",
-          credentials: "include", // 👈 quan trọng để gửi cookie lên BE
+          credentials: "include",
         });
 
         if (res.ok) {
