@@ -74,4 +74,11 @@
     {
         public int ProductVariantId { get; set; }
     }
+    //Update Status theo danh sách
+    public class BulkUpdateProductStatusDto
+    {
+        public List<int> ProductIds { get; set; } = new();
+        public int Status { get; set; }  // 1 = bật, 0 = tắt
+    }
+
 }
