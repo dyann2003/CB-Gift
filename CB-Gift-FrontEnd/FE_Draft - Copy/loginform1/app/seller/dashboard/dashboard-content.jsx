@@ -1,6 +1,14 @@
-"use client"
+"use client";
 
-import { Package, Clock, CheckCircle, Truck, DollarSign, AlertTriangle } from "lucide-react"
+import {
+  Package,
+  Clock,
+  CheckCircle,
+  DollarSign,
+  AlertTriangle,
+  Handshake,
+  ListTodo,
+} from "lucide-react";
 
 export default function DashboardContent() {
   const stats = [
@@ -12,41 +20,41 @@ export default function DashboardContent() {
       iconColor: "text-blue-500",
     },
     {
-      title: "Wait Accepted",
+      title: "Assigned Designer",
       value: "8",
       color: "bg-yellow-50 border-yellow-200",
-      icon: Clock,
+      icon: Handshake,
       iconColor: "text-yellow-500",
     },
     {
-      title: "Manufacturing",
+      title: "Designing",
       value: "12",
       color: "bg-purple-50 border-purple-200",
-      icon: Package,
+      icon: Clock,
       iconColor: "text-purple-500",
     },
     {
-      title: "Complete",
+      title: "Check File Design",
       value: "18",
       color: "bg-green-50 border-green-200",
-      icon: CheckCircle,
+      icon: ListTodo,
       iconColor: "text-green-500",
     },
     {
-      title: "Delivery",
+      title: "Seller Approved Design",
       value: "15",
       color: "bg-orange-50 border-orange-200",
-      icon: Truck,
+      icon: CheckCircle,
       iconColor: "text-orange-500",
     },
     {
-      title: "Refund",
+      title: "Seller Reject Design",
       value: "2",
       color: "bg-red-50 border-red-200",
       icon: AlertTriangle,
       iconColor: "text-red-500",
     },
-  ]
+  ];
 
   const recentOrders = [
     {
@@ -79,7 +87,7 @@ export default function DashboardContent() {
       status: "Completed",
       amount: "$125.00",
     },
-  ]
+  ];
 
   return (
     <div className="space-y-6">
@@ -87,8 +95,12 @@ export default function DashboardContent() {
       <div className="bg-white p-4 sm:p-6 rounded-lg border-2 border-blue-200 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-lg sm:text-xl font-semibold text-blue-800">Seller Dashboard</h2>
-            <p className="text-sm sm:text-base text-blue-600 mt-1">Track your orders and performance</p>
+            <h2 className="text-lg sm:text-xl font-semibold text-blue-800">
+              Seller Dashboard
+            </h2>
+            <p className="text-sm sm:text-base text-blue-600 mt-1">
+              Track your orders and performance
+            </p>
           </div>
           <div className="mt-3 sm:mt-0">
             <div className="flex items-center gap-2 text-sm text-blue-700">
@@ -100,25 +112,29 @@ export default function DashboardContent() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
         {stats.map((stat, index) => {
-          const IconComponent = stat.icon
+          const IconComponent = stat.icon;
           return (
             <div
               key={index}
-              className={`p-4 sm:p-6 rounded-lg border-2 ${stat.color} hover:shadow-md transition-shadow`}
+              className={`p-3 sm:p-4 rounded-lg border-2 ${stat.color} hover:shadow-md transition-shadow`}
             >
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col items-center justify-center text-center space-y-2">
+                <IconComponent
+                  className={`h-5 w-5 sm:h-6 sm:w-6 ${stat.iconColor}`}
+                />
                 <div>
-                  <h3 className="text-xs sm:text-sm font-medium text-gray-600 uppercase tracking-wide mb-2">
+                  <p className="text-lg sm:text-xl font-bold text-gray-900">
+                    {stat.value}
+                  </p>
+                  <h3 className="text-[10px] sm:text-xs font-medium text-gray-600 uppercase tracking-wide">
                     {stat.title}
                   </h3>
-                  <p className="text-xl sm:text-2xl font-bold text-gray-900">{stat.value}</p>
                 </div>
-                <IconComponent className={`h-6 w-6 sm:h-8 sm:w-8 ${stat.iconColor}`} />
               </div>
             </div>
-          )
+          );
         })}
       </div>
 
@@ -126,7 +142,9 @@ export default function DashboardContent() {
       <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-4 sm:p-6 rounded-lg text-white shadow-lg">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-base sm:text-lg font-medium mb-2">Total Money Earned</h3>
+            <h3 className="text-base sm:text-lg font-medium mb-2">
+              Total Money Earned
+            </h3>
             <p className="text-2xl sm:text-3xl font-bold">$2,847.50</p>
             <p className="text-sm text-blue-100 mt-1">+12.5% from last month</p>
           </div>
@@ -141,12 +159,18 @@ export default function DashboardContent() {
         <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Recent Orders</h3>
-              <p className="text-sm text-gray-600 mt-1">Latest customer orders</p>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Recent Orders
+              </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Latest customer orders
+              </p>
             </div>
-            <div className="mt-3 sm:mt-0">
-              <button className="text-sm text-blue-600 hover:text-blue-800 font-medium">View All Orders →</button>
-            </div>
+            {/* <div className="mt-3 sm:mt-0">
+              <button className="text-sm text-blue-600 hover:text-blue-800 font-medium">
+                View All Orders →
+              </button>
+            </div> */}
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -159,9 +183,8 @@ export default function DashboardContent() {
                 <th className="text-left py-3 px-4 font-medium text-gray-600 uppercase text-xs tracking-wide">
                   Customer
                 </th>
-                <th className="text-left py-3 px-4 font-medium text-gray-600 uppercase text-xs tracking-wide">Phone</th>
                 <th className="text-left py-3 px-4 font-medium text-gray-600 uppercase text-xs tracking-wide">
-                  Products
+                  Phone
                 </th>
                 <th className="text-left py-3 px-4 font-medium text-gray-600 uppercase text-xs tracking-wide">
                   Address
@@ -176,28 +199,27 @@ export default function DashboardContent() {
             </thead>
             <tbody>
               {recentOrders.map((order, index) => (
-                <tr key={index} className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
+                <tr
+                  key={index}
+                  className="border-b border-gray-200 hover:bg-gray-50 transition-colors"
+                >
                   <td className="py-3 px-4 text-gray-600">{order.orderDate}</td>
                   <td className="py-3 px-4">
-                    <div className="font-medium text-gray-900">{order.customerName}</div>
-                  </td>
-                  <td className="py-3 px-4 text-gray-600">{order.phone}</td>
-                  <td className="py-3 px-4 text-gray-600">
-                    <div className="space-y-1">
-                      {order.products.map((product, idx) => (
-                        <div key={idx} className="text-sm">
-                          {product}
-                        </div>
-                      ))}
+                    <div className="font-medium text-gray-900">
+                      {order.customerName}
                     </div>
                   </td>
+                  <td className="py-3 px-4 text-gray-600">{order.phone}</td>
+
                   <td className="py-3 px-4 text-gray-600 max-w-xs">
                     <div className="truncate" title={order.address}>
                       {order.address}
                     </div>
                   </td>
                   <td className="py-3 px-4 text-gray-600">{order.shipTo}</td>
-                  <td className="py-3 px-4 font-medium text-gray-900">{order.amount}</td>
+                  <td className="py-3 px-4 font-medium text-gray-900">
+                    {order.amount}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -205,5 +227,5 @@ export default function DashboardContent() {
         </div>
       </div>
     </div>
-  )
+  );
 }
