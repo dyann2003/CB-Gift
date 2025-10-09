@@ -9,79 +9,79 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace CB_Gift.Data.Migrations
+namespace CB_Gift.Migrations
 {
     [DbContext(typeof(CBGiftDbContext))]
-    [Migration("20251002111328_updateDB")]
-    partial class updateDB
+    [Migration("20251009105909_InitMySQL")]
+    partial class InitMySQL
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.20")
-                .HasAnnotation("Relational:MaxIdentifierLength", 128);
+                .HasAnnotation("ProductVersion", "8.0.6")
+                .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
-            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+            MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
 
             modelBuilder.Entity("CB_Gift.Data.AppUser", b =>
                 {
                     b.Property<string>("Id")
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<int>("AccessFailedCount")
                         .HasColumnType("int");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Email")
                         .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
+                        .HasColumnType("varchar(256)");
 
                     b.Property<bool>("EmailConfirmed")
-                        .HasColumnType("bit");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("FullName")
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("longtext");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<bool>("LockoutEnabled")
-                        .HasColumnType("bit");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<DateTimeOffset?>("LockoutEnd")
-                        .HasColumnType("datetimeoffset");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("NormalizedEmail")
                         .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
+                        .HasColumnType("varchar(256)");
 
                     b.Property<string>("NormalizedUserName")
                         .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
+                        .HasColumnType("varchar(256)");
 
                     b.Property<string>("PasswordHash")
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("PhoneNumber")
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("longtext");
 
                     b.Property<bool>("PhoneNumberConfirmed")
-                        .HasColumnType("bit");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("SecurityStamp")
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("longtext");
 
                     b.Property<bool>("TwoFactorEnabled")
-                        .HasColumnType("bit");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("UserName")
                         .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
+                        .HasColumnType("varchar(256)");
 
                     b.HasKey("Id");
 
@@ -90,8 +90,7 @@ namespace CB_Gift.Data.Migrations
 
                     b.HasIndex("NormalizedUserName")
                         .IsUnique()
-                        .HasDatabaseName("UserNameIndex")
-                        .HasFilter("[NormalizedUserName] IS NOT NULL");
+                        .HasDatabaseName("UserNameIndex");
 
                     b.ToTable("AspNetUsers", (string)null);
                 });
@@ -103,16 +102,16 @@ namespace CB_Gift.Data.Migrations
                         .HasColumnType("int")
                         .HasColumnName("CategoryID");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("CategoryId"));
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("CategoryId"));
 
                     b.Property<string>("CategoryCode")
                         .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasColumnType("varchar(50)");
 
                     b.Property<string>("CategoryName")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("varchar(100)");
 
                     b.Property<int?>("Status")
                         .HasColumnType("int");
@@ -125,20 +124,19 @@ namespace CB_Gift.Data.Migrations
             modelBuilder.Entity("CB_Gift.Models.DesignerSeller", b =>
                 {
                     b.Property<string>("DesignerUserId")
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<string>("SellerUserId")
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime")
-                        .HasDefaultValueSql("(getdate())")
-                        .HasAnnotation("Relational:DefaultConstraintName", "DF_DesignerSeller_CreatedAt");
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("CreatedByUserId")
                         .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("varchar(450)");
 
                     b.HasKey("DesignerUserId", "SellerUserId");
 
@@ -154,44 +152,44 @@ namespace CB_Gift.Data.Migrations
                         .HasColumnType("int")
                         .HasColumnName("CustID");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("CustId"));
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("CustId"));
 
                     b.Property<string>("Address")
                         .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasColumnType("varchar(200)");
 
                     b.Property<string>("Address1")
                         .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasColumnType("varchar(200)");
 
                     b.Property<string>("Email")
                         .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("varchar(100)");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("varchar(100)");
 
                     b.Property<string>("Phone")
                         .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                        .HasColumnType("varchar(20)");
 
                     b.Property<string>("ShipCity")
                         .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasColumnType("varchar(50)");
 
                     b.Property<string>("ShipCountry")
                         .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasColumnType("varchar(50)");
 
                     b.Property<string>("ShipState")
                         .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasColumnType("varchar(50)");
 
                     b.Property<string>("Zipcode")
                         .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                        .HasColumnType("varchar(20)");
 
                     b.HasKey("CustId");
 
@@ -205,10 +203,10 @@ namespace CB_Gift.Data.Migrations
                         .HasColumnType("int")
                         .HasColumnName("OrderID");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("OrderId"));
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("OrderId"));
 
                     b.Property<bool?>("ActiveTts")
-                        .HasColumnType("bit")
+                        .HasColumnType("tinyint(1)")
                         .HasColumnName("ActiveTTS");
 
                     b.Property<decimal?>("CostScan")
@@ -217,8 +215,7 @@ namespace CB_Gift.Data.Migrations
                     b.Property<DateTime?>("CreationDate")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime")
-                        .HasDefaultValueSql("(getdate())")
-                        .HasAnnotation("Relational:DefaultConstraintName", "DF_Order_CreationDate");
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<int>("EndCustomerId")
                         .HasColumnType("int")
@@ -226,31 +223,29 @@ namespace CB_Gift.Data.Migrations
 
                     b.Property<string>("OrderCode")
                         .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("varchar(100)");
 
                     b.Property<DateTime>("OrderDate")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime")
-                        .HasDefaultValueSql("(getdate())")
-                        .HasAnnotation("Relational:DefaultConstraintName", "DF_Order_OrderDate");
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("PaymentStatus")
                         .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasColumnType("varchar(50)");
 
                     b.Property<string>("ProductionStatus")
                         .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasColumnType("varchar(50)");
 
                     b.Property<string>("SellerUserId")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<int>("StatusOrder")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
-                        .HasDefaultValue(1)
-                        .HasAnnotation("Relational:DefaultConstraintName", "DF_Order_StatusOrder");
+                        .HasDefaultValue(1);
 
                     b.Property<decimal?>("TotalCost")
                         .HasColumnType("decimal(18, 2)");
@@ -278,52 +273,50 @@ namespace CB_Gift.Data.Migrations
                         .HasColumnType("int")
                         .HasColumnName("OrderDetailID");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("OrderDetailId"));
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("OrderDetailId"));
 
                     b.Property<string>("Accessory")
                         .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasColumnType("varchar(200)");
 
                     b.Property<DateTime?>("AssignedAt")
                         .HasColumnType("datetime");
 
                     b.Property<string>("AssignedDesignerUserId")
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<DateTime?>("CreatedDate")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime")
-                        .HasDefaultValueSql("(getdate())")
-                        .HasAnnotation("Relational:DefaultConstraintName", "DF_OrderDetail_CreatedDate");
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("LinkFileDesign")
                         .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasColumnType("varchar(200)");
 
                     b.Property<string>("LinkImg")
                         .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasColumnType("varchar(200)");
 
                     b.Property<string>("LinkThanksCard")
                         .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasColumnType("varchar(200)");
 
                     b.Property<bool>("NeedDesign")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(true)
-                        .HasAnnotation("Relational:DefaultConstraintName", "DF_OrderDetail_NeedDesign");
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(true);
 
                     b.Property<string>("Note")
                         .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasColumnType("varchar(200)");
 
                     b.Property<int>("OrderId")
                         .HasColumnType("int")
                         .HasColumnName("OrderID");
 
                     b.Property<decimal?>("Price")
-                        .HasColumnType("decimal(18,2)");
+                        .HasColumnType("decimal(65,30)");
 
                     b.Property<int>("ProductVariantId")
                         .HasColumnType("int")
@@ -352,30 +345,28 @@ namespace CB_Gift.Data.Migrations
                         .HasColumnType("int")
                         .HasColumnName("DesignID");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("DesignId"));
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("DesignId"));
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime")
-                        .HasDefaultValueSql("(getdate())")
-                        .HasAnnotation("Relational:DefaultConstraintName", "DF_OrderDetailDesign_CreatedAt");
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("DesignerUserId")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<string>("FileUrl")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
+                        .HasColumnType("varchar(500)");
 
                     b.Property<bool>("IsFinal")
-                        .HasColumnType("bit")
-                        .HasAnnotation("Relational:DefaultConstraintName", "DF_OrderDetailDesign_IsFinal");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("Note")
                         .HasMaxLength(400)
-                        .HasColumnType("nvarchar(400)");
+                        .HasColumnType("varchar(400)");
 
                     b.Property<int>("OrderDetailId")
                         .HasColumnType("int")
@@ -403,12 +394,12 @@ namespace CB_Gift.Data.Migrations
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasColumnType("varchar(50)");
 
                     b.Property<string>("NameVi")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("varchar(100)");
 
                     b.HasKey("StatusId");
 
@@ -419,34 +410,29 @@ namespace CB_Gift.Data.Migrations
                 {
                     b.Property<int>("PlanId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("PlanID");
+                        .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("PlanId"));
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("PlanId"));
 
                     b.Property<string>("ApproveByUserId")
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime?>("ApproveDate")
-                        .HasColumnType("datetime");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("CreateByUserId")
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime?>("CreateDate")
-                        .HasColumnType("datetime");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<DateTime?>("StartDatePlan")
-                        .HasColumnType("datetime");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<DateTime?>("StopDatePlan")
-                        .HasColumnType("datetime");
+                        .HasColumnType("datetime(6)");
 
                     b.HasKey("PlanId");
-
-                    b.HasIndex(new[] { "ApproveByUserId" }, "IX_Plans_ApproveByUserId");
-
-                    b.HasIndex(new[] { "CreateByUserId" }, "IX_Plans_CreateByUserId");
 
                     b.ToTable("Plans");
                 });
@@ -455,151 +441,122 @@ namespace CB_Gift.Data.Migrations
                 {
                     b.Property<int>("PlanDetailId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("PlanDetailID");
+                        .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("PlanDetailId"));
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("PlanDetailId"));
 
                     b.Property<int?>("NumberOfFinishedProducts")
                         .HasColumnType("int");
 
                     b.Property<int>("OrderDetailId")
-                        .HasColumnType("int")
-                        .HasColumnName("OrderDetailID");
+                        .HasColumnType("int");
 
                     b.Property<int>("PlanId")
-                        .HasColumnType("int")
-                        .HasColumnName("PlanID");
+                        .HasColumnType("int");
 
                     b.Property<int?>("StatusOrder")
                         .HasColumnType("int");
 
                     b.HasKey("PlanDetailId");
 
-                    b.HasIndex(new[] { "OrderDetailId" }, "IX_PlanDetail_OrderDetailID");
+                    b.HasIndex("OrderDetailId");
 
-                    b.HasIndex(new[] { "PlanId" }, "IX_PlanDetail_PlanID");
+                    b.HasIndex("PlanId");
 
-                    b.ToTable("PlanDetail", (string)null);
+                    b.ToTable("PlanDetails");
                 });
 
             modelBuilder.Entity("CB_Gift.Models.Product", b =>
                 {
                     b.Property<int>("ProductId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("ProductID");
+                        .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ProductId"));
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("ProductId"));
 
                     b.Property<int>("CategoryId")
-                        .HasColumnType("int")
-                        .HasColumnName("CategoryID");
+                        .HasColumnType("int");
 
                     b.Property<string>("Describe")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("ItemLink")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("ProductCode")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("ProductName")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("longtext");
 
                     b.Property<int?>("Status")
                         .HasColumnType("int");
 
                     b.Property<string>("Template")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
+                        .HasColumnType("longtext");
 
                     b.HasKey("ProductId");
 
-                    b.HasIndex(new[] { "CategoryId" }, "IX_Product_CategoryID");
+                    b.HasIndex("CategoryId");
 
-                    b.ToTable("Product", (string)null);
+                    b.ToTable("Products");
                 });
 
             modelBuilder.Entity("CB_Gift.Models.ProductVariant", b =>
                 {
                     b.Property<int>("ProductVariantId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("ProductVariantID");
+                        .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ProductVariantId"));
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("ProductVariantId"));
 
                     b.Property<decimal?>("BaseCost")
-                        .HasColumnType("decimal(18, 2)");
+                        .HasColumnType("decimal(65,30)");
 
                     b.Property<string>("CustomShape")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasColumnType("longtext");
 
                     b.Property<decimal?>("ExtraShipping")
-                        .HasColumnType("decimal(18, 2)");
+                        .HasColumnType("decimal(65,30)");
 
                     b.Property<decimal?>("HeightCm")
-                        .HasColumnType("decimal(10, 2)")
-                        .HasColumnName("HeightCM");
+                        .HasColumnType("decimal(65,30)");
 
                     b.Property<string>("Layer")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .IsUnicode(false)
-                        .HasColumnType("varchar(100)");
+                        .HasColumnType("longtext");
 
                     b.Property<decimal?>("LengthCm")
-                        .HasColumnType("decimal(10, 2)")
-                        .HasColumnName("LengthCM");
+                        .HasColumnType("decimal(65,30)");
 
                     b.Property<int>("ProductId")
-                        .HasColumnType("int")
-                        .HasColumnName("ProductID");
+                        .HasColumnType("int");
 
                     b.Property<decimal?>("ShipCost")
-                        .HasColumnType("decimal(18, 2)");
+                        .HasColumnType("decimal(65,30)");
 
                     b.Property<string>("SizeInch")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .IsUnicode(false)
-                        .HasColumnType("varchar(100)");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Sku")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)")
-                        .HasColumnName("SKU");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("ThicknessMm")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .IsUnicode(false)
-                        .HasColumnType("varchar(50)")
-                        .HasColumnName("ThicknessMM");
+                        .HasColumnType("longtext");
 
                     b.Property<decimal?>("TotalCost")
-                        .HasColumnType("decimal(18, 2)");
+                        .HasColumnType("decimal(65,30)");
 
                     b.Property<decimal?>("WeightGram")
-                        .HasColumnType("decimal(10, 2)");
+                        .HasColumnType("decimal(65,30)");
 
                     b.Property<decimal?>("WidthCm")
-                        .HasColumnType("decimal(10, 2)")
-                        .HasColumnName("WidthCM");
+                        .HasColumnType("decimal(65,30)");
 
                     b.HasKey("ProductVariantId");
 
-                    b.HasIndex(new[] { "ProductId" }, "IX_ProductVariant_ProductID");
+                    b.HasIndex("ProductId");
 
-                    b.ToTable("ProductVariant", (string)null);
+                    b.ToTable("ProductVariants");
                 });
 
             modelBuilder.Entity("CB_Gift.Models.Qc", b =>
@@ -609,16 +566,15 @@ namespace CB_Gift.Data.Migrations
                         .HasColumnType("int")
                         .HasColumnName("QCCheckID");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("QccheckId"));
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("QccheckId"));
 
                     b.Property<string>("CheckedByUserId")
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<DateTime?>("CheckedDate")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime")
-                        .HasDefaultValueSql("(getdate())")
-                        .HasAnnotation("Relational:DefaultConstraintName", "DF_QC_CheckedDate");
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<int>("PlanDetailId")
                         .HasColumnType("int")
@@ -635,7 +591,7 @@ namespace CB_Gift.Data.Migrations
 
                     b.Property<string>("Remark")
                         .HasMaxLength(400)
-                        .HasColumnType("nvarchar(400)");
+                        .HasColumnType("varchar(400)");
 
                     b.HasKey("QccheckId");
 
@@ -653,7 +609,7 @@ namespace CB_Gift.Data.Migrations
                         .HasColumnType("int")
                         .HasColumnName("TagsID");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("TagsId"));
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("TagsId"));
 
                     b.Property<string>("TagCode")
                         .HasMaxLength(150)
@@ -662,36 +618,69 @@ namespace CB_Gift.Data.Migrations
 
                     b.Property<string>("TagName")
                         .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("varchar(100)");
 
                     b.HasKey("TagsId");
 
                     b.ToTable("Tags");
                 });
 
+            modelBuilder.Entity("CB_Gift.Models.UploadedImage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CloudinaryPublicId")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("SecureUrl")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime>("UploadedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("varchar(255)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("UploadedImages");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
                 {
                     b.Property<string>("Id")
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Name")
                         .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
+                        .HasColumnType("varchar(256)");
 
                     b.Property<string>("NormalizedName")
                         .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
+                        .HasColumnType("varchar(256)");
 
                     b.HasKey("Id");
 
                     b.HasIndex("NormalizedName")
                         .IsUnique()
-                        .HasDatabaseName("RoleNameIndex")
-                        .HasFilter("[NormalizedName] IS NOT NULL");
+                        .HasDatabaseName("RoleNameIndex");
 
                     b.ToTable("AspNetRoles", (string)null);
                 });
@@ -702,17 +691,17 @@ namespace CB_Gift.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("ClaimType")
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("ClaimValue")
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("RoleId")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("varchar(255)");
 
                     b.HasKey("Id");
 
@@ -727,17 +716,17 @@ namespace CB_Gift.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("ClaimType")
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("ClaimValue")
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("varchar(255)");
 
                     b.HasKey("Id");
 
@@ -749,17 +738,17 @@ namespace CB_Gift.Data.Migrations
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<string>", b =>
                 {
                     b.Property<string>("LoginProvider")
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<string>("ProviderKey")
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<string>("ProviderDisplayName")
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("varchar(255)");
 
                     b.HasKey("LoginProvider", "ProviderKey");
 
@@ -771,10 +760,10 @@ namespace CB_Gift.Data.Migrations
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserRole<string>", b =>
                 {
                     b.Property<string>("UserId")
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<string>("RoleId")
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("varchar(255)");
 
                     b.HasKey("UserId", "RoleId");
 
@@ -786,37 +775,35 @@ namespace CB_Gift.Data.Migrations
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<string>", b =>
                 {
                     b.Property<string>("UserId")
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<string>("LoginProvider")
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<string>("Name")
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<string>("Value")
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("longtext");
 
                     b.HasKey("UserId", "LoginProvider", "Name");
 
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
-            modelBuilder.Entity("TagsProduct", b =>
+            modelBuilder.Entity("ProductTag", b =>
                 {
-                    b.Property<int>("ProductId")
-                        .HasColumnType("int")
-                        .HasColumnName("ProductID");
+                    b.Property<int>("ProductsProductId")
+                        .HasColumnType("int");
 
                     b.Property<int>("TagsId")
-                        .HasColumnType("int")
-                        .HasColumnName("TagsID");
+                        .HasColumnType("int");
 
-                    b.HasKey("ProductId", "TagsId");
+                    b.HasKey("ProductsProductId", "TagsId");
 
                     b.HasIndex("TagsId");
 
-                    b.ToTable("Tags_Product", (string)null);
+                    b.ToTable("ProductTag");
                 });
 
             modelBuilder.Entity("CB_Gift.Models.Order", b =>
@@ -874,14 +861,14 @@ namespace CB_Gift.Data.Migrations
                     b.HasOne("CB_Gift.Models.OrderDetail", "OrderDetail")
                         .WithMany("PlanDetails")
                         .HasForeignKey("OrderDetailId")
-                        .IsRequired()
-                        .HasConstraintName("FK_PlanDetail_OrderDetail");
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("CB_Gift.Models.Plan", "Plan")
                         .WithMany("PlanDetails")
                         .HasForeignKey("PlanId")
-                        .IsRequired()
-                        .HasConstraintName("FK_PlanDetail_Plan");
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("OrderDetail");
 
@@ -893,8 +880,8 @@ namespace CB_Gift.Data.Migrations
                     b.HasOne("CB_Gift.Models.Category", "Category")
                         .WithMany("Products")
                         .HasForeignKey("CategoryId")
-                        .IsRequired()
-                        .HasConstraintName("FK_Product_Category");
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Category");
                 });
@@ -904,8 +891,8 @@ namespace CB_Gift.Data.Migrations
                     b.HasOne("CB_Gift.Models.Product", "Product")
                         .WithMany("ProductVariants")
                         .HasForeignKey("ProductId")
-                        .IsRequired()
-                        .HasConstraintName("FK_Variant_Product");
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Product");
                 });
@@ -919,6 +906,17 @@ namespace CB_Gift.Data.Migrations
                         .HasConstraintName("FK_QC_PlanDetail");
 
                     b.Navigation("PlanDetail");
+                });
+
+            modelBuilder.Entity("CB_Gift.Models.UploadedImage", b =>
+                {
+                    b.HasOne("CB_Gift.Data.AppUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -972,21 +970,19 @@ namespace CB_Gift.Data.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("TagsProduct", b =>
+            modelBuilder.Entity("ProductTag", b =>
                 {
                     b.HasOne("CB_Gift.Models.Product", null)
                         .WithMany()
-                        .HasForeignKey("ProductId")
+                        .HasForeignKey("ProductsProductId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("FK_Tags_Product_Product");
+                        .IsRequired();
 
                     b.HasOne("CB_Gift.Models.Tag", null)
                         .WithMany()
                         .HasForeignKey("TagsId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("FK_Tags_Product_Tags");
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("CB_Gift.Models.Category", b =>

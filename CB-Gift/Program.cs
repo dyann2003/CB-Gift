@@ -1,7 +1,7 @@
 ﻿using CB_Gift.Data;
+using CB_Gift.DTOs;
 using CB_Gift.Jobs;
 using CB_Gift.Services;
-using CB_Gift.Services.Email;
 using CB_Gift.Services.Email;
 using CB_Gift.Services.IService;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -44,8 +44,13 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // ================== DbContext ==================
-builder.Services.AddDbContext<CBGiftDbContext>(opt =>
-    opt.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+// Lấy chuỗi kết nối từ appsettings.json
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+//Dùng UseMySql
+builder.Services.AddDbContext<CBGiftDbContext>(options =>
+    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString))
+);
 
 // ================== Identity ==================
 builder.Services
@@ -109,6 +114,10 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Đăng ký CloudinarySettings
+builder.Services.Configure<CloudinarySettings>(
+    builder.Configuration.GetSection("CloudinarySettings"));
+
 // ================== Custom services ==================
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
@@ -118,6 +127,8 @@ builder.Services.AddScoped<IQrCodeService, QrCodeService>();
 builder.Services.AddScoped<IOrderDetailService, OrderDetailService>();
 builder.Services.AddScoped<IPlanService, PlanService>();
 builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<ICloudinaryService, CloudinaryService>();
+builder.Services.AddScoped<IImageManagementService, ImageManagementService>();
 
 // --- Quartz ---
 builder.Services.AddQuartz(q =>
