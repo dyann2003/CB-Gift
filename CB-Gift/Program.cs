@@ -168,8 +168,8 @@ using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     await SeedRolesAsync(services);
-    await SeedAdminAsync(services);
-    await SeedSellerAsync(services);
+    await SeedAllDataAsync(services);
+   
 }
 
 app.Run();
@@ -189,64 +189,59 @@ static async Task SeedRolesAsync(IServiceProvider serviceProvider)
     }
 }
 
-static async Task SeedAdminAsync(IServiceProvider serviceProvider)
+ static async Task SeedAllDataAsync(IServiceProvider serviceProvider)
 {
-    var userManager = serviceProvider.GetRequiredService<UserManager<AppUser>>();
+    // 1. Lấy các service cần thiết
     var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+    var userManager = serviceProvider.GetRequiredService<UserManager<AppUser>>();
 
-    string adminEmail = "admin@example.com";
-    string adminPassword = "Admin@123";
+    // 2. Khởi tạo danh sách các Roles cần có
+    string[] roleNames = { "Admin", "Seller", "Designer", "QC", "Staff", "Manager" };
 
-    if (!await roleManager.RoleExistsAsync("Admin"))
+    foreach (var roleName in roleNames)
     {
-        await roleManager.CreateAsync(new IdentityRole("Admin"));
+        var roleExist = await roleManager.RoleExistsAsync(roleName);
+        if (!roleExist)
+        {
+            // Tạo role mới nếu chưa tồn tại
+            await roleManager.CreateAsync(new IdentityRole(roleName));
+        }
     }
 
-    var adminUser = await userManager.FindByEmailAsync(adminEmail);
-    if (adminUser == null)
+    // 3. Khởi tạo danh sách Users cần seed (Email, Mật khẩu, Role)
+    var usersToSeed = new List<(string Email, string Password, string Role)>
     {
-        var user = new AppUser
-        {
-            UserName = adminEmail,
-            Email = adminEmail,
-            EmailConfirmed = true
-        };
+        ("admin@example.com", "Admin@123", "Admin"),
+        ("seller@example.com", "Seller@123", "Seller"),
+        ("designer@example.com", "Designer@123", "Designer"),
+        ("qc@example.com", "Qc@123", "QC"),
+        ("staff@example.com", "Staff@123", "Staff"),
+        ("manager@example.com", "Manager@123", "Manager")
+    };
 
-        var result = await userManager.CreateAsync(user, adminPassword);
-        if (result.Succeeded)
+    // 4. Vòng lặp để tạo User và gán Role tương ứng
+    foreach (var userSpec in usersToSeed)
+    {
+        // Kiểm tra xem user đã tồn tại chưa
+        var user = await userManager.FindByEmailAsync(userSpec.Email);
+        if (user == null)
         {
-            await userManager.AddToRoleAsync(user, "Admin");
+            var newUser = new AppUser
+            {
+                UserName = userSpec.Email,
+                Email = userSpec.Email,
+                EmailConfirmed = true
+            };
+
+            // Tạo user mới với mật khẩu đã định
+            var result = await userManager.CreateAsync(newUser, userSpec.Password);
+
+            if (result.Succeeded)
+            {
+                // Gán role cho user vừa tạo
+                await userManager.AddToRoleAsync(newUser, userSpec.Role);
+            }
         }
     }
 }
 
-static async Task SeedSellerAsync(IServiceProvider serviceProvider)
-{
-    var userManager = serviceProvider.GetRequiredService<UserManager<AppUser>>();
-    var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-
-    string sellerEmail = "seller123@example.com";
-    string sellerPassword = "Seller@123";
-
-    if (!await roleManager.RoleExistsAsync("Seller"))
-    {
-        await roleManager.CreateAsync(new IdentityRole("Seller"));
-    }
-
-    var sellerUser = await userManager.FindByEmailAsync(sellerEmail);
-    if (sellerUser == null)
-    {
-        var user = new AppUser
-        {
-            UserName = sellerEmail,
-            Email = sellerEmail,
-            EmailConfirmed = true
-        };
-
-        var result = await userManager.CreateAsync(user, sellerPassword);
-        if (result.Succeeded)
-        {
-            await userManager.AddToRoleAsync(user, "Seller");
-        }
-    }
-}
