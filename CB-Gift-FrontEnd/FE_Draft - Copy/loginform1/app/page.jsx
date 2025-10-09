@@ -75,7 +75,7 @@ export default function LoginPage() {
       }
 
       // Điều hướng theo role
-      if (roles?.includes("Admin")) {
+      if (roles?.includes("Seller")) {
         router.push("/seller/dashboard");
       } else if (roles?.includes("Manager")) {
         router.push("/manager/dashboard");

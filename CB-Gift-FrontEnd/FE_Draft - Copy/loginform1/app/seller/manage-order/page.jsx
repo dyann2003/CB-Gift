@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import SellerSidebar from "@/components/layout/seller/sidebar";
 import SellerHeader from "@/components/layout/seller/header";
 
@@ -44,6 +44,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import MakeManualModal from "@/components/modals/make-manual-modal";
 import {
   Search,
@@ -55,301 +61,178 @@ import {
   QrCode,
   Edit,
   Save,
+  Clock,
+  CheckCircle,
+  AlertTriangle,
+  Handshake,
+  ListTodo,
+  ChevronLeft,
+  ChevronRight,
+  CalendarIcon,
+  FileDown,
+  Trash2,
+  FileEdit,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
+import { format } from "date-fns";
 
 export default function ManageOrder() {
   const [currentPage, setCurrentPage] = useState("manage-order");
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedStat, setSelectedStat] = useState("Total Order");
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
   const [showMakeManualModal, setShowMakeManualModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editedOrder, setEditedOrder] = useState(null);
+  const [page, setPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [dateRange, setDateRange] = useState({ from: null, to: null });
+  const [sortColumn, setSortColumn] = useState(null);
+  const [sortDirection, setSortDirection] = useState("asc");
+  const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const [showCannotAssignDialog, setShowCannotAssignDialog] = useState(false);
+  const [cannotAssignMessage, setCannotAssignMessage] = useState("");
 
-  const orders = [
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const response = await fetch("https://localhost:7015/api/seller", {
+          credentials: "include",
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        // Map API data to match table structure
+        const mappedOrders = data.map((order) => ({
+          id: order.orderId,
+          orderId: order.orderCode,
+          orderDate: new Date(order.orderDate).toISOString().split("T")[0], // Format: YYYY-MM-DD
+          customerName: order.customerName,
+          phone: "", // Not provided in API
+          email: "", // Not provided in API
+          products: order.details.map((detail) => ({
+            name: `Product ${detail.productVariantID}`,
+            quantity: detail.quantity,
+            price: detail.price,
+            size: "",
+            accessory: detail.accessory || "",
+          })),
+          address: "", // Not provided in API
+          shipTo: "", // Not provided in API
+          status: order.statusOderName,
+          totalAmount: `$${order.totalCost.toFixed(2)}`,
+          timeCreated: new Date(order.creationDate).toLocaleString(),
+          selected: false,
+          customerInfo: {
+            name: order.customerName,
+            phone: "",
+            email: "",
+            address: "",
+            city: "",
+            state: "",
+            zipcode: "",
+            country: "",
+          },
+          orderNotes: order.details[0]?.note || "",
+          uploadedFiles: {
+            linkImg: {
+              name: "image.jpg",
+              url: order.details[0]?.linkImg || "/placeholder.svg",
+            },
+            linkThanksCard: {
+              name: "thanks-card.jpg",
+              url: order.details[0]?.linkThanksCard || "#",
+            },
+            linkFileDesign: {
+              name: "design-file.psd",
+              url: order.details[0]?.linkFileDesign || "#",
+            },
+          },
+        }));
+
+        setOrders(mappedOrders);
+      } catch (err) {
+        console.error("[v0] Error fetching orders:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrders();
+  }, []);
+
+  const stats = [
     {
-      id: 1,
-      orderId: "ORD-S001",
-      orderDate: "2024-01-20",
-      customerName: "Emma Thompson",
-      phone: "+1-555-0101",
-      email: "emma.thompson@email.com",
-      products: [
-        {
-          name: "Custom Acrylic Keychain",
-          quantity: 25,
-          price: 87.5,
-          size: "5x5cm",
-          accessory: "Key Ring",
-        },
-      ],
-      address: "123 Oak Street, Portland, OR 97201",
-      shipTo: "Same as billing",
-      status: "Pending Design",
-      totalAmount: "$87.50",
-      timeCreated: "2 hours ago",
-      selected: false,
-      customerInfo: {
-        name: "Emma Thompson",
-        phone: "+1-555-0101",
-        email: "emma.thompson@email.com",
-        address: "123 Oak Street",
-        city: "Portland",
-        state: "OR",
-        zipcode: "97201",
-        country: "USA",
-      },
-      orderNotes: "Colorful anime design preferred",
-      uploadedFiles: {
-        linkImg: {
-          name: "keychain-reference.jpg",
-          url: "/acrylic-keychain.jpg",
-        },
-        linkThanksCard: { name: "thanks-card.pdf", url: "#" },
-        linkFileDesign: { name: "design-file.ai", url: "#" },
-      },
+      title: "Total Order",
+      value: "24",
+      color: "bg-blue-50 border-blue-200",
+      icon: Package,
+      iconColor: "text-blue-500",
+      statusFilter: null,
     },
     {
-      id: 2,
-      orderId: "ORD-S002",
-      orderDate: "2024-01-21",
-      customerName: "James Wilson",
-      phone: "+1-555-0102",
-      email: "james.wilson@email.com",
-      products: [
-        {
-          name: "Acrylic Phone Stand",
-          quantity: 15,
-          price: 75.0,
-          size: "8x10cm",
-          accessory: "None",
-        },
-        {
-          name: "Custom Charm Set",
-          quantity: 30,
-          price: 60.0,
-          size: "3x3cm",
-          accessory: "Phone Strap",
-        },
-      ],
-      address: "456 Pine Avenue, Seattle, WA 98101",
-      shipTo: "Office: 789 Business Blvd, Seattle, WA 98102",
-      status: "In Progress",
-      totalAmount: "$135.00",
-      timeCreated: "5 hours ago",
-      selected: false,
-      customerInfo: {
-        name: "James Wilson",
-        phone: "+1-555-0102",
-        email: "james.wilson@email.com",
-        address: "456 Pine Avenue",
-        city: "Seattle",
-        state: "WA",
-        zipcode: "98101",
-        country: "USA",
-      },
-      orderNotes: "Minimalist design with matching theme for both items",
-      uploadedFiles: {
-        linkImg: { name: "stand-reference.png", url: "/acrylic-stand.jpg" },
-        linkThanksCard: { name: "thank-you-card.jpg", url: "#" },
-        linkFileDesign: { name: "base-design.psd", url: "#" },
-      },
+      title: "Draft Seller Order",
+      value: "5",
+      color: "bg-gray-50 border-gray-200",
+      icon: FileEdit,
+      iconColor: "text-gray-500",
+      statusFilter: "Draft",
     },
     {
-      id: 3,
-      orderId: "ORD-S003",
-      orderDate: "2024-01-22",
-      customerName: "Lisa Chen",
-      phone: "+1-555-0103",
-      email: "lisa.chen@email.com",
-      products: [
-        {
-          name: "Acrylic Display Case",
-          quantity: 10,
-          price: 125.0,
-          size: "15x20cm",
-          accessory: "LED Base",
-        },
-      ],
-      address: "789 Maple Drive, San Francisco, CA 94102",
-      shipTo: "Same as billing",
-      status: "Completed",
-      totalAmount: "$125.00",
-      timeCreated: "1 day ago",
-      selected: false,
-      customerInfo: {
-        name: "Lisa Chen",
-        phone: "+1-555-0103",
-        email: "lisa.chen@email.com",
-        address: "789 Maple Drive",
-        city: "San Francisco",
-        state: "CA",
-        zipcode: "94102",
-        country: "USA",
-      },
-      orderNotes: "Professional showcase quality required",
-      uploadedFiles: {
-        linkImg: { name: "display-reference.png", url: "/acrylic-display.jpg" },
-        linkThanksCard: { name: "premium-thanks.jpg", url: "#" },
-        linkFileDesign: { name: "display-design.psd", url: "#" },
-      },
+      title: "Assigned Designer",
+      value: "8",
+      color: "bg-yellow-50 border-yellow-200",
+      icon: Handshake,
+      iconColor: "text-yellow-500",
+      statusFilter: "Assigned Designer",
     },
     {
-      id: 4,
-      orderId: "ORD-S004",
-      orderDate: "2024-01-23",
-      customerName: "Robert Davis",
-      phone: "+1-555-0104",
-      email: "robert.davis@email.com",
-      products: [
-        {
-          name: "Custom Keychain",
-          quantity: 50,
-          price: 125.0,
-          size: "5x5cm",
-          accessory: "Key Ring",
-        },
-        {
-          name: "Acrylic Stand",
-          quantity: 20,
-          price: 60.0,
-          size: "10x12cm",
-          accessory: "Stand Base",
-        },
-        {
-          name: "Phone Charm",
-          quantity: 35,
-          price: 52.5,
-          size: "4x4cm",
-          accessory: "Phone Strap",
-        },
-      ],
-      address: "321 Cedar Lane, Austin, TX 73301",
-      shipTo: "Corporate HQ: 654 Business Park, Austin, TX 73302",
-      status: "Pending Design",
-      totalAmount: "$237.50",
-      timeCreated: "6 hours ago",
-      selected: false,
-      customerInfo: {
-        name: "Robert Davis",
-        phone: "+1-555-0104",
-        email: "robert.davis@email.com",
-        address: "321 Cedar Lane",
-        city: "Austin",
-        state: "TX",
-        zipcode: "73301",
-        country: "USA",
-      },
-      orderNotes: "Corporate branding theme with company colors for all items",
-      uploadedFiles: {
-        linkImg: {
-          name: "corporate-design.jpg",
-          url: "/corporate-keychain.jpg",
-        },
-        linkThanksCard: { name: "corporate-thanks.pdf", url: "#" },
-        linkFileDesign: { name: "corporate-design.ai", url: "#" },
-      },
+      title: "Designing",
+      value: "12",
+      color: "bg-purple-50 border-purple-200",
+      icon: Clock,
+      iconColor: "text-purple-500",
+      statusFilter: "Designing",
     },
     {
-      id: 5,
-      orderId: "ORD-S005",
-      orderDate: "2024-01-24",
-      customerName: "Maria Garcia",
-      phone: "+1-555-0105",
-      email: "maria.garcia@email.com",
-      products: [
-        {
-          name: "Custom Acrylic Art",
-          quantity: 5,
-          price: 200.0,
-          size: "20x30cm",
-          accessory: "Wall Mount",
-        },
-      ],
-      address: "987 Birch Street, Denver, CO 80201",
-      shipTo: "Gallery: 147 Art District, Denver, CO 80202",
-      status: "In Progress",
-      totalAmount: "$200.00",
-      timeCreated: "3 hours ago",
-      selected: false,
-      customerInfo: {
-        name: "Maria Garcia",
-        phone: "+1-555-0105",
-        email: "maria.garcia@email.com",
-        address: "987 Birch Street",
-        city: "Denver",
-        state: "CO",
-        zipcode: "80201",
-        country: "USA",
-      },
-      orderNotes: "High-quality finish for gallery display",
-      uploadedFiles: {
-        linkImg: { name: "art-reference.jpg", url: "/acrylic-art.jpg" },
-        linkThanksCard: { name: "gallery-thanks.pdf", url: "#" },
-        linkFileDesign: { name: "art-design.ai", url: "#" },
-      },
+      title: "Check File Design",
+      value: "18",
+      color: "bg-green-50 border-green-200",
+      icon: ListTodo,
+      iconColor: "text-green-500",
+      statusFilter: "Check File Design",
     },
     {
-      id: 6,
-      orderId: "ORD-S006",
-      orderDate: "2024-01-25",
-      customerName: "David Kim",
-      phone: "+1-555-0106",
-      email: "david.kim@email.com",
-      products: [
-        {
-          name: "Gaming Keychain Set",
-          quantity: 100,
-          price: 200.0,
-          size: "4x4cm",
-          accessory: "Key Ring",
-        },
-        {
-          name: "LED Acrylic Stand",
-          quantity: 25,
-          price: 125.0,
-          size: "12x15cm",
-          accessory: "LED Base",
-        },
-        {
-          name: "Custom Phone Case",
-          quantity: 50,
-          price: 75.0,
-          size: "Various",
-          accessory: "None",
-        },
-        {
-          name: "Acrylic Coasters",
-          quantity: 200,
-          price: 50.0,
-          size: "10x10cm",
-          accessory: "Cork Base",
-        },
-      ],
-      address: "555 Tech Boulevard, San Jose, CA 95101",
-      shipTo: "Same as billing",
-      status: "Pending Design",
-      totalAmount: "$450.00",
-      timeCreated: "1 hour ago",
-      selected: false,
-      customerInfo: {
-        name: "David Kim",
-        phone: "+1-555-0106",
-        email: "david.kim@email.com",
-        address: "555 Tech Boulevard",
-        city: "San Jose",
-        state: "CA",
-        zipcode: "95101",
-        country: "USA",
-      },
-      orderNotes: "Gaming theme with RGB lighting for all items",
-      uploadedFiles: {
-        linkImg: { name: "gaming-reference.jpg", url: "/gaming-keychain.jpg" },
-        linkThanksCard: { name: "gaming-thanks.pdf", url: "#" },
-        linkFileDesign: { name: "gaming-design.ai", url: "#" },
-      },
+      title: "Seller Approved Design",
+      value: "15",
+      color: "bg-orange-50 border-orange-200",
+      icon: CheckCircle,
+      iconColor: "text-orange-500",
+      statusFilter: "Seller Approved Design",
+    },
+    {
+      title: "Seller Reject Design",
+      value: "2",
+      color: "bg-red-50 border-red-200",
+      icon: AlertTriangle,
+      iconColor: "text-red-500",
+      statusFilter: "Seller Reject Design",
     },
   ];
 
@@ -361,18 +244,109 @@ export default function ManageOrder() {
         product.name.toLowerCase().includes(searchTerm.toLowerCase())
       );
 
+    const selectedStatConfig = stats.find(
+      (stat) => stat.title === selectedStat
+    );
     const matchesStatus =
-      statusFilter === "all" ||
-      order.status.toLowerCase().includes(statusFilter.toLowerCase());
+      !selectedStatConfig?.statusFilter ||
+      order.status === selectedStatConfig.statusFilter;
 
-    return matchesSearch && matchesStatus;
+    let matchesDateRange = true;
+    if (dateRange.from && dateRange.to) {
+      const orderDate = new Date(order.orderDate);
+      matchesDateRange =
+        orderDate >= dateRange.from && orderDate <= dateRange.to;
+    } else if (dateRange.from) {
+      const orderDate = new Date(order.orderDate);
+      matchesDateRange =
+        orderDate.toDateString() === dateRange.from.toDateString();
+    }
+
+    return matchesSearch && matchesStatus && matchesDateRange;
   });
+
+  const sortedOrders = [...filteredOrders].sort((a, b) => {
+    if (!sortColumn) return 0;
+
+    let aValue, bValue;
+
+    if (sortColumn === "orderDate") {
+      aValue = new Date(a.orderDate).getTime();
+      bValue = new Date(b.orderDate).getTime();
+    } else if (sortColumn === "customerName") {
+      aValue = a.customerName.toLowerCase();
+      bValue = b.customerName.toLowerCase();
+    } else if (sortColumn === "totalAmount") {
+      aValue = Number.parseFloat(a.totalAmount.replace("$", ""));
+      bValue = Number.parseFloat(b.totalAmount.replace("$", ""));
+    }
+
+    if (sortDirection === "asc") {
+      return aValue > bValue ? 1 : -1;
+    } else {
+      return aValue < bValue ? 1 : -1;
+    }
+  });
+
+  const totalPages = Math.ceil(sortedOrders.length / itemsPerPage);
+  const startIndex = (page - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedOrders = sortedOrders.slice(startIndex, endIndex);
+
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortColumn(column);
+      setSortDirection("asc");
+    }
+  };
+
+  const renderSortIcon = (column) => {
+    if (sortColumn !== column) {
+      return <ArrowUpDown className="h-4 w-4 ml-1 inline" />;
+    }
+    return sortDirection === "asc" ? (
+      <ArrowUp className="h-4 w-4 ml-1 inline" />
+    ) : (
+      <ArrowDown className="h-4 w-4 ml-1 inline" />
+    );
+  };
+
+  const handleSearchChange = (value) => {
+    setSearchTerm(value);
+    setPage(1);
+  };
+
+  const handleStatClick = (statTitle) => {
+    setSelectedStat(statTitle);
+    setPage(1);
+  };
+
+  const handleItemsPerPageChange = (value) => {
+    setItemsPerPage(Number(value));
+    setPage(1);
+  };
+
+  const handleDateSelect = (range) => {
+    setDateRange(range || { from: null, to: null });
+    setPage(1);
+  };
+
+  const handleExport = () => {
+    console.log("Exporting orders:", filteredOrders);
+    alert(`Exporting ${filteredOrders.length} orders`);
+  };
+
+  const handleDelete = (orderId) => {
+    console.log("Deleting order:", orderId);
+  };
 
   const handleSelectAll = () => {
     const newSelectAll = !selectAll;
     setSelectAll(newSelectAll);
     if (newSelectAll) {
-      setSelectedOrders(filteredOrders.map((order) => order.id));
+      setSelectedOrders(paginatedOrders.map((order) => order.id));
     } else {
       setSelectedOrders([]);
     }
@@ -390,12 +364,32 @@ export default function ManageOrder() {
     const file = event.target.files[0];
     if (file) {
       console.log("File selected:", file.name);
-      // Handle file import logic here
+    }
+  };
+
+  const handleAssignClick = () => {
+    const selectedOrdersData = orders.filter((order) =>
+      selectedOrders.includes(order.id)
+    );
+    const nonDraftOrders = selectedOrdersData.filter(
+      (order) => order.status !== "Draft"
+    );
+
+    if (nonDraftOrders.length > 0) {
+      setCannotAssignMessage(
+        `Cannot assign ${nonDraftOrders.length} order(s) to designer. Only orders with "Draft Seller Order" status can be assigned.`
+      );
+      setShowCannotAssignDialog(true);
+    } else {
+      setShowAssignDialog(true);
     }
   };
 
   const handleAssignToDesigner = () => {
     console.log("Assigning orders to designer:", selectedOrders);
+    setShowAssignDialog(false);
+    setSelectedOrders([]);
+    setSelectAll(false);
   };
 
   const handleDownload = (file) => {
@@ -418,10 +412,8 @@ export default function ManageOrder() {
 
   const handleSaveUpdate = () => {
     console.log("Saving updated order:", editedOrder);
-    // Here you would typically make an API call to save the changes
     setIsEditMode(false);
     setSelectedOrder(editedOrder);
-    // Update the order in the orders array (in a real app, this would be done via API)
   };
 
   const handleCancelEdit = () => {
@@ -475,6 +467,36 @@ export default function ManageOrder() {
             Completed
           </Badge>
         );
+      case "Assigned Designer":
+        return (
+          <Badge className="bg-purple-500 hover:bg-purple-600 text-white">
+            Assigned Designer
+          </Badge>
+        );
+      case "Check File Design":
+        return (
+          <Badge className="bg-indigo-500 hover:bg-indigo-600 text-white">
+            Check File Design
+          </Badge>
+        );
+      case "Seller Approved Design":
+        return (
+          <Badge className="bg-orange-500 hover:bg-orange-600 text-white">
+            Seller Approved Design
+          </Badge>
+        );
+      case "Seller Reject Design":
+        return (
+          <Badge className="bg-red-500 hover:bg-red-600 text-white">
+            Seller Reject Design
+          </Badge>
+        );
+      case "Draft":
+        return (
+          <Badge className="bg-gray-500 hover:bg-gray-600 text-white">
+            Draft
+          </Badge>
+        );
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
@@ -510,7 +532,41 @@ export default function ManageOrder() {
               </div>
             </div>
 
-            {/* Controls */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2 sm:gap-3">
+              {stats.map((stat, index) => {
+                const IconComponent = stat.icon;
+                const isActive = selectedStat === stat.title;
+                return (
+                  <div
+                    key={index}
+                    onClick={() => handleStatClick(stat.title)}
+                    className={`p-3 rounded-lg border-2 ${
+                      stat.color
+                    } hover:shadow-lg transition-all cursor-pointer ${
+                      isActive ? "ring-2 ring-blue-400 shadow-lg scale-105" : ""
+                    }`}
+                  >
+                    <div className="flex flex-col items-center text-center gap-2">
+                      <IconComponent className={`h-5 w-5 ${stat.iconColor}`} />
+                      <div>
+                        <p className="text-lg font-bold text-gray-900">
+                          {stat.value}
+                        </p>
+                        <h3 className="text-[10px] sm:text-xs font-medium text-gray-600 uppercase tracking-wide">
+                          {stat.title}
+                        </h3>
+                      </div>
+                    </div>
+                    {isActive && (
+                      <div className="mt-1 text-[10px] font-medium text-blue-600 text-center">
+                        ✓ Active
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
             <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border border-gray-200">
               <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-end justify-between">
                 <div className="flex flex-col sm:flex-row gap-4 flex-1 w-full">
@@ -523,33 +579,70 @@ export default function ManageOrder() {
                       <Input
                         placeholder="Order ID, Customer, Product..."
                         value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onChange={(e) => handleSearchChange(e.target.value)}
                         className="pl-10 bg-white"
                       />
                     </div>
                   </div>
+
                   <div className="flex-1 max-w-xs">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Filter by Status
+                      Filter by Date
                     </label>
-                    <Select
-                      value={statusFilter}
-                      onValueChange={setStatusFilter}
-                    >
-                      <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="All Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Status</SelectItem>
-                        <SelectItem value="pending">Pending Design</SelectItem>
-                        <SelectItem value="progress">In Progress</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start text-left font-normal bg-white"
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {dateRange.from ? (
+                            dateRange.to ? (
+                              <>
+                                {format(dateRange.from, "MMM dd, yyyy")} -{" "}
+                                {format(dateRange.to, "MMM dd, yyyy")}
+                              </>
+                            ) : (
+                              format(dateRange.from, "MMM dd, yyyy")
+                            )
+                          ) : (
+                            <span>Pick a date range</span>
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="range"
+                          selected={dateRange}
+                          onSelect={handleDateSelect}
+                          numberOfMonths={2}
+                          initialFocus
+                        />
+                        {(dateRange.from || dateRange.to) && (
+                          <div className="p-3 border-t">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full bg-transparent"
+                              onClick={() =>
+                                handleDateSelect({ from: null, to: null })
+                              }
+                            >
+                              Clear Filter
+                            </Button>
+                          </div>
+                        )}
+                      </PopoverContent>
+                    </Popover>
                   </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2 w-full lg:w-auto">
+                  <Button variant="outline" onClick={handleExport}>
+                    <FileDown className="h-4 w-4 mr-2" />
+                    <span className="hidden sm:inline">Export file</span>
+                    <span className="sm:hidden">Export</span>
+                  </Button>
                   <Button
                     variant="outline"
                     onClick={() =>
@@ -589,305 +682,230 @@ export default function ManageOrder() {
                 {selectAll ? "Deselect All" : "Select All"}
               </Button>
 
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="outline"
-                    disabled={selectedOrders.length === 0}
-                    className="bg-white"
-                  >
-                    Assign to Designer ({selectedOrders.length})
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      Assign Orders to Designer
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Are you sure you want to send {selectedOrders.length}{" "}
-                      order(s) to the designer?
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>No</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleAssignToDesigner}>
-                      Yes
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              <Button
+                variant="outline"
+                disabled={selectedOrders.length === 0}
+                onClick={handleAssignClick}
+                className="bg-white"
+              >
+                Assign to Designer ({selectedOrders.length})
+              </Button>
             </div>
 
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-gray-50">
-                      <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
-                        Select
-                      </TableHead>
-                      <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
-                        Order ID
-                      </TableHead>
-                      <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
-                        Order Date
-                      </TableHead>
-                      <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
-                        Customer
-                      </TableHead>
-                      <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
-                        Phone
-                      </TableHead>
-                      <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
-                        Products
-                      </TableHead>
-                      <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
-                        Address
-                      </TableHead>
-                      <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
-                        Ship to
-                      </TableHead>
-                      <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
-                        Status
-                      </TableHead>
-                      <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
-                        Amount
-                      </TableHead>
-                      <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
-                        Time
-                      </TableHead>
-                      <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
-                        Actions
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredOrders.map((order) => (
-                      <TableRow
-                        key={order.id}
-                        className="hover:bg-gray-50 transition-colors"
-                      >
-                        <TableCell>
-                          <Checkbox
-                            checked={selectedOrders.includes(order.id)}
-                            onCheckedChange={() => handleOrderSelect(order.id)}
-                          />
-                        </TableCell>
-                        <TableCell className="font-medium text-gray-900 whitespace-nowrap">
-                          {order.orderId}
-                        </TableCell>
-                        <TableCell className="text-gray-600 whitespace-nowrap">
-                          {order.orderDate}
-                        </TableCell>
-                        <TableCell className="min-w-[200px]">
-                          <div>
-                            <div className="font-medium text-gray-900">
-                              {order.customerName}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {order.email}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-gray-600 whitespace-nowrap">
-                          {order.phone}
-                        </TableCell>
-                        <TableCell className="text-gray-600 min-w-[200px]">
-                          <div className="space-y-1">
-                            {order.products
-                              .slice(0, 2)
-                              .map((product, index) => (
-                                <div key={index} className="text-sm">
-                                  {product.name} (x{product.quantity})
-                                </div>
-                              ))}
-                            {order.products.length > 2 && (
-                              <div className="text-xs text-gray-500">
-                                +{order.products.length - 2} more items
-                              </div>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-gray-600 max-w-[200px]">
-                          <div className="truncate" title={order.address}>
-                            {order.address}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-gray-600 max-w-[200px]">
-                          <div className="truncate" title={order.shipTo}>
-                            {order.shipTo}
-                          </div>
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {getStatusBadge(order.status)}
-                        </TableCell>
-                        <TableCell className="font-medium text-gray-900 whitespace-nowrap">
-                          {order.totalAmount}
-                        </TableCell>
-                        <TableCell className="text-gray-600 whitespace-nowrap">
-                          {order.timeCreated}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleViewDetails(order)}
-                                className="bg-transparent hover:bg-gray-50"
-                              >
-                                <Eye className="h-4 w-4 mr-1" />
-                                <span className="hidden xl:inline">View</span>
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                              <DialogHeader>
-                                <DialogTitle className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <Package className="h-5 w-5" />
-                                    Order Details - {editedOrder?.orderId}
-                                  </div>
-                                  {!isEditMode && (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={handleEditMode}
-                                      className="bg-transparent hover:bg-gray-50"
-                                    >
-                                      <Edit className="h-4 w-4 mr-2" />
-                                      Edit Order
-                                    </Button>
-                                  )}
-                                </DialogTitle>
-                              </DialogHeader>
-                              {editedOrder && (
-                                <div className="space-y-6">
-                                  {/* Customer Information */}
-                                  <div className="bg-gray-50 p-4 rounded-lg">
-                                    <h3 className="font-semibold text-lg mb-3 text-gray-900">
-                                      Customer Information
-                                    </h3>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                      <div>
-                                        <Label className="text-sm text-gray-500 font-medium">
-                                          Name
-                                        </Label>
-                                        {isEditMode ? (
-                                          <Input
-                                            value={
-                                              editedOrder.customerInfo.name
-                                            }
-                                            onChange={(e) =>
-                                              handleCustomerInfoChange(
-                                                "name",
-                                                e.target.value
-                                              )
-                                            }
-                                            className="mt-1"
-                                          />
-                                        ) : (
-                                          <p className="font-medium text-gray-900 mt-1">
-                                            {editedOrder.customerInfo.name}
-                                          </p>
-                                        )}
-                                      </div>
-                                      <div>
-                                        <Label className="text-sm text-gray-500 font-medium">
-                                          Phone
-                                        </Label>
-                                        {isEditMode ? (
-                                          <Input
-                                            value={
-                                              editedOrder.customerInfo.phone
-                                            }
-                                            onChange={(e) =>
-                                              handleCustomerInfoChange(
-                                                "phone",
-                                                e.target.value
-                                              )
-                                            }
-                                            className="mt-1"
-                                          />
-                                        ) : (
-                                          <p className="font-medium text-gray-900 mt-1">
-                                            {editedOrder.customerInfo.phone}
-                                          </p>
-                                        )}
-                                      </div>
-                                      <div>
-                                        <Label className="text-sm text-gray-500 font-medium">
-                                          Email
-                                        </Label>
-                                        {isEditMode ? (
-                                          <Input
-                                            value={
-                                              editedOrder.customerInfo.email
-                                            }
-                                            onChange={(e) =>
-                                              handleCustomerInfoChange(
-                                                "email",
-                                                e.target.value
-                                              )
-                                            }
-                                            className="mt-1"
-                                          />
-                                        ) : (
-                                          <p className="font-medium text-gray-900 mt-1">
-                                            {editedOrder.customerInfo.email}
-                                          </p>
-                                        )}
-                                      </div>
-                                      <div>
-                                        <Label className="text-sm text-gray-500 font-medium">
-                                          Address
-                                        </Label>
-                                        {isEditMode ? (
-                                          <Input
-                                            value={`${editedOrder.customerInfo.address}, ${editedOrder.customerInfo.city}, ${editedOrder.customerInfo.state} ${editedOrder.customerInfo.zipcode}`}
-                                            onChange={(e) =>
-                                              handleCustomerInfoChange(
-                                                "address",
-                                                e.target.value
-                                              )
-                                            }
-                                            className="mt-1"
-                                          />
-                                        ) : (
-                                          <p className="font-medium text-gray-900 mt-1">
-                                            {editedOrder.customerInfo.address},{" "}
-                                            {editedOrder.customerInfo.city},{" "}
-                                            {editedOrder.customerInfo.state}{" "}
-                                            {editedOrder.customerInfo.zipcode}
-                                          </p>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
+            <AlertDialog
+              open={showAssignDialog}
+              onOpenChange={setShowAssignDialog}
+            >
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Assign Orders to Designer</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to send {selectedOrders.length}{" "}
+                    order(s) to the designer?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>No</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleAssignToDesigner}>
+                    Yes
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
 
-                                  {/* Product Details */}
-                                  <div>
-                                    <h3 className="font-semibold text-lg mb-3 text-gray-900">
-                                      Product Details
-                                    </h3>
-                                    <div className="space-y-4">
-                                      {editedOrder.products.map(
-                                        (product, index) => (
-                                          <div
-                                            key={index}
-                                            className="border border-gray-200 rounded-lg p-4"
-                                          >
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <AlertDialog
+              open={showCannotAssignDialog}
+              onOpenChange={setShowCannotAssignDialog}
+            >
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Cannot Assign Orders</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {cannotAssignMessage}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogAction>OK</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+              {loading ? (
+                <div className="flex items-center justify-center p-12">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Loading orders...</p>
+                  </div>
+                </div>
+              ) : error ? (
+                <div className="flex items-center justify-center p-12">
+                  <div className="text-center">
+                    <AlertTriangle className="h-12 w-12 text-red-500 mx-auto" />
+                    <p className="mt-4 text-red-600 font-medium">
+                      Error loading orders
+                    </p>
+                    <p className="mt-2 text-gray-600 text-sm">{error}</p>
+                    <Button
+                      onClick={() => window.location.reload()}
+                      className="mt-4"
+                      variant="outline"
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50">
+                          <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
+                            Select
+                          </TableHead>
+                          <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
+                            Order ID
+                          </TableHead>
+                          <TableHead
+                            className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap cursor-pointer hover:bg-gray-100"
+                            onClick={() => handleSort("orderDate")}
+                          >
+                            Order Date {renderSortIcon("orderDate")}
+                          </TableHead>
+                          <TableHead
+                            className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap cursor-pointer hover:bg-gray-100"
+                            onClick={() => handleSort("customerName")}
+                          >
+                            Customer {renderSortIcon("customerName")}
+                          </TableHead>
+                          <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
+                            Address
+                          </TableHead>
+                          <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
+                            Status
+                          </TableHead>
+                          <TableHead
+                            className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap cursor-pointer hover:bg-gray-100"
+                            onClick={() => handleSort("totalAmount")}
+                          >
+                            Amount {renderSortIcon("totalAmount")}
+                          </TableHead>
+                          <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
+                            Actions
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {paginatedOrders.length === 0 ? (
+                          <TableRow>
+                            <TableCell
+                              colSpan={8}
+                              className="text-center py-8 text-gray-500"
+                            >
+                              No orders found
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          paginatedOrders.map((order) => (
+                            <TableRow
+                              key={order.id}
+                              className="hover:bg-gray-50 transition-colors"
+                            >
+                              <TableCell>
+                                <Checkbox
+                                  checked={selectedOrders.includes(order.id)}
+                                  onCheckedChange={() =>
+                                    handleOrderSelect(order.id)
+                                  }
+                                />
+                              </TableCell>
+                              <TableCell className="font-medium text-gray-900 whitespace-nowrap">
+                                {order.orderId}
+                              </TableCell>
+                              <TableCell className="text-gray-600 whitespace-nowrap">
+                                {order.orderDate}
+                              </TableCell>
+                              <TableCell className="min-w-[200px]">
+                                <div>
+                                  <div className="font-medium text-gray-900">
+                                    {order.customerName}
+                                  </div>
+                                  {order.email && (
+                                    <div className="text-sm text-gray-500">
+                                      {order.email}
+                                    </div>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-gray-600 max-w-[200px]">
+                                <div className="truncate" title={order.address}>
+                                  {order.address || "N/A"}
+                                </div>
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                {getStatusBadge(order.status)}
+                              </TableCell>
+                              <TableCell className="font-medium text-gray-900 whitespace-nowrap">
+                                {order.totalAmount}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                <div className="flex items-center gap-2">
+                                  <Dialog>
+                                    <DialogTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleViewDetails(order)}
+                                        className="bg-transparent hover:bg-gray-50"
+                                      >
+                                        <Eye className="h-4 w-4 mr-1" />
+                                        <span className="hidden xl:inline">
+                                          View
+                                        </span>
+                                      </Button>
+                                    </DialogTrigger>
+                                    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                                      <DialogHeader>
+                                        <DialogTitle className="flex items-center justify-between">
+                                          <div className="flex items-center gap-2">
+                                            <Package className="h-5 w-5" />
+                                            Order Details -{" "}
+                                            {editedOrder?.orderId}
+                                          </div>
+                                          {!isEditMode && (
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              onClick={handleEditMode}
+                                              className="bg-transparent hover:bg-gray-50"
+                                            >
+                                              <Edit className="h-4 w-4 mr-2" />
+                                              Edit Order
+                                            </Button>
+                                          )}
+                                        </DialogTitle>
+                                      </DialogHeader>
+                                      {editedOrder && (
+                                        <div className="space-y-6">
+                                          {/* Customer Information */}
+                                          <div className="bg-gray-50 p-4 rounded-lg">
+                                            <h3 className="font-semibold text-lg mb-3 text-gray-900">
+                                              Customer Information
+                                            </h3>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                               <div>
                                                 <Label className="text-sm text-gray-500 font-medium">
-                                                  Product
+                                                  Name
                                                 </Label>
                                                 {isEditMode ? (
                                                   <Input
-                                                    value={product.name}
+                                                    value={
+                                                      editedOrder.customerInfo
+                                                        .name
+                                                    }
                                                     onChange={(e) =>
-                                                      handleProductChange(
-                                                        index,
+                                                      handleCustomerInfoChange(
                                                         "name",
                                                         e.target.value
                                                       )
@@ -896,21 +914,26 @@ export default function ManageOrder() {
                                                   />
                                                 ) : (
                                                   <p className="font-medium text-gray-900 mt-1">
-                                                    {product.name}
+                                                    {
+                                                      editedOrder.customerInfo
+                                                        .name
+                                                    }
                                                   </p>
                                                 )}
                                               </div>
                                               <div>
                                                 <Label className="text-sm text-gray-500 font-medium">
-                                                  Size
+                                                  Phone
                                                 </Label>
                                                 {isEditMode ? (
                                                   <Input
-                                                    value={product.size}
+                                                    value={
+                                                      editedOrder.customerInfo
+                                                        .phone
+                                                    }
                                                     onChange={(e) =>
-                                                      handleProductChange(
-                                                        index,
-                                                        "size",
+                                                      handleCustomerInfoChange(
+                                                        "phone",
                                                         e.target.value
                                                       )
                                                     }
@@ -918,46 +941,26 @@ export default function ManageOrder() {
                                                   />
                                                 ) : (
                                                   <p className="font-medium text-gray-900 mt-1">
-                                                    {product.size}
-                                                  </p>
-                                                )}
-                                              </div>
-                                              <div>
-                                                <Label className="text-sm text-gray-500 font-medium">
-                                                  Quantity
-                                                </Label>
-                                                {isEditMode ? (
-                                                  <Input
-                                                    type="number"
-                                                    value={product.quantity}
-                                                    onChange={(e) =>
-                                                      handleProductChange(
-                                                        index,
-                                                        "quantity",
-                                                        Number.parseInt(
-                                                          e.target.value
-                                                        )
-                                                      )
+                                                    {
+                                                      editedOrder.customerInfo
+                                                        .phone
                                                     }
-                                                    className="mt-1"
-                                                  />
-                                                ) : (
-                                                  <p className="font-medium text-gray-900 mt-1">
-                                                    {product.quantity}
                                                   </p>
                                                 )}
                                               </div>
                                               <div>
                                                 <Label className="text-sm text-gray-500 font-medium">
-                                                  Accessory
+                                                  Email
                                                 </Label>
                                                 {isEditMode ? (
                                                   <Input
-                                                    value={product.accessory}
+                                                    value={
+                                                      editedOrder.customerInfo
+                                                        .email
+                                                    }
                                                     onChange={(e) =>
-                                                      handleProductChange(
-                                                        index,
-                                                        "accessory",
+                                                      handleCustomerInfoChange(
+                                                        "email",
                                                         e.target.value
                                                       )
                                                     }
@@ -965,232 +968,535 @@ export default function ManageOrder() {
                                                   />
                                                 ) : (
                                                   <p className="font-medium text-gray-900 mt-1">
-                                                    {product.accessory}
+                                                    {
+                                                      editedOrder.customerInfo
+                                                        .email
+                                                    }
+                                                  </p>
+                                                )}
+                                              </div>
+                                              <div>
+                                                <Label className="text-sm text-gray-500 font-medium">
+                                                  Address
+                                                </Label>
+                                                {isEditMode ? (
+                                                  <Input
+                                                    value={`${editedOrder.customerInfo.address}, ${editedOrder.customerInfo.city}, ${editedOrder.customerInfo.state} ${editedOrder.customerInfo.zipcode}`}
+                                                    onChange={(e) =>
+                                                      handleCustomerInfoChange(
+                                                        "address",
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                    className="mt-1"
+                                                  />
+                                                ) : (
+                                                  <p className="font-medium text-gray-900 mt-1">
+                                                    {
+                                                      editedOrder.customerInfo
+                                                        .address
+                                                    }
+                                                    ,{" "}
+                                                    {
+                                                      editedOrder.customerInfo
+                                                        .city
+                                                    }
+                                                    ,{" "}
+                                                    {
+                                                      editedOrder.customerInfo
+                                                        .state
+                                                    }{" "}
+                                                    {
+                                                      editedOrder.customerInfo
+                                                        .zipcode
+                                                    }
                                                   </p>
                                                 )}
                                               </div>
                                             </div>
                                           </div>
-                                        )
+
+                                          {/* Product Details */}
+                                          <div>
+                                            <h3 className="font-semibold text-lg mb-3 text-gray-900">
+                                              Product Details
+                                            </h3>
+                                            <div className="space-y-4">
+                                              {editedOrder.products.map(
+                                                (product, index) => (
+                                                  <div
+                                                    key={index}
+                                                    className="border border-gray-200 rounded-lg p-4"
+                                                  >
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                                      <div>
+                                                        <Label className="text-sm text-gray-500 font-medium">
+                                                          Product
+                                                        </Label>
+                                                        {isEditMode ? (
+                                                          <Input
+                                                            value={product.name}
+                                                            onChange={(e) =>
+                                                              handleProductChange(
+                                                                index,
+                                                                "name",
+                                                                e.target.value
+                                                              )
+                                                            }
+                                                            className="mt-1"
+                                                          />
+                                                        ) : (
+                                                          <p className="font-medium text-gray-900 mt-1">
+                                                            {product.name}
+                                                          </p>
+                                                        )}
+                                                      </div>
+                                                      <div>
+                                                        <Label className="text-sm text-gray-500 font-medium">
+                                                          Size
+                                                        </Label>
+                                                        {isEditMode ? (
+                                                          <Input
+                                                            value={product.size}
+                                                            onChange={(e) =>
+                                                              handleProductChange(
+                                                                index,
+                                                                "size",
+                                                                e.target.value
+                                                              )
+                                                            }
+                                                            className="mt-1"
+                                                          />
+                                                        ) : (
+                                                          <p className="font-medium text-gray-900 mt-1">
+                                                            {product.size}
+                                                          </p>
+                                                        )}
+                                                      </div>
+                                                      <div>
+                                                        <Label className="text-sm text-gray-500 font-medium">
+                                                          Quantity
+                                                        </Label>
+                                                        {isEditMode ? (
+                                                          <Input
+                                                            type="number"
+                                                            value={
+                                                              product.quantity
+                                                            }
+                                                            onChange={(e) =>
+                                                              handleProductChange(
+                                                                index,
+                                                                "quantity",
+                                                                Number.parseInt(
+                                                                  e.target.value
+                                                                )
+                                                              )
+                                                            }
+                                                            className="mt-1"
+                                                          />
+                                                        ) : (
+                                                          <p className="font-medium text-gray-900 mt-1">
+                                                            {product.quantity}
+                                                          </p>
+                                                        )}
+                                                      </div>
+                                                      <div>
+                                                        <Label className="text-sm text-gray-500 font-medium">
+                                                          Accessory
+                                                        </Label>
+                                                        {isEditMode ? (
+                                                          <Input
+                                                            value={
+                                                              product.accessory
+                                                            }
+                                                            onChange={(e) =>
+                                                              handleProductChange(
+                                                                index,
+                                                                "accessory",
+                                                                e.target.value
+                                                              )
+                                                            }
+                                                            className="mt-1"
+                                                          />
+                                                        ) : (
+                                                          <p className="font-medium text-gray-900 mt-1">
+                                                            {product.accessory}
+                                                          </p>
+                                                        )}
+                                                      </div>
+                                                    </div>
+                                                  </div>
+                                                )
+                                              )}
+                                            </div>
+                                            {editedOrder.orderNotes && (
+                                              <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                                <Label className="text-sm text-yellow-700 font-medium">
+                                                  Order Notes
+                                                </Label>
+                                                {isEditMode ? (
+                                                  <Textarea
+                                                    value={
+                                                      editedOrder.orderNotes
+                                                    }
+                                                    onChange={(e) =>
+                                                      handleFieldChange(
+                                                        "orderNotes",
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                    className="mt-1 bg-white"
+                                                    rows={3}
+                                                  />
+                                                ) : (
+                                                  <p className="text-yellow-800 mt-1">
+                                                    {editedOrder.orderNotes}
+                                                  </p>
+                                                )}
+                                              </div>
+                                            )}
+                                          </div>
+
+                                          {/* Order Status */}
+                                          <div className="bg-gray-50 p-4 rounded-lg">
+                                            <h3 className="font-semibold text-lg mb-3 text-gray-900">
+                                              Order Status
+                                            </h3>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                              <div>
+                                                <Label className="text-sm text-gray-500 font-medium">
+                                                  Current Status
+                                                </Label>
+                                                {isEditMode ? (
+                                                  <Select
+                                                    value={editedOrder.status}
+                                                    onValueChange={(value) =>
+                                                      handleFieldChange(
+                                                        "status",
+                                                        value
+                                                      )
+                                                    }
+                                                  >
+                                                    <SelectTrigger className="mt-1 bg-white">
+                                                      <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                      <SelectItem value="Pending Design">
+                                                        Pending Design
+                                                      </SelectItem>
+                                                      <SelectItem value="In Progress">
+                                                        In Progress
+                                                      </SelectItem>
+                                                      <SelectItem value="Completed">
+                                                        Completed
+                                                      </SelectItem>
+                                                      <SelectItem value="Assigned Designer">
+                                                        Assigned Designer
+                                                      </SelectItem>
+                                                      <SelectItem value="Check File Design">
+                                                        Check File Design
+                                                      </SelectItem>
+                                                      <SelectItem value="Seller Approved Design">
+                                                        Seller Approved Design
+                                                      </SelectItem>
+                                                      <SelectItem value="Seller Reject Design">
+                                                        Seller Reject Design
+                                                      </SelectItem>
+                                                      <SelectItem value="Draft">
+                                                        Draft
+                                                      </SelectItem>
+                                                    </SelectContent>
+                                                  </Select>
+                                                ) : (
+                                                  <div className="mt-1">
+                                                    {getStatusBadge(
+                                                      editedOrder.status
+                                                    )}
+                                                  </div>
+                                                )}
+                                              </div>
+                                              <div>
+                                                <Label className="text-sm text-gray-500 font-medium">
+                                                  Order Date
+                                                </Label>
+                                                <p className="font-medium text-gray-900 mt-1">
+                                                  {editedOrder.orderDate}
+                                                </p>
+                                              </div>
+                                            </div>
+                                          </div>
+
+                                          {/* Order Files */}
+                                          <div>
+                                            <h3 className="font-semibold text-lg mb-3 text-gray-900">
+                                              Order Files
+                                            </h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                              <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                                                <Label className="text-sm text-gray-500 font-medium">
+                                                  Reference Image
+                                                </Label>
+                                                <div className="mt-2">
+                                                  <img
+                                                    src={
+                                                      editedOrder.uploadedFiles
+                                                        .linkImg.url ||
+                                                      "/placeholder.svg"
+                                                    }
+                                                    alt="Reference"
+                                                    className="w-full h-32 object-cover rounded border"
+                                                  />
+                                                  <p className="text-sm mt-2 text-gray-600">
+                                                    {
+                                                      editedOrder.uploadedFiles
+                                                        .linkImg.name
+                                                    }
+                                                  </p>
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="mt-2 w-full bg-transparent hover:bg-gray-50"
+                                                    onClick={() =>
+                                                      handleDownload(
+                                                        editedOrder
+                                                          .uploadedFiles.linkImg
+                                                      )
+                                                    }
+                                                  >
+                                                    <Download className="h-4 w-4 mr-2" />
+                                                    Download
+                                                  </Button>
+                                                </div>
+                                              </div>
+
+                                              <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                                                <Label className="text-sm text-gray-500 font-medium">
+                                                  Thanks Card
+                                                </Label>
+                                                <div className="mt-2">
+                                                  <div className="w-full h-32 bg-gray-100 rounded border flex items-center justify-center">
+                                                    <QrCode className="h-8 w-8 text-gray-400" />
+                                                  </div>
+                                                  <p className="text-sm mt-2 text-gray-600">
+                                                    {
+                                                      editedOrder.uploadedFiles
+                                                        .linkThanksCard.name
+                                                    }
+                                                  </p>
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="mt-2 w-full bg-transparent hover:bg-gray-50"
+                                                    onClick={() =>
+                                                      handleDownload(
+                                                        editedOrder
+                                                          .uploadedFiles
+                                                          .linkThanksCard
+                                                      )
+                                                    }
+                                                  >
+                                                    <Download className="h-4 w-4 mr-2" />
+                                                    Download
+                                                  </Button>
+                                                </div>
+                                              </div>
+
+                                              <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                                                <Label className="text-sm text-gray-500 font-medium">
+                                                  Design File
+                                                </Label>
+                                                <div className="mt-2">
+                                                  <div className="w-full h-32 bg-gray-100 rounded border flex items-center justify-center">
+                                                    <QrCode className="h-8 w-8 text-gray-400" />
+                                                  </div>
+                                                  <p className="text-sm mt-2 text-gray-600">
+                                                    {
+                                                      editedOrder.uploadedFiles
+                                                        .linkFileDesign.name
+                                                    }
+                                                  </p>
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="mt-2 w-full bg-transparent hover:bg-gray-50"
+                                                    onClick={() =>
+                                                      handleDownload(
+                                                        editedOrder
+                                                          .uploadedFiles
+                                                          .linkFileDesign
+                                                      )
+                                                    }
+                                                  >
+                                                    <Download className="h-4 w-4 mr-2" />
+                                                    Download
+                                                  </Button>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+
+                                          {/* QR Code Section */}
+                                          <div className="bg-gray-50 p-4 rounded-lg">
+                                            <h4 className="font-medium mb-2 text-gray-900">
+                                              QR Code for Order{" "}
+                                              {editedOrder.orderId}
+                                            </h4>
+                                            <div className="w-32 h-32 bg-white border-2 border-gray-300 rounded flex items-center justify-center">
+                                              <QrCode className="h-16 w-16 text-gray-400" />
+                                            </div>
+                                          </div>
+                                        </div>
                                       )}
-                                    </div>
-                                    {editedOrder.orderNotes && (
-                                      <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                        <Label className="text-sm text-yellow-700 font-medium">
-                                          Order Notes
-                                        </Label>
-                                        {isEditMode ? (
-                                          <Textarea
-                                            value={editedOrder.orderNotes}
-                                            onChange={(e) =>
-                                              handleFieldChange(
-                                                "orderNotes",
-                                                e.target.value
-                                              )
-                                            }
-                                            className="mt-1 bg-white"
-                                            rows={3}
-                                          />
-                                        ) : (
-                                          <p className="text-yellow-800 mt-1">
-                                            {editedOrder.orderNotes}
-                                          </p>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {/* Order Status */}
-                                  <div className="bg-gray-50 p-4 rounded-lg">
-                                    <h3 className="font-semibold text-lg mb-3 text-gray-900">
-                                      Order Status
-                                    </h3>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                      <div>
-                                        <Label className="text-sm text-gray-500 font-medium">
-                                          Current Status
-                                        </Label>
-                                        {isEditMode ? (
-                                          <Select
-                                            value={editedOrder.status}
-                                            onValueChange={(value) =>
-                                              handleFieldChange("status", value)
-                                            }
-                                          >
-                                            <SelectTrigger className="mt-1 bg-white">
-                                              <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              <SelectItem value="Pending Design">
-                                                Pending Design
-                                              </SelectItem>
-                                              <SelectItem value="In Progress">
-                                                In Progress
-                                              </SelectItem>
-                                              <SelectItem value="Completed">
-                                                Completed
-                                              </SelectItem>
-                                            </SelectContent>
-                                          </Select>
-                                        ) : (
-                                          <div className="mt-1">
-                                            {getStatusBadge(editedOrder.status)}
-                                          </div>
-                                        )}
-                                      </div>
-                                      <div>
-                                        <Label className="text-sm text-gray-500 font-medium">
-                                          Order Date
-                                        </Label>
-                                        <p className="font-medium text-gray-900 mt-1">
-                                          {editedOrder.orderDate}
-                                        </p>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* Order Files */}
-                                  <div>
-                                    <h3 className="font-semibold text-lg mb-3 text-gray-900">
-                                      Order Files
-                                    </h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                      <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                                        <Label className="text-sm text-gray-500 font-medium">
-                                          Reference Image
-                                        </Label>
-                                        <div className="mt-2">
-                                          <img
-                                            src={
-                                              editedOrder.uploadedFiles.linkImg
-                                                .url || "/placeholder.svg"
-                                            }
-                                            alt="Reference"
-                                            className="w-full h-32 object-cover rounded border"
-                                          />
-                                          <p className="text-sm mt-2 text-gray-600">
-                                            {
-                                              editedOrder.uploadedFiles.linkImg
-                                                .name
-                                            }
-                                          </p>
+                                      {isEditMode && (
+                                        <DialogFooter className="flex gap-2">
                                           <Button
                                             variant="outline"
-                                            size="sm"
-                                            className="mt-2 w-full bg-transparent hover:bg-gray-50"
-                                            onClick={() =>
-                                              handleDownload(
-                                                editedOrder.uploadedFiles
-                                                  .linkImg
-                                              )
-                                            }
+                                            onClick={handleCancelEdit}
                                           >
-                                            <Download className="h-4 w-4 mr-2" />
-                                            Download
+                                            Cancel
                                           </Button>
-                                        </div>
-                                      </div>
-
-                                      <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                                        <Label className="text-sm text-gray-500 font-medium">
-                                          Thanks Card
-                                        </Label>
-                                        <div className="mt-2">
-                                          <div className="w-full h-32 bg-gray-100 rounded border flex items-center justify-center">
-                                            <QrCode className="h-8 w-8 text-gray-400" />
-                                          </div>
-                                          <p className="text-sm mt-2 text-gray-600">
-                                            {
-                                              editedOrder.uploadedFiles
-                                                .linkThanksCard.name
-                                            }
-                                          </p>
                                           <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="mt-2 w-full bg-transparent hover:bg-gray-50"
-                                            onClick={() =>
-                                              handleDownload(
-                                                editedOrder.uploadedFiles
-                                                  .linkThanksCard
-                                              )
-                                            }
+                                            onClick={handleSaveUpdate}
+                                            className="bg-blue-600 hover:bg-blue-700"
                                           >
-                                            <Download className="h-4 w-4 mr-2" />
-                                            Download
+                                            <Save className="h-4 w-4 mr-2" />
+                                            Save Changes
                                           </Button>
-                                        </div>
-                                      </div>
-
-                                      <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                                        <Label className="text-sm text-gray-500 font-medium">
-                                          Design File
-                                        </Label>
-                                        <div className="mt-2">
-                                          <div className="w-full h-32 bg-gray-100 rounded border flex items-center justify-center">
-                                            <QrCode className="h-8 w-8 text-gray-400" />
-                                          </div>
-                                          <p className="text-sm mt-2 text-gray-600">
-                                            {
-                                              editedOrder.uploadedFiles
-                                                .linkFileDesign.name
-                                            }
-                                          </p>
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="mt-2 w-full bg-transparent hover:bg-gray-50"
-                                            onClick={() =>
-                                              handleDownload(
-                                                editedOrder.uploadedFiles
-                                                  .linkFileDesign
-                                              )
-                                            }
-                                          >
-                                            <Download className="h-4 w-4 mr-2" />
-                                            Download
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* QR Code Section */}
-                                  <div className="bg-gray-50 p-4 rounded-lg">
-                                    <h4 className="font-medium mb-2 text-gray-900">
-                                      QR Code for Order {editedOrder.orderId}
-                                    </h4>
-                                    <div className="w-32 h-32 bg-white border-2 border-gray-300 rounded flex items-center justify-center">
-                                      <QrCode className="h-16 w-16 text-gray-400" />
-                                    </div>
-                                  </div>
+                                        </DialogFooter>
+                                      )}
+                                    </DialogContent>
+                                  </Dialog>
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="bg-transparent hover:bg-red-50 text-red-600 hover:text-red-700"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>
+                                          Delete Order
+                                        </AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          Are you sure you want to delete order{" "}
+                                          {order.orderId}? This action cannot be
+                                          undone.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>
+                                          Cancel
+                                        </AlertDialogCancel>
+                                        <AlertDialogAction
+                                          onClick={() => handleDelete(order.id)}
+                                          className="bg-red-600 hover:bg-red-700"
+                                        >
+                                          Delete
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
                                 </div>
-                              )}
-                              {isEditMode && (
-                                <DialogFooter className="flex gap-2">
-                                  <Button
-                                    variant="outline"
-                                    onClick={handleCancelEdit}
-                                  >
-                                    Cancel
-                                  </Button>
-                                  <Button
-                                    onClick={handleSaveUpdate}
-                                    className="bg-blue-600 hover:bg-blue-700"
-                                  >
-                                    <Save className="h-4 w-4 mr-2" />
-                                    Save Changes
-                                  </Button>
-                                </DialogFooter>
-                              )}
-                            </DialogContent>
-                          </Dialog>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  <div className="bg-gray-50 px-4 py-3 border-t border-gray-200 sm:px-6">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-700">Show</span>
+                        <select
+                          value={itemsPerPage}
+                          onChange={(e) =>
+                            handleItemsPerPageChange(e.target.value)
+                          }
+                          className="px-2 py-1 border border-gray-300 rounded-md text-sm"
+                        >
+                          <option value="5">5</option>
+                          <option value="10">10</option>
+                          <option value="20">20</option>
+                          <option value="50">50</option>
+                        </select>
+                        <span className="text-sm text-gray-700">per page</span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-700">
+                          Showing {startIndex + 1} to{" "}
+                          {Math.min(endIndex, sortedOrders.length)} of{" "}
+                          {sortedOrders.length} results
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPage(page - 1)}
+                          disabled={page === 1}
+                          className="disabled:opacity-50"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                          <span className="hidden sm:inline ml-1">
+                            Previous
+                          </span>
+                        </Button>
+
+                        <div className="flex items-center gap-1">
+                          {Array.from(
+                            { length: Math.min(5, totalPages) },
+                            (_, i) => {
+                              let pageNum;
+                              if (totalPages <= 5) {
+                                pageNum = i + 1;
+                              } else if (page <= 3) {
+                                pageNum = i + 1;
+                              } else if (page >= totalPages - 2) {
+                                pageNum = totalPages - 4 + i;
+                              } else {
+                                pageNum = page - 2 + i;
+                              }
+
+                              return (
+                                <Button
+                                  key={pageNum}
+                                  variant={
+                                    page === pageNum ? "default" : "outline"
+                                  }
+                                  size="sm"
+                                  onClick={() => setPage(pageNum)}
+                                  className="w-8 h-8 p-0"
+                                >
+                                  {pageNum}
+                                </Button>
+                              );
+                            }
+                          )}
+                        </div>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPage(page + 1)}
+                          disabled={page === totalPages}
+                          className="disabled:opacity-50"
+                        >
+                          <span className="hidden sm:inline mr-1">Next</span>
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </main>
