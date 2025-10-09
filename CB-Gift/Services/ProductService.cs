@@ -7,59 +7,79 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CB_Gift.Services
 {
-        public class ProductService : IProductService
+    public class ProductService : IProductService
+    {
+        private readonly CBGiftDbContext _context;
+        private readonly IMapper _mapper;
+
+        public ProductService(CBGiftDbContext context, IMapper mapper)
         {
-            private readonly CBGiftDbContext _context;
-            private readonly IMapper _mapper;
+            _context = context;
+            _mapper = mapper;
+        }
 
-            public ProductService(CBGiftDbContext context, IMapper mapper)
+        // 🔹 Get all products
+        public async Task<IEnumerable<ProductDto>> GetAllAsync()
+        {
+            var products = await _context.Products
+                .Include(p => p.Category)
+                .Include(p => p.ProductVariants)
+                .ToListAsync();
+
+            return _mapper.Map<IEnumerable<ProductDto>>(products);
+        }
+        //Get All Product Have Status = 1 // các sản phẩm active
+        public async Task<IEnumerable<ProductDto>> GetAllProductsHaveStatusTrueAsync()
+        {
+            var products = await _context.Products
+                .Include(p => p.ProductVariants)
+                .Where(p => p.Status == 1) // chỉ lấy sản phẩm hiển thị
+                .ToListAsync();
+
+            return _mapper.Map<IEnumerable<ProductDto>>(products);
+        }
+        //Get All Product Have Status = 0 -- các sản phẩm bị ẩn
+        public async Task<IEnumerable<ProductDto>> GetHiddenProductsAsync()
+        {
+            var products = await _context.Products
+                .Include(p => p.ProductVariants)
+                .Where(p => p.Status == 0) // chỉ lấy sản phẩm bị ẩn
+                .ToListAsync();
+
+            return _mapper.Map<IEnumerable<ProductDto>>(products);
+        }
+
+        // 🔹 Get product by id
+        public async Task<ProductDto?> GetByIdAsync(int id)
+        {
+            var product = await _context.Products
+                .Include(p => p.Category)
+                .Include(p => p.ProductVariants)
+                .FirstOrDefaultAsync(p => p.ProductId == id);
+
+            return product == null ? null : _mapper.Map<ProductDto>(product);
+        }
+
+        // 🔹 Create new product (with variants)
+        public async Task<ProductDto> CreateAsync(ProductCreateDto dto)
+        {
+            var product = _mapper.Map<Product>(dto);
+
+            if (dto.Variants != null && dto.Variants.Any())
             {
-                _context = context;
-                _mapper = mapper;
-            }
-
-            // 🔹 Get all products
-            public async Task<IEnumerable<ProductDto>> GetAllAsync()
-            {
-                var products = await _context.Products
-                    .Include(p => p.Category)
-                    .Include(p => p.ProductVariants)
-                    .ToListAsync();
-
-                return _mapper.Map<IEnumerable<ProductDto>>(products);
-            }
-
-            // 🔹 Get product by id
-            public async Task<ProductDto?> GetByIdAsync(int id)
-            {
-                var product = await _context.Products
-                    .Include(p => p.Category)
-                    .Include(p => p.ProductVariants)
-                    .FirstOrDefaultAsync(p => p.ProductId == id);
-
-                return product == null ? null : _mapper.Map<ProductDto>(product);
-            }
-
-            // 🔹 Create new product (with variants)
-            public async Task<ProductDto> CreateAsync(ProductCreateDto dto)
-            {
-                var product = _mapper.Map<Product>(dto);
-
-                if (dto.Variants != null && dto.Variants.Any())
+                foreach (var variantDto in dto.Variants)
                 {
-                    foreach (var variantDto in dto.Variants)
-                    {
-                        var variant = _mapper.Map<ProductVariant>(variantDto);
-                        product.ProductVariants.Add(variant);
-                    }
+                    var variant = _mapper.Map<ProductVariant>(variantDto);
+                    product.ProductVariants.Add(variant);
                 }
-
-                _context.Products.Add(product);
-                await _context.SaveChangesAsync();
-
-                // Map lại để lấy ID sau khi tạo
-                return _mapper.Map<ProductDto>(product);
             }
+
+            _context.Products.Add(product);
+            await _context.SaveChangesAsync();
+
+            // Map lại để lấy ID sau khi tạo
+            return _mapper.Map<ProductDto>(product);
+        }
 
         // 🔹 Update product
         /*public async Task<ProductDto?> UpdateAsync(int id, ProductUpdateDto dto)
@@ -159,21 +179,72 @@ namespace CB_Gift.Services
 
         // 🔹 Delete product
         public async Task<bool> DeleteAsync(int id)
-            {
-                var product = await _context.Products
-                    .Include(p => p.ProductVariants)
-                    .FirstOrDefaultAsync(p => p.ProductId == id);
+        {
+            var product = await _context.Products
+                .Include(p => p.ProductVariants)
+                .FirstOrDefaultAsync(p => p.ProductId == id);
 
-                if (product == null) return false;
+            if (product == null) return false;
 
-                // Xoá variants trước (nếu có)
-                if (product.ProductVariants.Any())
-                    _context.ProductVariants.RemoveRange(product.ProductVariants);
+            // Không xóa variants vì sợ có trong OrderDetail, có rồi thì không được xóa
+            //if (product.ProductVariants.Any())
+            //    _context.ProductVariants.RemoveRange(product.ProductVariants);
 
-                _context.Products.Remove(product);
-                await _context.SaveChangesAsync();
+            _context.Products.Remove(product);
+            await _context.SaveChangesAsync();
 
-                return true;
-            }
+            return true;
         }
+        // Ẩn Product đi.
+        public async Task<bool> SoftDeleteProductAsync(int id)
+        {
+            var product = await _context.Products.FindAsync(id);
+            if (product == null) return false;
+            product.Status = 0; // ẩn sản phẩm
+            _context.Products.Update(product);
+            await _context.SaveChangesAsync();
+            return true;
+        }
+        // Hiển thị Product lên.
+        public async Task<bool> RestoreProductAsync(int id)
+        {
+            var product = await _context.Products.FindAsync(id);
+            if (product == null) return false;
+            product.Status = 1; // hiển thị lại sản phẩm
+            _context.Products.Update(product);
+            await _context.SaveChangesAsync();
+            return true;
+        }
+        //Update Status Product theo danh sách
+        public async Task<(int updatedCount, IEnumerable<object> updatedProducts)> BulkUpdateStatusAsync(BulkUpdateProductStatusDto request, string updatedBy)
+        {
+            if (request.ProductIds == null || !request.ProductIds.Any())
+                throw new ArgumentException("Danh sách sản phẩm không được để trống.");
+
+            var products = await _context.Products
+                .Where(p => request.ProductIds.Contains(p.ProductId))
+                .ToListAsync();
+
+            if (!products.Any())
+                throw new KeyNotFoundException("Không tìm thấy sản phẩm nào khớp.");
+
+            foreach (var product in products)
+            {
+                product.Status = request.Status;
+            }
+
+            await _context.SaveChangesAsync();
+
+            var updated = products.Select(p => new
+            {
+                p.ProductId,
+                p.ProductName,
+                p.Status
+            });
+
+            return (products.Count, updated);
+        }
+    }
+   
 }
+
