@@ -152,7 +152,10 @@ public class AuthController : ControllerBase
         var user = await _users.FindByEmailAsync(dto.Email);
         if (user == null) return BadRequest(new { message = "User not found" });
 
-        var result = await _users.ResetPasswordAsync(user, dto.Token, dto.NewPassword);
+        // Decode token để chắc chắn
+        var decodedToken = Uri.UnescapeDataString(dto.Token);
+
+        var result = await _users.ResetPasswordAsync(user, decodedToken, dto.NewPassword);
 
         if (!result.Succeeded)
         {
@@ -165,6 +168,7 @@ public class AuthController : ControllerBase
 
         return Ok(new { message = "Password has been reset successfully." });
     }
+
     // GET: /api/auth/profile
     [Authorize]
     [HttpGet("profile")]

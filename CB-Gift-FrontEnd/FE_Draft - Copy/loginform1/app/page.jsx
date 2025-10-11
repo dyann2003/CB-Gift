@@ -11,6 +11,8 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 
 export default function LoginPage() {
@@ -19,6 +21,10 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const [open, setOpen] = useState(false);
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
+  const [successOpen, setSuccessOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
   const handleLogin = async (e) => {
@@ -92,6 +98,55 @@ export default function LoginPage() {
     }
   };
 
+  const handleForgotPasswordClick = () => {
+    setForgotPasswordOpen(true);
+  };
+
+  const handleSendResetEmail = async () => {
+    if (!forgotPasswordEmail) {
+      setError("Please enter your email");
+      setOpen(true);
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const res = await fetch(
+        "https://localhost:7015/api/auth/forgot-password",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: forgotPasswordEmail,
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        const err = await res.json();
+        setError(err.message || "Failed to send reset link");
+        setOpen(true);
+        setIsLoading(false);
+        return;
+      }
+
+      // Close forgot password dialog
+      setForgotPasswordOpen(false);
+      // Show success message
+      setSuccessOpen(true);
+      // Reset email input
+      setForgotPasswordEmail("");
+    } catch (error) {
+      setError("Something went wrong!");
+      setOpen(true);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Left side - Login Form */}
@@ -99,7 +154,7 @@ export default function LoginPage() {
         <div className="w-full max-w-md space-y-6">
           {/* Logo */}
           <div className="flex items-center space-x-2 mb-8">
-            <div className="w-8 h-8 bg-cyan-400 rounded"></div>s
+            <div className="w-8 h-8 bg-cyan-400 rounded"></div>
           </div>
 
           {/* Login Form */}
@@ -140,7 +195,7 @@ export default function LoginPage() {
                 />
               </div>
 
-              {/* Remember Me */}
+              {/* Remember Me & Forgot Password */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <Checkbox
@@ -154,6 +209,7 @@ export default function LoginPage() {
                 </div>
                 <button
                   type="button"
+                  onClick={handleForgotPasswordClick}
                   className="text-sm text-gray-600 hover:text-gray-800"
                 >
                   Forgot password?
@@ -182,12 +238,74 @@ export default function LoginPage() {
           />
         </div>
       </div>
+
+      {/* Forgot Password Dialog */}
+      <Dialog open={forgotPasswordOpen} onOpenChange={setForgotPasswordOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Forgot Password</DialogTitle>
+            <DialogDescription>
+              Enter your email address and we'll send you a link to reset your
+              password.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">
+                Email Address
+              </label>
+              <Input
+                type="email"
+                placeholder="Enter your email"
+                value={forgotPasswordEmail}
+                onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                className="w-full"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setForgotPasswordOpen(false)}
+              disabled={isLoading}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleSendResetEmail} disabled={isLoading}>
+              {isLoading ? "Sending..." : "Send Reset Link"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Success Dialog */}
+      <Dialog open={successOpen} onOpenChange={setSuccessOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-green-600">
+              Reset Link Sent!
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-gray-700 py-4">
+            A password reset link has been sent to your email. Please check your
+            inbox and follow the instructions to reset your password.
+          </p>
+          <DialogFooter>
+            <Button onClick={() => setSuccessOpen(false)}>OK</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Error Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-red-600">Login Error</DialogTitle>
+            <DialogTitle className="text-red-600">Error</DialogTitle>
           </DialogHeader>
           <p className="text-gray-700">{error}</p>
+          <DialogFooter>
+            <Button onClick={() => setOpen(false)}>OK</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
