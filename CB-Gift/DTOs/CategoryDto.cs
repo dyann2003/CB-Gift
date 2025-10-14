@@ -15,7 +15,6 @@ namespace CB_Gift.DTOs
         [StringLength(100, ErrorMessage = "Tên danh mục không được vượt quá 100 ký tự.")]
         public string CategoryName { get; set; }
 
-        [Required(ErrorMessage = "Mã danh mục không được để trống.")]
         [StringLength(50, ErrorMessage = "Mã danh mục không được vượt quá 50 ký tự.")]
         public string CategoryCode { get; set; }
 

@@ -10,6 +10,15 @@ namespace CB_Gift.Mapper
         {
             CreateMap<Category, CategoryDto>();
 
+            CreateMap<Tag, TagDto>();
+
+            // DTO -> Model
+            CreateMap<CreateTagDto, Tag>();
+            CreateMap<UpdateTagDto, Tag>();
+
+            CreateMap<UpdateCategoryDto, Category>();
+            CreateMap<CreateCategoryDto, Category>();
+
         }
 
     }
