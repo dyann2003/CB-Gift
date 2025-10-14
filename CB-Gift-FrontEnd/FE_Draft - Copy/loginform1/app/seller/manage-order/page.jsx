@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import SellerSidebar from "@/components/layout/seller/sidebar";
 import SellerHeader from "@/components/layout/seller/header";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -96,6 +98,9 @@ export default function ManageOrder() {
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [showCannotAssignDialog, setShowCannotAssignDialog] = useState(false);
   const [cannotAssignMessage, setCannotAssignMessage] = useState("");
+  const [showPopup, setShowPopup] = useState(false);
+  const [popupMessage, setPopupMessage] = useState("");
+  const [popupTitle, setPopupTitle] = useState("");
 
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -231,28 +236,40 @@ export default function ManageOrder() {
 
   const filteredOrders = orders.filter((order) => {
     const matchesSearch =
-      order.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.orderId.toString().includes(searchTerm.toLowerCase()) ||
       order.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.products.some((product) =>
-        product.name.toLowerCase().includes(searchTerm.toLowerCase())
+      order.details?.some((detail) =>
+        detail.note?.toLowerCase().includes(searchTerm.toLowerCase())
       );
 
     const selectedStatConfig = stats.find(
       (stat) => stat.title === selectedStat
     );
+
     const matchesStatus =
       !selectedStatConfig?.statusFilter ||
       order.status === selectedStatConfig.statusFilter;
 
     let matchesDateRange = true;
+
     if (dateRange.from && dateRange.to) {
       const orderDate = new Date(order.orderDate);
-      matchesDateRange =
-        orderDate >= dateRange.from && orderDate <= dateRange.to;
+      const fromDate = new Date(dateRange.from);
+      const toDate = new Date(dateRange.to);
+
+      // 🧠 Fix: set giờ cuối ngày để bao gồm cả ngày to
+      toDate.setHours(23, 59, 59, 999);
+
+      matchesDateRange = orderDate >= fromDate && orderDate <= toDate;
     } else if (dateRange.from) {
       const orderDate = new Date(order.orderDate);
-      matchesDateRange =
-        orderDate.toDateString() === dateRange.from.toDateString();
+      const fromDate = new Date(dateRange.from);
+
+      // Bao gồm toàn bộ ngày from
+      const fromEndOfDay = new Date(fromDate);
+      fromEndOfDay.setHours(23, 59, 59, 999);
+
+      matchesDateRange = orderDate >= fromDate && orderDate <= fromEndOfDay;
     }
 
     return matchesSearch && matchesStatus && matchesDateRange;
@@ -335,9 +352,112 @@ export default function ManageOrder() {
   };
 
   const handleExport = () => {
-    console.log("Exporting orders:", filteredOrders);
-    alert(`Exporting ${filteredOrders.length} orders`);
+    if (!filteredOrders || filteredOrders.length === 0) {
+      alert("❌ Không có đơn hàng nào để export!");
+      return;
+    }
+
+    const exportData = [];
+
+    filteredOrders.forEach((order) => {
+      const products = order.products || [];
+
+      products.forEach((p) => {
+        exportData.push({
+          OrderID: order.id,
+          OrderCode: order.orderId,
+          OrderDate: formatMySQLDate(order.orderDate),
+          CustomerName: order.customerName || order.customerInfo?.name || "",
+          Phone: order.phone || order.customerInfo?.phone || "",
+          Email: order.email || order.customerInfo?.email || "",
+          Address: order.address || order.customerInfo?.address || "",
+          Size: p.size || "",
+          ProductName: p.name || "",
+          Quantity: p.quantity || 0,
+          Price: p.price || 0,
+          Accessory: p.accessory || "",
+          Note: order.orderNotes || "",
+          LinkImg: order.uploadedFiles?.linkImg?.url || "",
+          LinkThanksCard: order.uploadedFiles?.linkThanksCard?.url || "",
+          LinkFileDesign: order.uploadedFiles?.linkFileDesign?.url || "",
+          Status: order.status || "",
+          TotalAmount: order.totalAmount || "",
+          OrderNotes: order.orderNotes || "",
+          TimeCreated: order.timeCreated || "",
+        });
+      });
+
+      // Nếu order không có product nào, vẫn export 1 dòng tổng
+      if (products.length === 0) {
+        exportData.push({
+          OrderID: order.id,
+          OrderCode: order.orderId,
+          OrderDate: formatMySQLDate(order.orderDate),
+          CustomerName: order.customerName || order.customerInfo?.name || "",
+          Phone: order.phone || order.customerInfo?.phone || "",
+          Email: order.email || order.customerInfo?.email || "",
+          Address: order.address || order.customerInfo?.address || "",
+          ProductName: "",
+          Quantity: "",
+          Price: "",
+          Size: "",
+          Accessory: "",
+          Note: order.orderNotes || "",
+          LinkImg: order.uploadedFiles?.linkImg?.url || "",
+          LinkThanksCard: order.uploadedFiles?.linkThanksCard?.url || "",
+          LinkFileDesign: order.uploadedFiles?.linkFileDesign?.url || "",
+          Status: order.status || "",
+          TotalAmount: order.totalAmount || "",
+          OrderNotes: order.orderNotes || "",
+          TimeCreated: order.timeCreated || "",
+        });
+      }
+    });
+
+    console.log("📦 Export Data:", exportData);
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Orders");
+
+    const excelBuffer = XLSX.write(workbook, {
+      bookType: "xlsx",
+      type: "array",
+    });
+    const blob = new Blob([excelBuffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+
+    const fileName = `Orders_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    saveAs(blob, fileName);
+
+    alert(
+      `✅ Đã export ${exportData.length} dòng dữ liệu từ ${filteredOrders.length} đơn hàng!`
+    );
   };
+
+  // Helper: định dạng MySQL
+  function formatMySQLDate(dateStr) {
+    if (!dateStr) return "";
+    const date = new Date(dateStr);
+    const pad = (n) => n.toString().padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+      date.getDate()
+    )} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(
+      date.getSeconds()
+    )}`;
+  }
+
+  function formatMySQLDate(dateStr) {
+    if (!dateStr) return "";
+    const date = new Date(dateStr);
+    const pad = (n) => n.toString().padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+      date.getDate()
+    )} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(
+      date.getSeconds()
+    )}`;
+  }
 
   const handleDelete = (orderId) => {
     console.log("Deleting order:", orderId);

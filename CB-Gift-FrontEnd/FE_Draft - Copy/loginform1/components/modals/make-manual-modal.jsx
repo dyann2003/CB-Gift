@@ -449,6 +449,7 @@ export default function MakeManualModal({ isOpen, onClose }) {
       setShowConfirmDialog(false);
       onClose();
       resetForm();
+      window.location.reload();
     } catch (err) {
       console.error("❌ Create order failed:", err);
       setErrorMessage("❌ Failed to create order: " + err.message);
