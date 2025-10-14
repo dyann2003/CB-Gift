@@ -10,10 +10,12 @@ namespace CB_Gift.Controllers
     public class ProductController : ControllerBase
     {
         private readonly IProductService _service;
+        private readonly ITagService _tagService;
 
-        public ProductController(IProductService service)
+        public ProductController(IProductService service, ITagService tagService)
         {
             _service = service;
+            _tagService = tagService;
         }
 
         // GET: api/Product
@@ -125,6 +127,35 @@ namespace CB_Gift.Controllers
             {
                 return NotFound(ex.Message);
             }
+        }
+
+        // --- API QUẢN LÝ TAG CHO PRODUCT ---
+
+        // GET: api/Products/1/tags
+        [HttpGet("{productId}/tags")]
+        public async Task<IActionResult> GetProductTags(int productId)
+        {
+            var tags = await _tagService.GetTagsByProductIdAsync(productId);
+            if (tags == null) return NotFound("Sản phẩm không tồn tại.");
+            return Ok(tags);
+        }
+
+        // POST: api/Products/1/tags/5  (Gán tag 5 cho sản phẩm 1)
+        [HttpPost("{productId}/tags/{tagId}")]
+        public async Task<IActionResult> AddTagToProduct(int productId, int tagId)
+        {
+            var success = await _tagService.AddTagToProductAsync(productId, tagId);
+            if (!success) return NotFound("Sản phẩm hoặc Tag không tồn tại.");
+            return Ok();
+        }
+
+        // DELETE: api/Products/1/tags/5 (Gỡ tag 5 khỏi sản phẩm 1)
+        [HttpDelete("{productId}/tags/{tagId}")]
+        public async Task<IActionResult> RemoveTagFromProduct(int productId, int tagId)
+        {
+            var success = await _tagService.RemoveTagFromProductAsync(productId, tagId);
+            if (!success) return NotFound("Sản phẩm không tồn tại.");
+            return NoContent();
         }
 
     }
