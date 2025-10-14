@@ -11,7 +11,7 @@
         public string? ItemLink { get; set; }
         public string? Template { get; set; }
         public int? Status { get; set; }
-
+        public List<int>? TagIds { get; set; }
         public List<ProductVariantDto>? Variants { get; set; }
     }
     public class ProductCreateDto
@@ -23,6 +23,7 @@
         public string? ItemLink { get; set; }
         public string? Describe { get; set; }
         public string? Template { get; set; }
+        public List<int>? TagIds { get; set; }
 
         public List<ProductVariantCreateDto>? Variants { get; set; }
     }

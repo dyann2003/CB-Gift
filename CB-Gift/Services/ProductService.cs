@@ -65,6 +65,20 @@ namespace CB_Gift.Services
         {
             var product = _mapper.Map<Product>(dto);
 
+            // ✅ Gán Tag nếu có
+            if (dto.TagIds != null && dto.TagIds.Any())
+            {
+                // Lấy ra các Tag từ DB theo danh sách ID
+                var tags = await _context.Tags
+                    .Where(t => dto.TagIds.Contains(t.TagsId))
+                    .ToListAsync();
+
+                foreach (var tag in tags)
+                {
+                    product.Tags.Add(tag); // EF sẽ tự tạo bản ghi trong bảng trung gian ProductTag
+                }
+            }
+
             if (dto.Variants != null && dto.Variants.Any())
             {
                 foreach (var variantDto in dto.Variants)
@@ -76,6 +90,7 @@ namespace CB_Gift.Services
 
             _context.Products.Add(product);
             await _context.SaveChangesAsync();
+
 
             // Map lại để lấy ID sau khi tạo
             return _mapper.Map<ProductDto>(product);

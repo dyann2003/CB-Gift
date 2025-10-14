@@ -180,59 +180,52 @@ export default function ManageOrder() {
   const stats = [
     {
       title: "Total Order",
-      value: "24",
       color: "bg-blue-50 border-blue-200",
       icon: Package,
       iconColor: "text-blue-500",
       statusFilter: null,
     },
     {
-      title: "Draft Seller Order",
-      value: "5",
+      title: "Draft (Nháp)",
       color: "bg-gray-50 border-gray-200",
       icon: FileEdit,
       iconColor: "text-gray-500",
-      statusFilter: "Draft",
+      statusFilter: "Draft (Nháp)",
     },
     {
-      title: "Assigned Designer",
-      value: "8",
+      title: "Cần Design",
       color: "bg-yellow-50 border-yellow-200",
       icon: Handshake,
       iconColor: "text-yellow-500",
-      statusFilter: "Assigned Designer",
+      statusFilter: "Cần Design",
     },
     {
-      title: "Designing",
-      value: "12",
+      title: "Đang làm Design",
       color: "bg-purple-50 border-purple-200",
       icon: Clock,
       iconColor: "text-purple-500",
-      statusFilter: "Designing",
+      statusFilter: "Đang làm Design",
     },
     {
-      title: "Check File Design",
-      value: "18",
+      title: "Cần Check Design",
       color: "bg-green-50 border-green-200",
       icon: ListTodo,
       iconColor: "text-green-500",
-      statusFilter: "Check File Design",
+      statusFilter: "Cần Check Design",
     },
     {
-      title: "Seller Approved Design",
-      value: "15",
+      title: "Chốt Đơn (Khóa Seller)",
       color: "bg-orange-50 border-orange-200",
       icon: CheckCircle,
       iconColor: "text-orange-500",
-      statusFilter: "Seller Approved Design",
+      statusFilter: "Chốt Đơn (Khóa Seller)",
     },
     {
-      title: "Seller Reject Design",
-      value: "2",
+      title: "Thiết kế Lại (Design Lỗi)",
       color: "bg-red-50 border-red-200",
       icon: AlertTriangle,
       iconColor: "text-red-500",
-      statusFilter: "Seller Reject Design",
+      statusFilter: "Thiết kế Lại (Design Lỗi)",
     },
   ];
 
@@ -263,6 +256,14 @@ export default function ManageOrder() {
     }
 
     return matchesSearch && matchesStatus && matchesDateRange;
+  });
+
+  // Cập nhật dynamic count cho từng status
+  const statsWithCounts = stats.map((stat) => {
+    const count = stat.statusFilter
+      ? orders.filter((order) => order.status === stat.statusFilter).length
+      : orders.length;
+    return { ...stat, value: count };
   });
 
   const sortedOrders = [...filteredOrders].sort((a, b) => {
@@ -533,7 +534,7 @@ export default function ManageOrder() {
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2 sm:gap-3">
-              {stats.map((stat, index) => {
+              {statsWithCounts.map((stat, index) => {
                 const IconComponent = stat.icon;
                 const isActive = selectedStat === stat.title;
                 return (
