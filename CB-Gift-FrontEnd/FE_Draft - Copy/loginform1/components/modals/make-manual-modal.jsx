@@ -66,6 +66,10 @@ export default function MakeManualModal({ isOpen, onClose }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [expandedProducts, setExpandedProducts] = useState({});
+  const [showErrorDialog, setShowErrorDialog] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
 
   const [customerInfo, setCustomerInfo] = useState({
     name: "",
@@ -91,6 +95,33 @@ export default function MakeManualModal({ isOpen, onClose }) {
     note: "",
     productPrice: 0,
   });
+
+  const resetForm = () => {
+    setCurrentStep(1);
+    setCustomerInfo({
+      name: "",
+      phone: "",
+      email: "",
+      address: "",
+      address1: "",
+      zipcode: "",
+      shipState: "",
+      shipCity: "",
+      shipCountry: "",
+    });
+    setCartProducts([]);
+    setCurrentProduct(null);
+    setCurrentProductConfig({
+      size: "",
+      accessory: "",
+      linkThanksCard: null,
+      linkFileDesign: null,
+      quantity: 1,
+      activeTTS: false,
+      note: "",
+      productPrice: 0,
+    });
+  };
 
   // ─── Step 2: load products từ BE ───
   const [products, setProducts] = useState([]);
@@ -120,37 +151,66 @@ export default function MakeManualModal({ isOpen, onClose }) {
     }
   };
 
+  // Upload ảnh thật lên server
+  const uploadImage = async (file) => {
+    const formData = new FormData();
+    formData.append("File", file);
+
+    try {
+      const res = await fetch("https://localhost:7015/api/images/upload", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Upload failed: ${res.status} - ${errText}`);
+      }
+
+      const data = await res.json();
+      console.log(" Upload success:", data);
+      return data.url || data.secureUrl || data.path || null; // backend trả url nào thì lấy
+    } catch (err) {
+      console.error("Upload error:", err);
+      setErrorMessage("Upload failed: " + err.message);
+      setShowErrorDialog(true);
+      return null;
+    }
+  };
+
   const calculateProductPrice = () => {
     if (!currentProduct) return 0;
 
-    // try variant price first
     const variantId = currentProductConfig.variantId;
-    if (variantId && currentProduct.productVariants) {
-      const v = currentProduct.productVariants.find(
-        (x) => (x.id ?? x.variantId) === variantId
-      );
-      if (v) {
-        const unit = v.price ?? v.unitPrice ?? currentProduct.basePrice ?? 0;
-        const qty = Number.parseInt(currentProductConfig.quantity) || 1;
-        const accessoryPrice =
-          currentProductConfig.accessory &&
-          currentProductConfig.accessory !== "None"
-            ? 2.0
-            : 0;
-        return (unit + accessoryPrice) * qty;
-      }
-    }
+    const variant = currentProduct?.variants?.find(
+      (v) => v.productVariantId === variantId
+    );
 
-    // fallback to base price
-    const basePrice = currentProduct.basePrice ?? currentProduct.price ?? 0;
-    const quantity = Number.parseInt(currentProductConfig.quantity) || 1;
-    const accessoryPrice =
-      currentProductConfig.accessory &&
-      currentProductConfig.accessory !== "None"
-        ? 2.0
-        : 0;
-    return (basePrice + accessoryPrice) * quantity;
+    // Giá cơ bản theo size
+    const basePrice = variant?.totalCost ?? currentProduct.basePrice ?? 0;
+
+    // Số lượng
+    const qty = Number.parseInt(currentProductConfig.quantity) || 1;
+
+    // Active TTS cộng thêm $1
+    const ttsExtra = currentProductConfig.activeTTS ? 1.0 : 0.0;
+
+    const total = (basePrice + ttsExtra) * qty;
+    return total;
   };
+
+  useEffect(() => {
+    const total = calculateProductPrice();
+    setCurrentProductConfig((prev) => ({
+      ...prev,
+      productPrice: total,
+    }));
+  }, [
+    currentProductConfig.variantId,
+    currentProductConfig.quantity,
+    currentProductConfig.activeTTS,
+  ]);
 
   const calculateTotalMoney = () => {
     return cartProducts.reduce(
@@ -160,6 +220,43 @@ export default function MakeManualModal({ isOpen, onClose }) {
   };
 
   const handleNext = () => {
+    if (currentStep === 1) {
+      console.log("Step 1 - Customer Info:", customerInfo);
+
+      // kiểm tra các trường bắt buộc
+      const requiredFields = [
+        "name",
+        "phone",
+        "email",
+        "address",
+        "zipcode",
+        "shipState",
+        "shipCity",
+        "shipCountry",
+      ];
+
+      const missing = requiredFields.filter((f) => !customerInfo[f]?.trim());
+      if (missing.length > 0) {
+        setErrorMessage(
+          `Please fill all required fields: ${missing.join(", ")}`
+        );
+        setShowErrorDialog(true);
+        return;
+      }
+
+      // Nếu đủ -> sang Step 2
+      setCurrentStep(2);
+      return;
+    }
+
+    if (currentStep === 2) {
+      console.log(" Step 2 - Selected Product:", currentProduct);
+      setCurrentStep(3);
+      return;
+    }
+
+    // Không cần bước này nữa vì chỉ có 3 step
+    // Nhưng nếu sau này có thêm step thì vẫn an toàn
     if (currentStep < 3) {
       setCurrentStep(currentStep + 1);
     }
@@ -171,10 +268,36 @@ export default function MakeManualModal({ isOpen, onClose }) {
     }
   };
 
-  const handleFileUpload = (field, event) => {
+  // Hàm upload file + hiển thị preview
+  const handleFileUpload = async (field, event) => {
     const file = event.target.files[0];
-    if (file) {
-      setCurrentProductConfig((prev) => ({ ...prev, [field]: file }));
+    if (!file) return;
+
+    console.log("Uploading file:", file.name);
+
+    try {
+      // Gọi API upload đúng endpoint
+      const uploadedUrl = await uploadImage(file);
+
+      if (uploadedUrl) {
+        // Lưu link thật
+        setCurrentProductConfig((prev) => ({
+          ...prev,
+          [field]: uploadedUrl,
+        }));
+
+        // Hiển thị preview ảnh (nếu là ảnh)
+        if (file.type.startsWith("image/")) {
+          const previewUrl = URL.createObjectURL(file);
+          setCurrentProductConfig((prev) => ({
+            ...prev,
+            [`${field}Preview`]: previewUrl,
+          }));
+        }
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      alert("Upload failed. Please try again.");
     }
   };
 
@@ -264,39 +387,73 @@ export default function MakeManualModal({ isOpen, onClose }) {
     setShowConfirmDialog(true);
   };
 
-  const confirmMakeOrder = () => {
-    console.log("Order created:", {
-      customerInfo,
-      products: cartProducts,
-      totalAmount: calculateTotalMoney(),
-    });
-    setShowConfirmDialog(false);
-    onClose();
-    // Reset form
-    setCurrentStep(1);
-    setCustomerInfo({
-      name: "",
-      phone: "",
-      email: "",
-      address: "",
-      address1: "",
-      zipcode: "",
-      shipState: "",
-      shipCity: "",
-      shipCountry: "",
-    });
-    setCartProducts([]);
-    setCurrentProduct(null);
-    setCurrentProductConfig({
-      size: "",
-      accessory: "",
-      linkThanksCard: null,
-      linkFileDesign: null,
-      quantity: 1,
-      activeTTS: false,
-      note: "",
-      productPrice: 0,
-    });
+  const confirmMakeOrder = async () => {
+    const orderDetails = cartProducts.map((p) => ({
+      orderId: 0,
+      productVariantID: p.config.variantId,
+      quantity: Number(p.config.quantity),
+      price: p.config.productPrice || 0,
+      linkImg: p.product.image || null,
+      needDesign: true,
+      linkThanksCard: p.config.linkThanksCard || null,
+      linkDesign: p.config.linkFileDesign || null,
+      accessory: p.config.accessory || "",
+      note: p.config.note || "",
+    }));
+
+    const orderPayload = {
+      customerInfo: {
+        name: customerInfo.name,
+        phone: customerInfo.phone,
+        email: customerInfo.email,
+        address: customerInfo.address,
+        address1: customerInfo.address1,
+        zipCode: customerInfo.zipcode,
+        shipState: customerInfo.shipState,
+        shipCity: customerInfo.shipCity,
+        shipCountry: customerInfo.shipCountry,
+      },
+      orderCreate: {
+        orderCode: `ORD-${Date.now()}`,
+        endCustomerID: 0,
+        totalCost: calculateTotalMoney(),
+        sellerUserId: null,
+        orderDate: new Date().toISOString(),
+        costScan: 1,
+        activeTTS: cartProducts.some((p) => p.config.activeTTS),
+        tracking: "",
+        productionStatus: "Pending",
+        paymentStatus: "Unpaid",
+        orderDetails: orderDetails,
+      },
+      orderDetails: orderDetails,
+    };
+
+    console.log("Sending order payload:", orderPayload);
+
+    try {
+      const res = await fetch("https://localhost:7015/api/Order/make-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(orderPayload),
+      });
+
+      const text = await res.text();
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${text}`);
+
+      console.log("Order created successfully:", text);
+      setSuccessMessage("🎉 Order created successfully!");
+      setShowSuccessDialog(true);
+
+      setShowConfirmDialog(false);
+      onClose();
+      resetForm();
+    } catch (err) {
+      console.error("❌ Create order failed:", err);
+      setErrorMessage("❌ Failed to create order: " + err.message);
+      setShowErrorDialog(true);
+    }
   };
 
   const toggleProductDetails = (cartItemId) => {
@@ -583,10 +740,36 @@ export default function MakeManualModal({ isOpen, onClose }) {
             accept="image/*"
             onChange={(e) => handleFileUpload("linkThanksCard", e)}
           />
+
+          {/* Nếu đã upload */}
           {currentProductConfig.linkThanksCard && (
-            <p className="text-sm text-gray-600 mt-1">
-              Selected: {currentProductConfig.linkThanksCard.name}
-            </p>
+            <div className="mt-2 space-y-2">
+              <p className="text-sm text-green-600 flex items-center gap-1">
+                Uploaded:{" "}
+                <a
+                  href={currentProductConfig.linkThanksCard}
+                  target="_blank"
+                  className="underline text-blue-600 truncate max-w-[200px]"
+                >
+                  {currentProductConfig.linkThanksCard.split("/").pop()}
+                </a>
+              </p>
+
+              {/* Hiển thị ảnh nhỏ */}
+              {currentProductConfig.linkThanksCard.endsWith(".png") ||
+              currentProductConfig.linkThanksCard.endsWith(".jpg") ||
+              currentProductConfig.linkThanksCard.endsWith(".jpeg") ? (
+                <img
+                  src={currentProductConfig.linkThanksCard}
+                  alt="Thanks Card Preview"
+                  className="w-20 h-20 object-cover rounded border border-gray-300 shadow-sm"
+                />
+              ) : (
+                <p className="text-xs text-gray-500">
+                  (No image preview available)
+                </p>
+              )}
+            </div>
           )}
         </div>
 
@@ -596,12 +779,39 @@ export default function MakeManualModal({ isOpen, onClose }) {
           <Input
             id="linkFileDesign"
             type="file"
+            accept="image/*,.pdf,.zip,.ai,.psd"
             onChange={(e) => handleFileUpload("linkFileDesign", e)}
           />
+
+          {/* Nếu đã upload */}
           {currentProductConfig.linkFileDesign && (
-            <p className="text-sm text-gray-600 mt-1">
-              Selected: {currentProductConfig.linkFileDesign.name}
-            </p>
+            <div className="mt-2 space-y-2">
+              <p className="text-sm text-green-600 flex items-center gap-1">
+                Uploaded:{" "}
+                <a
+                  href={currentProductConfig.linkFileDesign}
+                  target="_blank"
+                  className="underline text-blue-600 truncate max-w-[200px]"
+                >
+                  {currentProductConfig.linkFileDesign.split("/").pop()}
+                </a>
+              </p>
+
+              {/* Hiển thị ảnh nhỏ */}
+              {currentProductConfig.linkFileDesign.endsWith(".png") ||
+              currentProductConfig.linkFileDesign.endsWith(".jpg") ||
+              currentProductConfig.linkFileDesign.endsWith(".jpeg") ? (
+                <img
+                  src={currentProductConfig.linkFileDesign}
+                  alt="Design File Preview"
+                  className="w-20 h-20 object-cover rounded border border-gray-300 shadow-sm"
+                />
+              ) : (
+                <p className="text-xs text-gray-500">
+                  (No image preview available)
+                </p>
+              )}
+            </div>
           )}
         </div>
 
@@ -684,7 +894,150 @@ export default function MakeManualModal({ isOpen, onClose }) {
           <h4 className="font-semibold mb-3">
             Products in Order ({cartProducts.length})
           </h4>
-          {/* ... phần cart giữ nguyên, chỉ cần sửa size/accessory cho đúng variant */}
+
+          <div className="space-y-3">
+            {cartProducts.map((item) => (
+              <div key={item.id} className="border rounded-lg p-4 bg-gray-50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={item.product.image || "/placeholder.svg"}
+                      alt={item.product.productName}
+                      className="w-12 h-12 object-cover rounded"
+                    />
+                    <div>
+                      <p className="font-medium">{item.product.productName}</p>
+                      <p className="text-sm text-gray-600">
+                        {item.config.size} • Qty: {item.config.quantity}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-blue-600">
+                      ${item.totalPrice.toFixed(2)}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => toggleProductDetails(item.id)}
+                    >
+                      {expandedProducts[item.id] ? (
+                        <>
+                          <ChevronUp className="w-4 h-4 mr-1" />
+                          Hide Details
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="w-4 h-4 mr-1" />
+                          View Details
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleRemoveFromCart(item.id)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+
+                {expandedProducts[item.id] && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Size */}
+                      <div>
+                        <Label>Size</Label>
+                        <Input
+                          value={item.config.size || ""}
+                          readOnly
+                          className="bg-gray-100 cursor-not-allowed"
+                        />
+                      </div>
+
+                      {/* Quantity */}
+                      <div>
+                        <Label>Quantity</Label>
+                        <Input
+                          type="number"
+                          value={item.config.quantity}
+                          readOnly
+                          className="bg-gray-100 cursor-not-allowed"
+                        />
+                      </div>
+
+                      {/* Active TTS */}
+                      <div className="flex items-center space-x-2">
+                        <Checkbox checked={item.config.activeTTS} disabled />
+                        <Label>Active TTS (+$1)</Label>
+                      </div>
+
+                      {/* Note */}
+                      <div className="md:col-span-2">
+                        <Label>Note</Label>
+                        <Textarea
+                          value={item.config.note || ""}
+                          readOnly
+                          className="bg-gray-100 cursor-not-allowed"
+                          rows={2}
+                        />
+                      </div>
+
+                      {/* Link File Design */}
+                      <div className="md:col-span-2">
+                        <Label>Link File Design</Label>
+                        {item.config.linkFileDesign ? (
+                          <a
+                            href={item.config.linkFileDesign}
+                            target="_blank"
+                            className="text-blue-600 underline block"
+                          >
+                            {item.config.linkFileDesign.split("/").pop()}
+                          </a>
+                        ) : (
+                          <p className="text-gray-500 text-sm">
+                            (No file uploaded)
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Link Thanks Card */}
+                      <div className="md:col-span-2">
+                        <Label>Link Thanks Card</Label>
+                        {item.config.linkThanksCard ? (
+                          <a
+                            href={item.config.linkThanksCard}
+                            target="_blank"
+                            className="text-blue-600 underline block"
+                          >
+                            {item.config.linkThanksCard.split("/").pop()}
+                          </a>
+                        ) : (
+                          <p className="text-gray-500 text-sm">
+                            (No file uploaded)
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 bg-green-50 p-4 rounded-lg flex justify-between items-center">
+            <Label className="text-lg font-semibold">
+              Total Money: ${calculateTotalMoney().toFixed(2)}
+            </Label>
+            <Button
+              onClick={handleMakeOrder}
+              disabled={cartProducts.length === 0}
+            >
+              Make Order
+            </Button>
+          </div>
         </div>
       )}
     </div>
@@ -765,6 +1118,34 @@ export default function MakeManualModal({ isOpen, onClose }) {
             <AlertDialogCancel>No</AlertDialogCancel>
             <AlertDialogAction onClick={confirmMakeOrder}>
               Yes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {/* Error Dialog */}
+      <AlertDialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle> Missing Information</AlertDialogTitle>
+            <AlertDialogDescription>{errorMessage}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setShowErrorDialog(false)}>
+              OK
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {/* ✅ Success Dialog */}
+      <AlertDialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Success</AlertDialogTitle>
+            <AlertDialogDescription>{successMessage}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setShowSuccessDialog(false)}>
+              OK
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
