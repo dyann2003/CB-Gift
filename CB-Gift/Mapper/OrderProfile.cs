@@ -13,15 +13,28 @@ namespace CB_Gift.Mapper
                     .ForMember(dest => dest.CustomerName, opt => opt.MapFrom(src => src.EndCustomer.Name))
                     .ForMember(dest => dest.SellerId, opt => opt.MapFrom(src => src.SellerUserId))
                     .ForMember(dest => dest.StatusOderName, opt => opt.MapFrom(src => src.StatusOrderNavigation.NameVi));
-
+                CreateMap<OrderDto, Order>();
                 CreateMap<Order, OrderWithDetailsDto>()
+                   .ForMember(dest => dest.CustomerId, opt => opt.MapFrom(src => src.EndCustomer.CustId))
                     .ForMember(dest => dest.CustomerName, opt => opt.MapFrom(src => src.EndCustomer.Name))
+                    .ForMember(dest => dest.Phone, opt => opt.MapFrom(src => src.EndCustomer.Phone))
+                    .ForMember(dest => dest.Email, opt => opt.MapFrom(src => src.EndCustomer.Email))
+                    .ForMember(dest => dest.Address, opt => opt.MapFrom(src => src.EndCustomer.Address))
+                    .ForMember(dest => dest.Address1, opt => opt.MapFrom(src => src.EndCustomer.Address1))
+                    .ForMember(dest => dest.Zipcode, opt => opt.MapFrom(src => src.EndCustomer.Zipcode))
+                    .ForMember(dest => dest.ShipState, opt => opt.MapFrom(src => src.EndCustomer.ShipState))
+                    .ForMember(dest => dest.ShipCity, opt => opt.MapFrom(src => src.EndCustomer.ShipCity))
+                    .ForMember(dest => dest.ShipCountry, opt => opt.MapFrom(src => src.EndCustomer.ShipCountry))
+                    .ForMember(dest => dest.SellerId, opt => opt.MapFrom(src => src.SellerUserId))
+                    .ForMember(dest => dest.SellerName, opt => opt.MapFrom(src => src.SellerUser.FullName))
                     .ForMember(dest => dest.StatusOderName, opt => opt.MapFrom(src => src.StatusOrderNavigation.NameVi))
                     .ForMember(dest => dest.Details, opt => opt.MapFrom(src => src.OrderDetails));
 
                 CreateMap<OrderDetail, OrderDetailDto>()
                     .ForMember(dest => dest.OrderDetailID, opt => opt.MapFrom(src => src.OrderDetailId))
                     .ForMember(dest => dest.ProductVariantID, opt => opt.MapFrom(src => src.ProductVariantId))
+                    .ForMember(dest => dest.Size, opt => opt.MapFrom(src => src.ProductVariant.SizeInch))
+                    .ForMember(dest => dest.ProductName, opt => opt.MapFrom(src => src.ProductVariant.Product.ProductName))
                     .ForMember(dest => dest.Price, opt => opt.MapFrom(src => src.ProductVariant.TotalCost))
                     .ForMember(dest => dest.Quantity, opt => opt.MapFrom(src => src.Quantity))
                     .ForMember(dest => dest.LinkImg, opt => opt.MapFrom(src => src.LinkImg))
@@ -51,6 +64,26 @@ namespace CB_Gift.Mapper
                 .ForMember(dest => dest.CreatedDate, opt => opt.MapFrom(_ => DateTime.UtcNow));
             // test MakeOrder
             CreateMap<EndCustomerCreateRequest, EndCustomer>();
+            // UpdateOrder
+            CreateMap<OrderCoreUpdateRequest, Order>()
+                // Bỏ qua các thuộc tính không có trong DTO update để tránh ghi đè null
+                .ForAllMembers(opts => opts.Condition((src, dest, srcMember) => srcMember != null));
+
+            CreateMap<OrderDetailUpdateRequest, OrderDetail>()
+                // Khi update, không được set lại CreatedDate
+                .ForMember(dest => dest.CreatedDate, opt => opt.Ignore())
+                // Cũng không map OrderDetailID vì đây là khóa chính
+                .ForMember(dest => dest.OrderDetailId, opt => opt.Ignore())
+                .ForMember(dest => dest.ProductVariantId, opt => opt.MapFrom(src => src.ProductVariantID));
+
+            CreateMap<OrderDetail, MakeOrderDetailResponse>()
+                .ForMember(dest => dest.ProductVariantID, opt => opt.MapFrom(src => src.ProductVariantId));
+
+            // THÊM CẤU HÌNH BỊ THIẾU: Order -> MakeOrderResponse
+            CreateMap<Order, MakeOrderResponse>()
+                .ForMember(dest => dest.CustomerName, opt => opt.MapFrom(src => src.EndCustomer.Name))
+                .ForMember(dest => dest.Details, opt => opt.MapFrom(src => src.OrderDetails));
+            CreateMap<EndCustomerUpdateRequest, EndCustomer>();
         }
         }
 

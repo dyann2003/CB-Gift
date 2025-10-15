@@ -77,5 +77,56 @@ namespace CB_Gift.Controllers
             }
             
         }
+        //update order
+        // Trong SellerController.cs
+
+        [HttpPut("update-order/{id}")]
+        public async Task<IActionResult> UpdateOrder(int id, [FromBody] OrderUpdateDto request)
+        {
+            try
+            {
+                string sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+                var response = await _orderService.UpdateOrderAsync(id, request, sellerId);
+                return Ok(response);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn.", error = ex.Message });
+            }
+        }
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteOrder(int id)
+        {
+            try
+            {
+                string sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+                var success = await _orderService.DeleteOrderAsync(id, sellerId);
+
+                if (!success)
+                {
+                    return NotFound(new { message = "Không tìm thấy đơn hàng hoặc bạn không có quyền truy cập." });
+                }
+
+                return Ok(new { message = "Xóa đơn hàng và các chi tiết liên quan thành công." });
+            }
+            catch (InvalidOperationException ex)
+            {
+               // _logger.LogWarning(ex, "Delete Order failed for Order ID {OrderId}: Invalid State.", id);
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+               // _logger.LogError(ex, "An unexpected error occurred while deleting Order ID {OrderId}.", id);
+                return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn." });
+            }
+        }
     }
 }

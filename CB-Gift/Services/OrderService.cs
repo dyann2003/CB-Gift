@@ -275,7 +275,7 @@ namespace CB_Gift.Services
             var response = new MakeOrderResponse
             {
                 OrderId = order.OrderId,
-                OrderCode = order.OrderCode ?? $"ORD-{DateTime.UtcNow:yyyyMMddHHmmss}",
+                OrderCode = order.OrderCode ?? null,
                 TotalCost = totalCost,
                 CustomerName = request.CustomerInfo.Name,
                 Details = details.Select(d => new MakeOrderDetailResponse
@@ -287,6 +287,108 @@ namespace CB_Gift.Services
             };
 
             return response;
+        }
+        public async Task<MakeOrderResponse> UpdateOrderAsync(int orderId, OrderUpdateDto request, string sellerUserId)
+        {
+            // Step 1: Tìm đơn hàng và kiểm tra điều kiện
+            var order = await _context.Orders
+                .Include(o => o.OrderDetails) // Lấy danh sách chi tiết hiện có
+                .FirstOrDefaultAsync(o => o.OrderId == orderId && o.SellerUserId == sellerUserId);
+
+            if (order == null)
+            {
+                throw new KeyNotFoundException("Không tìm thấy đơn hàng hoặc bạn không có quyền truy cập.");
+            }
+
+            if (order.StatusOrder != 1)
+            {
+                throw new InvalidOperationException("Chỉ có thể cập nhật đơn hàng ở trạng thái 'Mới tạo'.");
+            }
+
+            // Step 2: Cập nhật thông tin khách hàng và đơn hàng chính
+            var customer = await _context.EndCustomers.FindAsync(order.EndCustomerId);
+            if (customer != null) _mapper.Map(request.CustomerInfo, customer);
+            _mapper.Map(request.OrderUpdate, order);
+
+            // Step 3: Đồng bộ hóa Order Details
+            var detailsInRequest = request.OrderDetailsUpdate ?? new List<OrderDetailUpdateRequest>();
+            var requestDetailIds = detailsInRequest.Select(d => d.OrderDetailID).ToHashSet();
+
+            // 3.1: Xác định các details cần xóa
+            var detailsToRemove = order.OrderDetails
+                .Where(d => !requestDetailIds.Contains(d.OrderDetailId))
+                .ToList();
+            if (detailsToRemove.Any())
+            {
+                _context.OrderDetails.RemoveRange(detailsToRemove);
+            }
+
+            // 3.2: Cập nhật hoặc Thêm mới
+            foreach (var detailDto in detailsInRequest)
+            {
+                if (detailDto.OrderDetailID > 0) // Đây là item cần UPDATE
+                {
+                    var existingDetail = order.OrderDetails
+                        .FirstOrDefault(d => d.OrderDetailId == detailDto.OrderDetailID);
+                    if (existingDetail != null)
+                    {
+                        // Dùng AutoMapper để cập nhật các thuộc tính
+                        _mapper.Map(detailDto, existingDetail);
+                    }
+                }
+                else // Đây là item mới cần ADD
+                {
+                    var newDetail = _mapper.Map<OrderDetail>(detailDto);
+                    // Gán các giá trị cần thiết mà không có trong DTO
+                    newDetail.OrderId = order.OrderId;
+                    newDetail.CreatedDate = DateTime.UtcNow;
+                    order.OrderDetails.Add(newDetail); // Thêm vào danh sách của order
+                }
+            }
+
+            // Step 4: Tính toán lại tổng tiền và lưu thay đổi
+            // Bạn nên gọi lại hàm RecalculateOrderTotalCost để đảm bảo logic tính toán là nhất quán
+            await _context.SaveChangesAsync(); // Lưu các thay đổi (add, update, remove)
+
+            // Gọi hàm tính toán lại sau khi đã lưu DB để nó lấy được dữ liệu mới nhất
+            await RecalculateOrderTotalCost(order.OrderId);
+
+            // Step 5: Chuẩn bị dữ liệu trả về (tương tự như trước)
+            var updatedOrder = await _context.Orders
+                .Include(o => o.OrderDetails)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(o => o.OrderId == orderId);
+
+            return _mapper.Map<MakeOrderResponse>(updatedOrder);
+        }
+        public async Task<bool> DeleteOrderAsync(int orderId, string sellerUserId)
+        {
+            var order = await _context.Orders
+                .Include(o => o.OrderDetails) // Lấy cả các order details liên quan
+                .FirstOrDefaultAsync(o => o.OrderId == orderId && o.SellerUserId == sellerUserId);
+
+            if (order == null)
+            {
+                return false; // Trả về false để controller xử lý NotFound
+            }
+
+            if (order.StatusOrder != 1)
+            {
+                // Ném ra lỗi để Controller có thể bắt và trả về BadRequest
+                throw new InvalidOperationException("Chỉ có thể xóa đơn hàng ở trạng thái 'Daft(Nháp)'.");
+            }
+
+            // Xóa các OrderDetail liên quan trước
+            if (order.OrderDetails.Any())
+            {
+                _context.OrderDetails.RemoveRange(order.OrderDetails);
+            }
+
+            // Sau đó xóa Order
+            _context.Orders.Remove(order);
+
+            await _context.SaveChangesAsync();
+            return true;
         }
     }
 }

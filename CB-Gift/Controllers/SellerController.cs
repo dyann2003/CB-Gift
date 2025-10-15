@@ -12,11 +12,15 @@ namespace CB_Gift.Controllers
     public class SellerController : ControllerBase
     {
         private readonly IOrderService _orderService;
+        private readonly IDesignerTaskService _designerTaskService;
+        private readonly IDesignerSellerService _designerSellerservice;
 
 
-        public SellerController(IOrderService orderService)
+        public SellerController(IOrderService orderService, IDesignerTaskService designerTaskService, IDesignerSellerService designerSellerservice)
         {
             _orderService = orderService;
+            _designerTaskService = designerTaskService;
+            _designerSellerservice = designerSellerservice;
         }
 
         [HttpGet]
@@ -50,6 +54,90 @@ namespace CB_Gift.Controllers
             string sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             await _orderService.AddOrderDetailAsync(id, request, sellerId);
             return Ok(new { message = "Order detail added." });
+        }
+
+        // Endpoint để giao việc
+        // POST: /api/seller/tasks/order-details/123/assign
+        [HttpPost("order-details/{orderDetailId}/assign")]
+        public async Task<IActionResult> AssignDesigner(int orderDetailId, [FromBody] AssignDesignerToOrderDetailDto dto)
+        {
+            var sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(sellerId)) return Unauthorized();
+
+            try
+            {
+                var success = await _designerTaskService.AssignDesignerToOrderDetailAsync(orderDetailId, dto.DesignerUserId, sellerId);
+
+                if (!success)
+                {
+                    return NotFound("Không tìm thấy Chi tiết đơn hàng hoặc bạn không có quyền truy cập.");
+                }
+
+                return Ok(new { message = "Giao việc cho Designer thành công. Đơn hàng đã chuyển sang trạng thái Cần Design." });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, "Đã xảy ra lỗi không mong muốn.");
+            }
+        }
+        //assign theo OrderId
+        // POST: /api/seller/orders/{orderId}/assign-designer
+        [HttpPost("orders/{orderId}/assign-designer")]
+        public async Task<IActionResult> AssignDesignerToOrder(int orderId, [FromBody] AssignDesignerToOrderDetailDto dto)
+        {
+            try
+            {
+                var sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrEmpty(sellerId)) return Unauthorized();
+
+                // Gọi phương thức service mới
+                var success = await _designerTaskService.AssignDesignerToOrderAsync(orderId, dto.DesignerUserId, sellerId);
+
+                if (!success)
+                {
+                    return NotFound(new { message = "Không tìm thấy Đơn hàng hoặc bạn không có quyền truy cập." });
+                }
+
+                return Ok(new { message = "Giao việc cho Designer thành công. Toàn bộ đơn hàng đã được cập nhật." });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception)
+            {
+                // _logger.LogError(...)
+                return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn." });
+            }
+        }
+        //Get Designer của seller
+        [HttpGet("my-designer")]
+        public async Task<IActionResult> GetDesignersForSeller()
+        {
+            try
+            {
+                var sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+                if (string.IsNullOrEmpty(sellerId))
+                {
+                    return Unauthorized(new { message = "Không thể xác định người dùng. Vui lòng đăng nhập lại." });
+                }
+
+                var result = await _designerSellerservice.GetDesignersForSellerAsync(sellerId);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                // Ghi lại log lỗi chi tiết ở phía server để bạn có thể điều tra
+                // _logger.LogError(ex, "Lỗi xảy ra khi Seller {SellerId} lấy danh sách designer.", sellerId);
+
+                // Chỉ trả về một thông báo lỗi chung chung cho client
+                return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn. Vui lòng thử lại sau." });
+            }
         }
     }
 }
