@@ -36,6 +36,8 @@ namespace CB_Gift.DTOs
         
         public string? PaymentStatus { get; set; }
 
+        public bool? ActiveTTS { get; set; }
+
         public decimal? TotalCost { get; set; }
 
         public string? Tracking {  get; set; }

@@ -91,12 +91,20 @@ export default function DashboardContent() {
     },
   ];
 
-  const statsWithCounts = stats.map((stat) => ({
+  let statsWithCounts = stats.map((stat) => ({
     ...stat,
     value: stat.statusFilter
-      ? orders.filter((o) => o.statusOderName === stat.statusFilter).length
-      : orders.length,
+      ? orders.filter(
+          (o) => (o.status || o.statusOderName) === stat.statusFilter
+        ).length
+      : 0,
   }));
+
+  const totalCount = statsWithCounts
+    .filter((s) => s.statusFilter)
+    .reduce((sum, s) => sum + s.value, 0);
+
+  statsWithCounts[0].value = totalCount;
 
   // ===== Lấy Top 5 order mới nhất =====
   const recentOrders = [...orders]
