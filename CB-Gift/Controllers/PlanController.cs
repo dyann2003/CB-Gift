@@ -18,10 +18,18 @@ namespace CB_Gift.Controllers
 
         /// Test API: gom đơn ngay lập tức
         [HttpPost("group-submitted")]
-        public async Task<IActionResult> GroupSubmittedOrders([FromQuery] string userId)
+        public async Task<IActionResult> GroupSubmittedOrders()
         {
-            await _planService.GroupSubmittedOrdersAsync(userId ?? "system");
+            await _planService.GroupSubmittedOrdersAsync("system");
             return Ok("Orders grouped into plans successfully.");
+        }
+
+        /// Lấy kế hoạch sản xuất theo CategoryId và ngày tạo Plan
+        [HttpGet("staff-view")]
+        public async Task<IActionResult> GetPlansForStaffView([FromQuery] int? categoryId, [FromQuery] DateTime? selectedDate, [FromQuery] string status)
+        {
+            var result = await _planService.GetPlansForStaffViewAsync(categoryId, selectedDate, status);
+            return Ok(result);
         }
     }
 }
