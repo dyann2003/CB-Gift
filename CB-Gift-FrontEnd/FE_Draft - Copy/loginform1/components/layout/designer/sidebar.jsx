@@ -12,12 +12,12 @@ export default function DesignerSidebar({ currentPage, setCurrentPage }) {
       id: "design-assign",
       label: "Design Assign by Seller",
       path: "/designer/design-assign",
-    },
-    {
-      id: "manage-fail-design",
-      label: "Manage Fail Design",
-      path: "/designer/manage-fail-design",
-    },
+    }
+    // {
+    //   id: "manage-fail-design",
+    //   label: "Manage Fail Design",
+    //   path: "/designer/manage-fail-design",
+    // },
   ];
 
   const handleNavigation = (item) => {

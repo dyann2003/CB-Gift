@@ -1,726 +1,581 @@
 "use client";
 
-import { useState } from "react";
-import RoleSidebar from "@/components/layout/shared/role-sidebar";
+import { useState, useEffect } from "react";
+// Import các components UI
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
 } from "@/components/ui/table";
 import {
-  Eye,
-  Upload,
-  Check,
-  Download,
-  ImageIcon,
-  Search,
-  Send,
+    Eye,
+    Upload,
+    Check,
+    Download,
+    ImageIcon,
+    Search,
+    Send,
 } from "lucide-react";
 import DesignerHeader from "@/components/layout/designer/header";
 import DesignerSidebar from "@/components/layout/designer/sidebar";
 
+const DESIGN_STATUSES = {
+    "3": { name: "NEED DESIGN", color: "bg-red-500", code: "NEEDDESIGN" },
+    "4": { name: "DESIGNING", color: "bg-yellow-500", code: "DESIGNING" },
+    "5": { name: "CHECKDESIGN", color: "bg-blue-500", code: "CHECKDESIGN" },
+    "6": { name: "DESIGN_REDO", color: "bg-purple-500", code: "DESIGN_REDO" },
+};
+
 export default function DesignAssignPage() {
-  const [currentPage, setCurrentPage] = useState("design-assign");
-  const [selectedOrder, setSelectedOrder] = useState(null);
-  const [designFile, setDesignFile] = useState(null);
-  const [designNotes, setDesignNotes] = useState("");
-  const [acceptedOrders, setAcceptedOrders] = useState(new Set());
-  const [uploadedDesigns, setUploadedDesigns] = useState(new Set());
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedOrders, setSelectedOrders] = useState(new Set());
-  const [selectAll, setSelectAll] = useState(false);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [confirmAction, setConfirmAction] = useState(null);
-  const [confirmMessage, setConfirmMessage] = useState("");
+    const [currentPage, setCurrentPage] = useState("design-assign");
+    const [selectedOrder, setSelectedOrder] = useState(null);
+    const [designFile, setDesignFile] = useState(null);
+    const [designNotes, setDesignNotes] = useState("");
+    
+    // State cho tính năng chọn hàng loạt
+    const [selectedOrderDetails, setSelectedOrderDetails] = useState(new Set()); 
+    const [selectAll, setSelectAll] = useState(false);
 
-  const assignedOrders = [
-    {
-      id: "ORD-001",
-      customerName: "John Doe",
-      productName: "Acrylic Keychain",
-      quantity: 50,
-      size: "5x5cm",
-      accessory: "Key Ring",
-      assignedDate: "2024-01-15",
-      status: "pending",
-      customerInfo: {
-        name: "John Doe",
-        phone: "+1234567890",
-        email: "john@example.com",
-        address: "123 Main St",
-        city: "New York",
-        state: "NY",
-        zipcode: "10001",
-        country: "USA",
-      },
-      productDetails: {
-        size: "5x5cm",
-        accessory: "Key Ring",
-        quantity: 50,
-        activeTTS: true,
-        note: "Please make it colorful and vibrant",
-      },
-      uploadedFiles: {
-        linkImg: { name: "design-reference.jpg", url: "/acrylic-keychain.jpg" },
-        linkThanksCard: { name: "thanks-card.pdf", url: "#" },
-        linkFileDesign: { name: "original-design.ai", url: "#" },
-      },
-    },
-    {
-      id: "ORD-002",
-      customerName: "Jane Smith",
-      productName: "Acrylic Stand",
-      quantity: 25,
-      size: "10x15cm",
-      accessory: "None",
-      assignedDate: "2024-01-16",
-      status: "pending",
-      customerInfo: {
-        name: "Jane Smith",
-        phone: "+1234567891",
-        email: "jane@example.com",
-        address: "456 Oak Ave",
-        city: "Los Angeles",
-        state: "CA",
-        zipcode: "90001",
-        country: "USA",
-      },
-      productDetails: {
-        size: "10x15cm",
-        accessory: "None",
-        quantity: 25,
-        activeTTS: false,
-        note: "Minimalist design preferred",
-      },
-      uploadedFiles: {
-        linkImg: { name: "stand-reference.png", url: "/acrylic-stand.jpg" },
-        linkThanksCard: { name: "thank-you-card.jpg", url: "#" },
-        linkFileDesign: { name: "base-design.psd", url: "#" },
-      },
-    },
-    {
-      id: "ORD-003",
-      customerName: "Mike Johnson",
-      productName: "Acrylic Charm",
-      quantity: 100,
-      size: "3x3cm",
-      accessory: "Phone Strap",
-      assignedDate: "2024-01-17",
-      status: "pending",
-      customerInfo: {
-        name: "Mike Johnson",
-        phone: "+1234567892",
-        email: "mike@example.com",
-        address: "789 Pine St",
-        city: "Chicago",
-        state: "IL",
-        zipcode: "60601",
-        country: "USA",
-      },
-      productDetails: {
-        size: "3x3cm",
-        accessory: "Phone Strap",
-        quantity: 100,
-        activeTTS: true,
-        note: "Cute anime style design",
-      },
-      uploadedFiles: {
-        linkImg: { name: "charm-reference.jpg", url: "/acrylic-charm.jpg" },
-        linkThanksCard: { name: "thanks-note.pdf", url: "#" },
-        linkFileDesign: { name: "charm-design.ai", url: "#" },
-      },
-    },
-  ];
+    const [searchTerm, setSearchTerm] = useState("");
+    const [statusFilter, setStatusFilter] = useState("all");
+    const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+    const [confirmAction, setConfirmAction] = useState(null);
+    const [confirmMessage, setConfirmMessage] = useState("");
 
-  const filteredOrders = assignedOrders.filter((order) => {
-    const matchesSearch =
-      order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.productName.toLowerCase().includes(searchTerm.toLowerCase());
+    const [loading, setLoading] = useState(true);
+    const [assignedOrders, setAssignedOrders] = useState([]); 
 
-    const matchesStatus =
-      statusFilter === "all" ||
-      (statusFilter === "pending" && !acceptedOrders.has(order.id)) ||
-      (statusFilter === "accepted" && acceptedOrders.has(order.id)) ||
-      (statusFilter === "uploaded" && uploadedDesigns.has(order.id));
+    // --- HÀM GỌI API CẬP NHẬT TRẠNG THÁI (Đã sửa lỗi JSON input) ---
+    const updateDesignStatusApi = async (orderDetailId, newStatusKey) => {
+        const url = `https://localhost:7015/api/designer/tasks/status/${orderDetailId}`; 
+        
+        try {
+            const response = await fetch(url, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    orderStatus: parseInt(newStatusKey),
+                }),
+                credentials: 'include',
+            });
 
-    return matchesSearch && matchesStatus;
-  });
+            if (!response.ok) {
+                const contentType = response.headers.get("content-type");
+                
+                if (!contentType || !contentType.includes("application/json")) {
+                    // Nếu không phải JSON (ví dụ: 400 Bad Request trả về text)
+                    const errorText = await response.text();
+                    throw new Error(`Server returned status ${response.status}. Response: ${errorText.substring(0, 50)}...`);
+                }
+                
+                const errorData = await response.json();
+                throw new Error(errorData.message || `Failed to update status: ${response.status}`);
+            }
 
-  const handleSelectAll = (checked) => {
-    setSelectAll(checked);
-    if (checked) {
-      setSelectedOrders(new Set(filteredOrders.map((order) => order.id)));
-    } else {
-      setSelectedOrders(new Set());
-    }
-  };
+            // Xử lý thành công (200 OK, 204 No Content)
+            return true;
 
-  const handleSelectOrder = (orderId, checked) => {
-    const newSelected = new Set(selectedOrders);
-    if (checked) {
-      newSelected.add(orderId);
-    } else {
-      newSelected.delete(orderId);
-    }
-    setSelectedOrders(newSelected);
-    setSelectAll(newSelected.size === filteredOrders.length);
-  };
+        } catch (error) {
+            console.error("API Error during status update:", error);
+            alert(`Lỗi khi cập nhật trạng thái: ${error.message}`);
+            return false;
+        }
+    };
+    
+    // Hàm cập nhật trạng thái trên frontend (chỉ khi API thành công)
+    const handleUpdateStatusLocal = (orderId, newStatusKey) => {
+        setAssignedOrders(prevOrders => 
+            prevOrders.map(order => 
+                order.id === orderId ? { ...order, OrderStatus: newStatusKey } : order
+            )
+        );
+        console.log(`Cập nhật trạng thái Order Detail ${orderId} thành ${newStatusKey} (Local)`);
+    };
 
-  const handleBulkAccept = () => {
-    const newAccepted = new Set([...acceptedOrders, ...selectedOrders]);
-    setAcceptedOrders(newAccepted);
-    setSelectedOrders(new Set());
-    setSelectAll(false);
-    console.log(
-      `Bulk accepting orders: ${Array.from(selectedOrders).join(", ")}`
-    );
-  };
+    // Hàm chấp nhận thiết kế (3 -> 4)
+    const handleAcceptDesign = async (orderId) => {
+        const success = await updateDesignStatusApi(orderId, "4");
+        
+        if (success) {
+            handleUpdateStatusLocal(orderId, "4");
+        }
+    };
 
-  const handleBulkSendToQA = () => {
-    const eligibleOrders = Array.from(selectedOrders).filter((orderId) =>
-      uploadedDesigns.has(orderId)
-    );
-    if (eligibleOrders.length > 0) {
-      setConfirmMessage(
-        `Are you sure you want to send ${eligibleOrders.length} order(s) to QA?`
-      );
-      setConfirmAction(() => () => {
-        console.log(`Bulk sending to QA: ${eligibleOrders.join(", ")}`);
-        setSelectedOrders(new Set());
-        setSelectAll(false);
-        setShowConfirmDialog(false);
-      });
-      setShowConfirmDialog(true);
-    }
-  };
+    // Hàm Gửi QA (4/5/6 -> 5/QA)
+    const handleSendToQA = (orderId) => {
+        setConfirmMessage(`Bạn có chắc muốn gửi Order Detail ${orderId} sang CHECKDESIGN (5)?`);
+        setConfirmAction(() => async () => {
+            const success = await updateDesignStatusApi(orderId, "5");
+            if (success) {
+                handleUpdateStatusLocal(orderId, "5");
+            }
+            setShowConfirmDialog(false);
+        });
+        setShowConfirmDialog(true);
+    };
+    
+    // Hàm Upload Design (và chuyển trạng thái)
+    const handleUploadDesign = async () => {
+        if (designFile && selectedOrder) {
+            console.log(`Uploading design file for ${selectedOrder.id}`);
+            
+            // 1. Logic Upload File lên server (BẠN CẦN VIẾT HÀM NÀY)
+            // Tạm thời giả định thành công
+            const uploadSuccess = true; 
+            
+            if (uploadSuccess) {
+                // 2. Chuyển trạng thái sang 5 (CHECKDESIGN)
+                const apiSuccess = await updateDesignStatusApi(selectedOrder.id, "5"); 
 
-  const handleAcceptDesign = (orderId) => {
-    console.log(`Accepting design for order: ${orderId}`);
-    setAcceptedOrders((prev) => new Set([...prev, orderId]));
-  };
+                if (apiSuccess) {
+                    handleUpdateStatusLocal(selectedOrder.id, "5"); 
+                    setDesignFile(null);
+                    setDesignNotes("");
+                    setSelectedOrder(null); 
+                }
+            } else {
+                alert("Lỗi: Không thể upload file thiết kế.");
+            }
+        }
+    };
 
-  const handleUploadDesign = () => {
-    if (designFile && selectedOrder) {
-      console.log(`Uploading design for order: ${selectedOrder.id}`);
-      setUploadedDesigns((prev) => new Set([...prev, selectedOrder.id]));
-      setDesignFile(null);
-      setDesignNotes("");
-      setSelectedOrder(null);
-    }
-  };
 
-  const handleSendToQA = (orderId) => {
-    setConfirmMessage(`Are you sure you want to send order ${orderId} to QA?`);
-    setConfirmAction(() => () => {
-      console.log(`Sending order ${orderId} to QA`);
-      setShowConfirmDialog(false);
+    // *** LOGIC GỌI API BAN ĐẦU ***
+    useEffect(() => {
+        const fetchTasks = async () => {
+            try {
+                setLoading(true);
+                
+                const res = await fetch("https://localhost:7015/api/designer/tasks", { 
+                    credentials: "include", 
+                });
+                
+                if (!res.ok) {
+                    throw new Error(`HTTP error! status: ${res.status}`);
+                }
+                
+                const apiData = await res.json();
+
+                const mappedData = (apiData || []).map((item) => ({
+                    ...item,
+                    id: item.orderDetailId.toString(), 
+                    // LẤY TRỰC TIẾP TỪ orderStatus VÀ CHUYỂN THÀNH CHUỖI
+                    OrderStatus: String(item.orderStatus), 
+                    customerName: `Customer for ${item.orderCode}`, 
+                }));
+
+                setAssignedOrders(mappedData);
+            } catch (error) {
+                console.error("Failed to fetch assigned tasks:", error);
+                setAssignedOrders([]);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchTasks();
+    }, []); 
+
+    // --- LOGIC FILTER ---
+    const filteredOrders = assignedOrders.filter((order) => {
+        const matchesSearch =
+            order.orderCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            order.productName.toLowerCase().includes(searchTerm.toLowerCase());
+
+        const orderStatusKey = String(order.OrderStatus || "3");
+
+        const matchesStatus =
+            statusFilter === "all" ||
+            orderStatusKey === statusFilter;
+
+        return matchesSearch && matchesStatus;
     });
-    setShowConfirmDialog(true);
-  };
 
-  const getOrderStatus = (order) => {
-    if (uploadedDesigns.has(order.id)) {
-      return (
-        <Badge variant="default" className="bg-blue-500">
-          Design Uploaded
-        </Badge>
-      );
-    }
-    if (acceptedOrders.has(order.id)) {
-      return (
-        <Badge variant="default" className="bg-green-500">
-          Accepted
-        </Badge>
-      );
-    }
-    return <Badge variant="secondary">Pending</Badge>;
-  };
+    // --- LOGIC COUNT ---
+    const getFilterCounts = () => {
+        const counts = { all: assignedOrders.length };
+        Object.keys(DESIGN_STATUSES).forEach(key => {
+            counts[key] = 0;
+        });
 
-  return (
-    <div className="flex h-screen bg-gray-50">
-      <DesignerSidebar
-        currentPage={currentPage}
-        setCurrentPage={setCurrentPage}
-      />
+        assignedOrders.forEach(order => {
+            const statusKey = String(order.OrderStatus || "3");
+            if (counts.hasOwnProperty(statusKey)) {
+                counts[statusKey] += 1;
+            }
+        });
+        return counts;
+    };
+    const filterCounts = getFilterCounts();
 
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <DesignerHeader />
+    // --- LOGIC CHECKBOX/BULK ACTIONS ---
+    const handleSelectAll = (checked) => {
+        setSelectAll(checked);
+        if (checked) {
+          setSelectedOrderDetails(new Set(filteredOrders.map((order) => order.id)));
+        } else {
+          setSelectedOrderDetails(new Set());
+        }
+    };
+    
+    const handleSelectOrder = (orderId, checked) => {
+        const newSelected = new Set(selectedOrderDetails);
+        if (checked) {
+          newSelected.add(orderId);
+        } else {
+          newSelected.delete(orderId);
+        }
+        setSelectedOrderDetails(newSelected);
+        setSelectAll(newSelected.size === filteredOrders.length && filteredOrders.length > 0);
+    };
 
-        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-          <h1 className="text-2xl font-semibold text-gray-900">
-            Design Assign by Seller
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Orders assigned to you for design work
-          </p>
-        </header>
+    // Hàm hiển thị Badge trạng thái
+    const getOrderStatus = (order) => {
+        const statusKey = order.OrderStatus ? String(order.OrderStatus) : "3";
+        const statusInfo = DESIGN_STATUSES[statusKey] || { name: "UNKNOWN", color: "bg-gray-500" };
 
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto p-6">
-          <div className="bg-white p-4 rounded-lg shadow mb-6">
-            <div className="flex gap-4 items-center">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                  <Input
-                    placeholder="Search by Order ID, Customer Name, or Product..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-              </div>
-              <div className="w-48">
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Filter by status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="accepted">Accepted</SelectItem>
-                    <SelectItem value="uploaded">Design Uploaded</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
+        return (
+            <Badge variant="default" className={statusInfo.color}>
+                {statusInfo.name}
+            </Badge>
+        );
+    };
+    
+    // Biến theo dõi OrderCode trùng lặp
+    let previousOrderCode = null;
 
-          {selectedOrders.size > 0 && (
-            <div className="bg-blue-50 p-4 rounded-lg shadow mb-6 border border-blue-200">
-              <div className="flex items-center justify-between">
-                <span className="text-blue-800 font-medium">
-                  {selectedOrders.size} order
-                  {selectedOrders.size > 1 ? "s" : ""} selected
-                </span>
-                <div className="flex gap-2">
-                  <Button
-                    onClick={handleBulkAccept}
-                    className="bg-green-600 hover:bg-green-700"
-                    size="sm"
-                  >
-                    <Check className="h-4 w-4 mr-1" />
-                    Accept Selected ({selectedOrders.size})
-                  </Button>
-                  <Button
-                    onClick={handleBulkSendToQA}
-                    className="bg-blue-600 hover:bg-blue-700"
-                    size="sm"
-                    disabled={
-                      !Array.from(selectedOrders).some((orderId) =>
-                        uploadedDesigns.has(orderId)
-                      )
-                    }
-                  >
-                    <Send className="h-4 w-4 mr-1" />
-                    Send to QA (
-                    {
-                      Array.from(selectedOrders).filter((orderId) =>
-                        uploadedDesigns.has(orderId)
-                      ).length
-                    }
-                    )
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
 
-          <div className="bg-white rounded-lg shadow">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">
-                    <Checkbox
-                      checked={selectAll}
-                      onCheckedChange={handleSelectAll}
-                    />
-                  </TableHead>
-                  <TableHead>Order ID</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead>Quantity</TableHead>
-                  <TableHead>Size</TableHead>
-                  <TableHead>Assigned Date</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredOrders.map((order) => (
-                  <TableRow key={order.id}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedOrders.has(order.id)}
-                        onCheckedChange={(checked) =>
-                          handleSelectOrder(order.id, checked)
-                        }
-                      />
-                    </TableCell>
-                    <TableCell className="font-medium">{order.id}</TableCell>
-                    <TableCell>{order.customerName}</TableCell>
-                    <TableCell>{order.productName}</TableCell>
-                    <TableCell>{order.quantity}</TableCell>
-                    <TableCell>{order.size}</TableCell>
-                    <TableCell>{order.assignedDate}</TableCell>
-                    <TableCell>{getOrderStatus(order)}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setSelectedOrder(order)}
-                            >
-                              <Eye className="h-4 w-4 mr-1" />
-                              View
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-                            <DialogHeader>
-                              <DialogTitle>
-                                Order Details - {order.id}
-                              </DialogTitle>
-                            </DialogHeader>
-                            <div className="space-y-6">
-                              <div>
-                                <h3 className="font-semibold text-lg mb-3">
-                                  Customer Information
-                                </h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                    <Label className="text-sm text-gray-500">
-                                      Name
-                                    </Label>
-                                    <p className="font-medium">
-                                      {order.customerInfo.name}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <Label className="text-sm text-gray-500">
-                                      Phone
-                                    </Label>
-                                    <p className="font-medium">
-                                      {order.customerInfo.phone}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <Label className="text-sm text-gray-500">
-                                      Email
-                                    </Label>
-                                    <p className="font-medium">
-                                      {order.customerInfo.email}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <Label className="text-sm text-gray-500">
-                                      Address
-                                    </Label>
-                                    <p className="font-medium">
-                                      {order.customerInfo.address}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <Label className="text-sm text-gray-500">
-                                      City
-                                    </Label>
-                                    <p className="font-medium">
-                                      {order.customerInfo.city}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <Label className="text-sm text-gray-500">
-                                      State
-                                    </Label>
-                                    <p className="font-medium">
-                                      {order.customerInfo.state}
-                                    </p>
-                                  </div>
+    return (
+        <div className="flex h-screen bg-gray-50">
+            <DesignerSidebar
+                currentPage={currentPage}
+                setCurrentPage={setCurrentPage}
+            />
+
+            <div className="flex-1 flex flex-col overflow-hidden">
+                <DesignerHeader />
+
+                <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+                    <h1 className="text-2xl font-semibold text-gray-900">
+                        Design Assigned
+                    </h1>
+                    <p className="text-gray-600 mt-1">
+                        Orders assigned to you for design work
+                    </p>
+                </header>
+
+                <main className="flex-1 overflow-y-auto p-6">
+                    {/* Search and Filter Section */}
+                    <div className="bg-white p-4 rounded-lg shadow mb-6">
+                        <div className="flex gap-4 items-center">
+                            <div className="flex-1">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                                    <Input
+                                        placeholder="Search by Order ID, Product Name..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="pl-10"
+                                    />
                                 </div>
-                              </div>
-
-                              <div>
-                                <h3 className="font-semibold text-lg mb-3">
-                                  Product Details
-                                </h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                    <Label className="text-sm text-gray-500">
-                                      Product
-                                    </Label>
-                                    <p className="font-medium">
-                                      {order.productName}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <Label className="text-sm text-gray-500">
-                                      Size
-                                    </Label>
-                                    <p className="font-medium">
-                                      {order.productDetails.size}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <Label className="text-sm text-gray-500">
-                                      Accessory
-                                    </Label>
-                                    <p className="font-medium">
-                                      {order.productDetails.accessory}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <Label className="text-sm text-gray-500">
-                                      Quantity
-                                    </Label>
-                                    <p className="font-medium">
-                                      {order.productDetails.quantity}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <Label className="text-sm text-gray-500">
-                                      Active TTS
-                                    </Label>
-                                    <p className="font-medium">
-                                      {order.productDetails.activeTTS
-                                        ? "Yes"
-                                        : "No"}
-                                    </p>
-                                  </div>
-                                </div>
-                                {order.productDetails.note && (
-                                  <div className="mt-4">
-                                    <Label className="text-sm text-gray-500">
-                                      Note
-                                    </Label>
-                                    <p className="font-medium">
-                                      {order.productDetails.note}
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-
-                              <div>
-                                <h3 className="font-semibold text-lg mb-3">
-                                  Files from Seller
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                  <div className="border rounded-lg p-4">
-                                    <Label className="text-sm text-gray-500">
-                                      Reference Image
-                                    </Label>
-                                    <div className="mt-2">
-                                      <img
-                                        src={
-                                          order.uploadedFiles.linkImg.url ||
-                                          "/placeholder.svg"
-                                        }
-                                        alt="Reference"
-                                        className="w-full h-32 object-cover rounded border"
-                                      />
-                                      <p className="text-sm mt-2">
-                                        {order.uploadedFiles.linkImg.name}
-                                      </p>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="mt-2 w-full bg-transparent"
-                                      >
-                                        <Download className="h-4 w-4 mr-2" />
-                                        Download
-                                      </Button>
-                                    </div>
-                                  </div>
-
-                                  <div className="border rounded-lg p-4">
-                                    <Label className="text-sm text-gray-500">
-                                      Thanks Card
-                                    </Label>
-                                    <div className="mt-2">
-                                      <div className="w-full h-32 bg-gray-100 rounded border flex items-center justify-center">
-                                        <ImageIcon className="h-8 w-8 text-gray-400" />
-                                      </div>
-                                      <p className="text-sm mt-2">
-                                        {
-                                          order.uploadedFiles.linkThanksCard
-                                            .name
-                                        }
-                                      </p>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="mt-2 w-full bg-transparent"
-                                      >
-                                        <Download className="h-4 w-4 mr-2" />
-                                        Download
-                                      </Button>
-                                    </div>
-                                  </div>
-
-                                  <div className="border rounded-lg p-4">
-                                    <Label className="text-sm text-gray-500">
-                                      Design File
-                                    </Label>
-                                    <div className="mt-2">
-                                      <div className="w-full h-32 bg-gray-100 rounded border flex items-center justify-center">
-                                        <ImageIcon className="h-8 w-8 text-gray-400" />
-                                      </div>
-                                      <p className="text-sm mt-2">
-                                        {
-                                          order.uploadedFiles.linkFileDesign
-                                            .name
-                                        }
-                                      </p>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="mt-2 w-full bg-transparent"
-                                      >
-                                        <Download className="h-4 w-4 mr-2" />
-                                        Download
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {acceptedOrders.has(order.id) && (
-                                <div>
-                                  <h3 className="font-semibold text-lg mb-3">
-                                    Upload Design
-                                  </h3>
-                                  <div className="space-y-4">
-                                    <div>
-                                      <Label htmlFor="design-file">
-                                        Design File
-                                      </Label>
-                                      <Input
-                                        id="design-file"
-                                        type="file"
-                                        accept=".jpg,.jpeg,.png,.pdf,.ai,.psd"
-                                        onChange={(e) =>
-                                          setDesignFile(e.target.files[0])
-                                        }
-                                      />
-                                    </div>
-                                    <div>
-                                      <Label htmlFor="design-notes">
-                                        Design Notes
-                                      </Label>
-                                      <Textarea
-                                        id="design-notes"
-                                        placeholder="Add any notes about the design..."
-                                        value={designNotes}
-                                        onChange={(e) =>
-                                          setDesignNotes(e.target.value)
-                                        }
-                                      />
-                                    </div>
-                                    <div className="flex gap-2">
-                                      <Button
-                                        onClick={handleUploadDesign}
-                                        className="flex-1"
-                                      >
-                                        <Upload className="h-4 w-4 mr-2" />
-                                        Upload Design
-                                      </Button>
-                                      {uploadedDesigns.has(order.id) && (
-                                        <Button
-                                          onClick={() =>
-                                            handleSendToQA(order.id)
-                                          }
-                                          className="flex-1 bg-blue-600 hover:bg-blue-700"
-                                        >
-                                          <Send className="h-4 w-4 mr-1" />
-                                          Send to QA
-                                        </Button>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
                             </div>
-                          </DialogContent>
-                        </Dialog>
-
-                        {!acceptedOrders.has(order.id) && (
-                          <Button
-                            size="sm"
-                            onClick={() => handleAcceptDesign(order.id)}
-                          >
-                            <Check className="h-4 w-4 mr-1" />
-                            Accept
-                          </Button>
+                            <div className="w-48">
+                                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                                    <SelectTrigger>
+                                        {/* Hiển thị count bên cạnh giá trị đang chọn */}
+                                        <SelectValue placeholder="Filter by status">
+                                            {statusFilter === "all" ? (
+                                                `Tất cả Status (${filterCounts.all})`
+                                            ) : (
+                                                `${DESIGN_STATUSES[statusFilter]?.name} (${filterCounts[statusFilter] || 0})`
+                                            )}
+                                        </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">
+                                            Tất cả Status ({filterCounts.all})
+                                        </SelectItem>
+                                        
+                                        {Object.entries(DESIGN_STATUSES).map(([key, value]) => (
+                                            <SelectItem key={key} value={key}>
+                                                {value.name} ({filterCounts[key] || 0})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    </div>
+                    {/* Bulk Actions (Chưa có logic cập nhật trạng thái bulk) */}
+                    {selectedOrderDetails.size > 0 && (
+                        <div className="bg-blue-50 p-4 rounded-lg shadow mb-6 border border-blue-200">
+                            <div className="flex items-center justify-between">
+                                <span className="text-blue-800 font-medium">
+                                    {selectedOrderDetails.size} order detail
+                                    {selectedOrderDetails.size > 1 ? "s" : ""} selected
+                                </span>
+                                <div className="flex gap-2">
+                                    <Button
+                                        onClick={() => { /* Bulk accept logic */ }}
+                                        className="bg-green-600 hover:bg-green-700"
+                                        size="sm"
+                                    >
+                                        <Check className="h-4 w-4 mr-1" />
+                                        Accept Selected ({selectedOrderDetails.size})
+                                    </Button>
+                                    <Button
+                                        onClick={() => { /* Bulk send to QA logic */ }}
+                                        className="bg-blue-600 hover:bg-blue-700"
+                                        size="sm"
+                                        disabled={true} 
+                                    >
+                                        <Send className="h-4 w-4 mr-1" />
+                                        Send to QA (0)
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* Table Section */}
+                    <div className="bg-white rounded-lg shadow">
+                        {loading && (
+                            <div className="p-4 text-center text-gray-500">
+                                Đang tải danh sách công việc được giao...
+                            </div>
                         )}
-
-                        {uploadedDesigns.has(order.id) && (
-                          <Button
-                            size="sm"
-                            onClick={() => handleSendToQA(order.id)}
-                            className="bg-blue-600 hover:bg-blue-700"
-                          >
-                            <Send className="h-4 w-4 mr-1" />
-                            Send to QA
-                          </Button>
+                        {!loading && filteredOrders.length === 0 && (
+                            <div className="p-4 text-center text-gray-500">
+                                Không tìm thấy công việc thiết kế nào được giao.
+                            </div>
                         )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </main>
-      </div>
+                        {!loading && filteredOrders.length > 0 && (
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-12"><Checkbox checked={selectAll} onCheckedChange={handleSelectAll} /></TableHead>
+                                        <TableHead>Detail ID</TableHead> 
+                                        <TableHead>Order Code</TableHead>
+                                        <TableHead>Product Name</TableHead>
+                                        <TableHead>Product Description</TableHead> 
+                                        <TableHead>Quantity</TableHead>
+                                        <TableHead>Size (L x H x W)</TableHead>
+                                        <TableHead>Assigned At</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead>Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {previousOrderCode = null}
+                                    {filteredOrders.map((order) => {
+                                        // Logic ẩn OrderCode trùng lặp
+                                        const isDuplicateOrderCode = order.orderCode === previousOrderCode;
+                                        previousOrderCode = order.orderCode;
+                                        
+                                        const currentStatus = String(order.OrderStatus || "3");
 
-      {showConfirmDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999]">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold mb-4">Confirm Action</h3>
-            <p className="text-gray-600 mb-6">{confirmMessage}</p>
-            <div className="flex gap-3 justify-end">
-              <Button
-                variant="outline"
-                onClick={() => setShowConfirmDialog(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={confirmAction}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                Confirm
-              </Button>
+                                        return (
+                                            <TableRow key={order.id}> 
+                                                <TableCell>
+                                                    <Checkbox
+                                                        checked={selectedOrderDetails.has(order.id)}
+                                                        onCheckedChange={(checked) => handleSelectOrder(order.id, checked)}
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="font-medium">{order.orderDetailId}</TableCell>
+                                                <TableCell className={isDuplicateOrderCode ? "text-gray-400 font-normal" : "font-medium"}>
+                                                    {!isDuplicateOrderCode ? order.orderCode : "—"}
+                                                </TableCell>
+                                                <TableCell>{order.productName}</TableCell>
+                                                <TableCell>{order.productDescribe || 'N/A'}</TableCell>
+                                                <TableCell>{order.quantity}</TableCell>
+                                                <TableCell>
+                                                    {order.productDetails?.lengthCm}x{order.productDetails?.heightCm}x{order.productDetails?.widthCm}cm
+                                                </TableCell>
+                                                <TableCell>{new Date(order.assignedAt).toLocaleString()}</TableCell>
+                                                <TableCell>{getOrderStatus(order)}</TableCell>
+                                                <TableCell>
+                                                    <div className="flex gap-2">
+                                                        <Dialog>
+                                                            <DialogTrigger asChild>
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    onClick={() => setSelectedOrder(order)}
+                                                                >
+                                                                    <Eye className="h-4 w-4 mr-1" /> View
+                                                                </Button>
+                                                            </DialogTrigger>
+                                                            {/* DIALOG CONTENT */}
+                                                            {selectedOrder && selectedOrder.id === order.id && ( 
+                                                                <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                                                                    <DialogHeader>
+                                                                        <DialogTitle>Order Detail - {selectedOrder.orderDetailId} ({selectedOrder.orderCode})</DialogTitle>
+                                                                    </DialogHeader>
+                                                                    <div className="space-y-6">
+                                                                        {/* PRODUCT DETAILS (Đã tối giản) */}
+                                                                        <div>
+                                                                            <h3 className="font-semibold text-lg mb-3">Product Details</h3>
+                                                                            <div className="grid grid-cols-2 gap-4">
+                                                                                <div><Label className="text-sm text-gray-500">Product</Label><p className="font-medium">{selectedOrder.productName}</p></div>
+                                                                                <div><Label className="text-sm text-gray-500">Size</Label><p className="font-medium">{selectedOrder.productDetails?.lengthCm}x{selectedOrder.productDetails?.heightCm}x{selectedOrder.productDetails?.widthCm}cm</p></div>
+                                                                                <div><Label className="text-sm text-gray-500">Quantity</Label><p className="font-medium">{selectedOrder.quantity}</p></div>
+                                                                                <div><Label className="text-sm text-gray-500">SKU</Label><p className="font-medium">{selectedOrder.productDetails?.sku || 'N/A'}</p></div>
+                                                                            </div>
+                                                                            <div className="mt-4"><Label className="text-sm text-gray-500">Note</Label><p className="font-medium">{selectedOrder.note || 'No notes.'}</p></div>
+                                                                        </div>
+
+                                                                        {/* UPLOAD DESIGN SECTION */}
+                                                                        {/* HIỂN THỊ KHI ĐANG DESIGNING (4) HOẶC DESIGN_REDO (6) */}
+                                                                        {(currentStatus === "4" || currentStatus === "6") && (
+                                                                            <div className="border-t pt-4">
+                                                                                <h3 className="font-semibold text-lg mb-3">Upload Design</h3>
+                                                                                <div className="space-y-4">
+                                                                                    <div><Label htmlFor="design-file">Design File</Label><Input id="design-file" type="file" accept=".jpg,.jpeg,.png,.pdf,.ai,.psd" onChange={(e) => setDesignFile(e.target.files[0])}/></div>
+                                                                                    <div><Label htmlFor="design-notes">Design Notes</Label><Textarea id="design-notes" placeholder="Add notes..." value={designNotes} onChange={(e) => setDesignNotes(e.target.value)} /></div>
+                                                                                    <div className="flex gap-2">
+                                                                                        <Button onClick={handleUploadDesign} className="flex-1" disabled={!designFile}>
+                                                                                            <Upload className="h-4 w-4 mr-2" /> Upload & Send to Check (5)
+                                                                                        </Button>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+                                                                        {/* HIỂN THỊ NÚT SEND TO QA (CHỈ KHI ĐÃ CÓ FILE DESIGN VÀ CHƯA GỬI CHECK) */}
+                                                                        {currentStatus === "5" && (
+                                                                            <div className="border-t pt-4">
+                                                                                <Button onClick={() => handleSendToQA(selectedOrder.id)} className="w-full bg-blue-600 hover:bg-blue-700">
+                                                                                    <Send className="h-4 w-4 mr-1" /> Send to QA
+                                                                                </Button>
+                                                                            </div>
+                                                                        )}
+                                                                        
+                                                                         {/* FILES FROM SELLER (Tạm thời giữ nguyên logic file cũ) */}
+                                                                        <div className="border-t pt-4">
+                                                                            <h3 className="font-semibold text-lg mb-3">Files from Seller</h3>
+                                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                                                <div className="border rounded-lg p-4 opacity-50">
+                                                                                    <Label className="text-sm text-gray-500">Reference Image</Label>
+                                                                                    <div className="mt-2 w-full h-32 bg-gray-100 rounded border flex items-center justify-center">
+                                                                                        <ImageIcon className="h-8 w-8 text-gray-400" />
+                                                                                    </div>
+                                                                                    <p className="text-sm mt-2">N/A</p>
+                                                                                </div>
+                                                                                {/* Thêm các file khác... */}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </DialogContent>
+                                                            )}
+                                                            {/* END DIALOG CONTENT */}
+                                                        </Dialog>
+
+                                                        {/* ACCEPT BUTTON (Chỉ hiển thị khi NEED DESIGN - 3) */}
+                                                        {currentStatus === "3" && (
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => handleAcceptDesign(order.id)}
+                                                            >
+                                                                <Check className="h-4 w-4 mr-1" />
+                                                                Accept
+                                                            </Button>
+                                                        )}
+
+                                                        {/* Nút REDO/START DESIGN (Cho Status 6) */}
+                                                        {currentStatus === "6" && (
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => handleUpdateStatusLocal(order.id, "4")} // Chuyển về DESIGNING để bắt đầu lại
+                                                                className="bg-purple-600 hover:bg-purple-700"
+                                                            >
+                                                                <Check className="h-4 w-4 mr-1" />
+                                                                Start Redo
+                                                            </Button>
+                                                        )}
+                                                        
+                                                        {/* NÚT UPLOAD/GỬI QA NHANH (Chỉ khi đang DESIGNING (4) */}
+                                                        {currentStatus === "4" && (
+                                                             <Button
+                                                                size="sm"
+                                                                onClick={() => setSelectedOrder(order)} // Mở Dialog để Upload
+                                                                className="bg-blue-600 hover:bg-blue-700"
+                                                            >
+                                                                <Upload className="h-4 w-4 mr-1" />
+                                                                Upload Design
+                                                            </Button>
+                                                        )}
+                                                        
+                                                        {/* NÚT SEND QA (Chỉ khi CHECKDESIGN (5)) */}
+                                                        {currentStatus === "5" && (
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => handleSendToQA(order.id)}
+                                                                className="bg-blue-600 hover:bg-blue-700"
+                                                            >
+                                                                <Send className="h-4 w-4 mr-1" />
+                                                                Send to QA
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                </TableBody>
+                            </Table>
+                        )}
+                    </div>
+                </main>
             </div>
-          </div>
+            
+            {/* Confirmation Dialog (giữ nguyên) */}
+            {showConfirmDialog && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999]">
+                    <div className="bg-white rounded-lg max-w-md w-full p-6">
+                        <h3 className="text-lg font-semibold mb-4">Confirm Action</h3>
+                        <p className="text-gray-600 mb-6">{confirmMessage}</p>
+                        <div className="flex gap-3 justify-end">
+                            <Button
+                                variant="outline"
+                                onClick={() => setShowConfirmDialog(false)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={confirmAction}
+                                className="bg-blue-600 hover:bg-blue-700"
+                            >
+                                Confirm
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
-      )}
-    </div>
-  );
+    );
 }
