@@ -126,21 +126,16 @@ export default function ManageOrder() {
         const mappedOrders = data.map((order) => ({
           id: order.orderId,
           orderId: order.orderCode,
-          orderDate: new Date(order.orderDate).toISOString().split("T")[0], // Format: YYYY-MM-DD
+          orderDate: new Date(order.orderDate).toISOString().split("T")[0],
           customerName: order.customerName,
-          phone: "", // Not provided in API
-          email: "", // Not provided in API
-          products: order.details.map((detail) => ({
-            name: `Product ${detail.productVariantID}`,
-            quantity: detail.quantity,
-            price: detail.price,
-            size: "",
-            accessory: detail.accessory || "",
-          })),
-          address: "", // Not provided in API
-          shipTo: "", // Not provided in API
+          phone: order.phone || "",
+          email: order.email || "",
+          address: order.address || "",
+          shipTo: `${order.shipCity || ""}, ${order.shipState || ""}, ${
+            order.shipCountry || ""
+          }`,
           status: order.statusOderName,
-          totalAmount: `$${order.totalCost.toFixed(2)}`,
+          totalAmount: `$${order.totalCost?.toFixed(2) || 0}`,
           timeCreated: new Date(order.creationDate).toLocaleString(),
           selected: false,
           customerInfo: {
@@ -168,6 +163,13 @@ export default function ManageOrder() {
               url: order.details[0]?.linkFileDesign || "#",
             },
           },
+          products: order.details.map((detail) => ({
+            name: detail.productName || `Product ${detail.productVariantID}`,
+            quantity: detail.quantity,
+            price: detail.price,
+            size: detail.size || "",
+            accessory: detail.accessory || "",
+          })),
         }));
 
         setOrders(mappedOrders);
