@@ -131,6 +131,8 @@ builder.Services.AddScoped<ICloudinaryService, CloudinaryService>();
 builder.Services.AddScoped<IImageManagementService, ImageManagementService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<ITagService, TagService>();
+builder.Services.AddScoped<IDesignerSellerService, DesignerSellerService>();
+builder.Services.AddScoped<IDesignerTaskService, DesignerTaskService>();
 
 // --- Quartz ---
 builder.Services.AddQuartz(q =>

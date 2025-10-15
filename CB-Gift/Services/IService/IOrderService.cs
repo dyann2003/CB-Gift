@@ -22,6 +22,8 @@ namespace CB_Gift.Services.IService
 
         //Create Order: Gửi tổng Json: Customer,Order,OrderDetail.
         Task<MakeOrderResponse> MakeOrder(MakeOrderDto request, string sellerUserId);
-        
+        Task<MakeOrderResponse> UpdateOrderAsync(int orderId, OrderUpdateDto request, string sellerUserId);
+        Task<bool> DeleteOrderAsync(int orderId, string sellerUserId);
+
     }
 }
