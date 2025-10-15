@@ -57,4 +57,43 @@ public class DesignerController : ControllerBase
             return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn trong quá trình upload." });
         }
     }
+    /// <summary>
+    /// API để Designer cập nhật trạng thái thiết kế.
+    /// PUT: api/designer/tasks/status/{orderDetailId}
+    /// </summary>
+    [HttpPut("status/{orderDetailId}")]
+    public async Task<IActionResult> UpdateDesignStatus(
+        int orderDetailId,
+        [FromBody] UpdateStatusRequest request)
+    {
+        try
+        {
+            // 1. Gọi Service để xử lý logic
+            var success = await _designerTaskService.UpdateStatusAsync(orderDetailId, request.OrderStatus);
+
+            if (!success)
+            {
+                // Nếu Service trả về false (ví dụ: không tìm thấy)
+                return NotFound(new { message = $"Order Detail with ID {orderDetailId} not found or status update failed." });
+            }
+
+            // 2. Trả về phản hồi thành công (204 No Content)
+            return NoContent();
+        }
+        catch (ArgumentException ex)
+        {
+            // Xử lý lỗi validation từ Service
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Xử lý lỗi logic nghiệp vụ từ Service
+            return StatusCode(403, new { message = ex.Message }); // 403 Forbidden hoặc 400 Bad Request
+        }
+        catch (Exception ex)
+        {
+            // Xử lý lỗi server không mong muốn
+            return StatusCode(500, new { message = "An internal server error occurred while updating the status." });
+        }
+    }
 }

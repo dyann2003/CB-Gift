@@ -35,10 +35,9 @@ namespace CB_Gift.Mapper
                 )
                 .ForMember(
                     dest => dest.SellerName,
-                    opt => opt.MapFrom(src => src.SellerUser.FullName) // Lấy OrderCode từ bảng Order liên quan
+                    opt => opt.MapFrom(src => src.SellerUser.FullName) 
                 );
-
-
+            CreateMap<ProductDetails, ProductVariant>();
             // === CHỨC NĂNG CỦA DESIGNER ===
 
             // 3. Ánh xạ từ Model OrderDetail sang DTO hiển thị Task cho Designer
@@ -46,12 +45,24 @@ namespace CB_Gift.Mapper
             CreateMap<OrderDetail, DesignTaskDto>()
                 .ForMember(
                     dest => dest.OrderCode,
-                    opt => opt.MapFrom(src => src.Order.OrderCode) // Lấy OrderCode từ bảng Order liên quan
+                    opt => opt.MapFrom(src => src.Order.OrderCode) 
                 )
                 .ForMember(
                     dest => dest.ProductName,
-                    opt => opt.MapFrom(src => src.ProductVariant.Product.ProductName) // Lấy ProductName từ Product -> ProductVariant
-                );
+                    opt => opt.MapFrom(src => src.ProductVariant.Product.ProductName) 
+                )
+                 .ForMember(
+                    dest => dest.ProductDescribe,
+                    opt => opt.MapFrom(src => src.ProductVariant.Product.Describe)
+                )
+                 .ForMember(
+                    dest => dest.ProductTemplate,
+                    opt => opt.MapFrom(src => src.ProductVariant.Product.Template)
+                )
+                .ForMember(
+                    dest => dest.ProductDetails,
+                    opt => opt.MapFrom(src => src.ProductVariant) // Ánh xạ toàn bộ đối tượng ProductVariant đã Include
+                ); 
 
             // Các DTO khác không cần mapping trực tiếp:
             // - UploadDesignDto: Dùng để nhận IFormFile từ request, được xử lý thủ công trong service.

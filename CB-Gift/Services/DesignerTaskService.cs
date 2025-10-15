@@ -27,18 +27,34 @@ namespace CB_Gift.Services
                 .Include(od => od.Order)
                 .Include(od => od.ProductVariant.Product)
                 .Where(od => od.AssignedDesignerUserId == designerId &&
-                             od.NeedDesign == true)
-                            // (od.Order.StatusOrder == 3 || od.Order.StatusOrder == 6)) // Trạng thái NEEDDESIGN hoặc DESIGN_REDO
+                             od.NeedDesign == true &&
+                             (od.Order.StatusOrder == 3 || od.Order.StatusOrder == 4 || od.Order.StatusOrder == 5|| od.Order.StatusOrder == 6)) // Trạng thái NEEDDESIGN hoặc DESIGN_REDO
                 .Select(od => new DesignTaskDto {
                     OrderDetailId = od.OrderDetailId,
                     OrderId = od.OrderId,
                     OrderCode = od.Order.OrderCode,
                     ProductName = od.ProductVariant.Product.ProductName,
+                    ProductDescribe = od.ProductVariant.Product.Describe,
+                    ProductTemplate = od.ProductVariant.Product.Template,
+                    OrderStatus = od.Order.StatusOrder,
                     Quantity = od.Quantity,
                     LinkImg  = od.ProductVariant.Product.ItemLink,
                     Note  = od.Note,
-                    AssignedAt = od.AssignedAt
-                    })
+                    AssignedAt = od.AssignedAt,
+                    ProductDetails = od.ProductVariant != null ? new ProductDetails
+                    {
+                    ProductVariantId = od.ProductVariant.ProductVariantId.ToString(), // Assuming ProductVariantId is int
+                    LengthCm = od.ProductVariant.LengthCm,
+                    HeightCm = od.ProductVariant.HeightCm,
+                    WidthCm = od.ProductVariant.WidthCm,
+                    ThicknessMm = od.ProductVariant.ThicknessMm,
+                    SizeInch = od.ProductVariant.SizeInch,
+                    Layer = od.ProductVariant.Layer,
+                    CustomShape = od.ProductVariant.CustomShape,
+                    Sku = od.ProductVariant.Sku
+                    } : null 
+                     // =================================
+                })
                 .AsNoTracking()
                 .ToListAsync();
             return tasks;
@@ -212,6 +228,71 @@ namespace CB_Gift.Services
                 await transaction.RollbackAsync();
                 throw; // Ném lại lỗi để controller xử lý và trả về lỗi 500.
             }
+        }
+        /// <summary>
+        /// Cập nhật trạng thái thiết kế của một chi tiết đơn hàng.
+        /// </summary>
+        /// <param name="orderDetailId">ID chi tiết đơn hàng.</param>
+        /// <param name="newStatus">Trạng thái mới (3, 4, 5, hoặc 6).</param>
+        /// <returns>True nếu cập nhật thành công, False nếu thất bại hoặc không tìm thấy.</returns>
+        public async Task<bool> UpdateStatusAsync(int orderDetailId, int newStatus)
+        {
+            // === 1. Xác thực trạng thái đầu vào (Validation) ===
+            if (newStatus < 3 || newStatus > 6)
+            {
+                // Trả về false hoặc throw exception tùy theo quy ước của dự án
+                throw new ArgumentException("Invalid design status code provided.");
+            }
+
+            // === 2. Tìm kiếm chi tiết đơn hàng ===
+            // Giả định OrderDetail là tên bảng/entity
+            var orderDetail = await _context.OrderDetails
+                .Include(od=>od.Order)
+                .FirstOrDefaultAsync(od => od.OrderDetailId == orderDetailId);
+
+            if (orderDetail == null)
+            {
+                return false; // Không tìm thấy bản ghi
+            }
+
+            // === 3. Logic Nghiệp vụ (Business Rules) ===
+
+            // Ví dụ: Logic Accept Design (Chỉ cho phép chuyển từ NEEDDESIGN(3) sang DESIGNING(4))
+            if (orderDetail.Order.StatusOrder == 3 && newStatus == 4)
+            {
+                // Cập nhật trạng thái
+                orderDetail.Order.StatusOrder = newStatus;
+               // orderDetail.UpdatedAt = DateTime.UtcNow;
+            }
+            // Ví dụ: Logic Gửi QA (Chỉ cho phép chuyển từ DESIGNING(4) sang CHECKDESIGN(5))
+            else if (orderDetail.Order.StatusOrder == 4 && newStatus == 5)
+            {
+                // Cập nhật trạng thái
+                orderDetail.Order.StatusOrder = newStatus;
+               // orderDetail.UpdatedAt = DateTime.UtcNow;
+            }
+            // Ví dụ: Xử lý Redo (Chỉ cho phép chuyển từ DESIGN_REDO(6) sang DESIGNING(4))
+            else if (orderDetail.Order.StatusOrder == 6 && newStatus == 4)
+            {
+                // Cập nhật trạng thái
+                orderDetail.Order.StatusOrder = newStatus;
+             //   orderDetail.UpdatedAt = DateTime.UtcNow;
+            }
+            else if (orderDetail.Order.StatusOrder == newStatus)
+            {
+                // Trạng thái đã đúng, không cần cập nhật
+                return true;
+            }
+            else
+            {
+                // Trường hợp chuyển trạng thái không hợp lệ theo logic nghiệp vụ
+                throw new InvalidOperationException($"Cannot transition status from {orderDetail.Order.StatusOrder} to {newStatus}.");
+            }
+
+            // === 4. Lưu thay đổi vào Database ===
+            await _context.SaveChangesAsync();
+
+            return true;
         }
     }
 }
