@@ -87,7 +87,7 @@ export default function ManageOrder() {
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
   const [showMakeManualModal, setShowMakeManualModal] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [selectedOrder, setSelectedOrder] = useState(null); // This seems unused, consider removing
   const [isEditMode, setIsEditMode] = useState(false);
   const [editedOrder, setEditedOrder] = useState(null);
   const [page, setPage] = useState(1);
@@ -98,9 +98,9 @@ export default function ManageOrder() {
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [showCannotAssignDialog, setShowCannotAssignDialog] = useState(false);
   const [cannotAssignMessage, setCannotAssignMessage] = useState("");
-  const [showPopup, setShowPopup] = useState(false);
-  const [popupMessage, setPopupMessage] = useState("");
-  const [popupTitle, setPopupTitle] = useState("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false); // Added for dialog state management
+  const [showResultDialog, setShowResultDialog] = useState(false);
+  const [resultMessage, setResultMessage] = useState("");
 
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -121,21 +121,30 @@ export default function ManageOrder() {
         }
 
         const data = await response.json();
+        console.log("📦 Orders fetched:", data);
 
-        // Map API data to match table structure
         const mappedOrders = data.map((order) => ({
           id: order.orderId,
           orderId: order.orderCode,
-          orderDate: new Date(order.orderDate).toISOString().split("T")[0],
+          orderDate: new Date(order.orderDate).toISOString().split("T")[0], // Format: YYYY-MM-DD
           customerName: order.customerName,
-          phone: order.phone || "",
-          email: order.email || "",
-          address: order.address || "",
-          shipTo: `${order.shipCity || ""}, ${order.shipState || ""}, ${
-            order.shipCountry || ""
-          }`,
+          phone: "", // Not provided in API
+          email: "", // Not provided in API
+          products: order.details.map((detail) => ({
+            name: `Product ${detail.productVariantID}`,
+            quantity: detail.quantity,
+            price: detail.price,
+            size: "",
+            accessory: detail.accessory || "",
+            activeTTS: order.activeTTS || false, // Read from order level
+            linkFileDesign: detail.linkFileDesign,
+            linkThanksCard: detail.linkThanksCard,
+            linkImg: detail.linkImg,
+          })),
+          address: "", // Not provided in API
+          shipTo: "", // Not provided in API
           status: order.statusOderName,
-          totalAmount: `$${order.totalCost?.toFixed(2) || 0}`,
+          totalAmount: `$${order.totalCost.toFixed(2)}`,
           timeCreated: new Date(order.creationDate).toLocaleString(),
           selected: false,
           customerInfo: {
@@ -163,14 +172,8 @@ export default function ManageOrder() {
               url: order.details[0]?.linkFileDesign || "#",
             },
           },
-          products: order.details.map((detail) => ({
-            name: detail.productName || `Product ${detail.productVariantID}`,
-            quantity: detail.quantity,
-            price: detail.price,
-            size: detail.size || "",
-            accessory: detail.accessory || "",
-          })),
         }));
+        // </CHANGE>
 
         setOrders(mappedOrders);
       } catch (err) {
@@ -236,53 +239,46 @@ export default function ManageOrder() {
     },
   ];
 
+  let statsWithCounts = stats.map((stat) => ({
+    ...stat,
+    value: stat.statusFilter
+      ? orders.filter((o) => o.status === stat.statusFilter).length
+      : 0,
+  }));
+
+  statsWithCounts = statsWithCounts.map((stat, i) =>
+    i === 0
+      ? { ...stat, value: statsWithCounts.reduce((sum, s) => sum + s.value, 0) }
+      : stat
+  );
+
   const filteredOrders = orders.filter((order) => {
     const matchesSearch =
-      order.orderId.toString().includes(searchTerm.toLowerCase()) ||
+      order.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.details?.some((detail) =>
-        detail.note?.toLowerCase().includes(searchTerm.toLowerCase())
+      order.products.some((product) =>
+        product.name.toLowerCase().includes(searchTerm.toLowerCase())
       );
 
     const selectedStatConfig = stats.find(
       (stat) => stat.title === selectedStat
     );
-
     const matchesStatus =
       !selectedStatConfig?.statusFilter ||
       order.status === selectedStatConfig.statusFilter;
 
     let matchesDateRange = true;
-
     if (dateRange.from && dateRange.to) {
       const orderDate = new Date(order.orderDate);
-      const fromDate = new Date(dateRange.from);
-      const toDate = new Date(dateRange.to);
-
-      // 🧠 Fix: set giờ cuối ngày để bao gồm cả ngày to
-      toDate.setHours(23, 59, 59, 999);
-
-      matchesDateRange = orderDate >= fromDate && orderDate <= toDate;
+      matchesDateRange =
+        orderDate >= dateRange.from && orderDate <= dateRange.to;
     } else if (dateRange.from) {
       const orderDate = new Date(order.orderDate);
-      const fromDate = new Date(dateRange.from);
-
-      // Bao gồm toàn bộ ngày from
-      const fromEndOfDay = new Date(fromDate);
-      fromEndOfDay.setHours(23, 59, 59, 999);
-
-      matchesDateRange = orderDate >= fromDate && orderDate <= fromEndOfDay;
+      matchesDateRange =
+        orderDate.toDateString() === dateRange.from.toDateString();
     }
 
     return matchesSearch && matchesStatus && matchesDateRange;
-  });
-
-  // Cập nhật dynamic count cho từng status
-  const statsWithCounts = stats.map((stat) => {
-    const count = stat.statusFilter
-      ? orders.filter((order) => order.status === stat.statusFilter).length
-      : orders.length;
-    return { ...stat, value: count };
   });
 
   const sortedOrders = [...filteredOrders].sort((a, b) => {
@@ -461,8 +457,32 @@ export default function ManageOrder() {
     )}`;
   }
 
-  const handleDelete = (orderId) => {
-    console.log("Deleting order:", orderId);
+  const handleDelete = async (orderId) => {
+    if (!orderId) return;
+
+    try {
+      const response = await fetch(
+        `https://localhost:7015/api/Order/${orderId}`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        }
+      );
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setOrders((prev) => prev.filter((o) => o.id !== orderId));
+        setResultMessage(result.message || "✅ Xóa đơn hàng thành công.");
+      } else {
+        setResultMessage(result.message || "❌ Không thể xóa đơn hàng này.");
+      }
+    } catch (error) {
+      console.error("❌ Delete failed:", error);
+      setResultMessage("⚠️ Đã xảy ra lỗi khi xóa đơn hàng.");
+    } finally {
+      setShowResultDialog(true);
+    }
   };
 
   const handleSelectAll = () => {
@@ -495,7 +515,7 @@ export default function ManageOrder() {
       selectedOrders.includes(order.id)
     );
     const nonDraftOrders = selectedOrdersData.filter(
-      (order) => order.status !== "Draft"
+      (order) => order.status !== "Draft (Nháp)"
     );
 
     if (nonDraftOrders.length > 0) {
@@ -523,10 +543,94 @@ export default function ManageOrder() {
     link.click();
   };
 
-  const handleViewDetails = (order) => {
-    setSelectedOrder(order);
-    setEditedOrder({ ...order });
-    setIsEditMode(false);
+  const handleViewDetails = async (order) => {
+    try {
+      console.log("🧾 Selected order (before fetch):", order);
+
+      const res = await fetch(`https://localhost:7015/api/Seller`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const allOrders = await res.json();
+      console.log("📦 All orders fetched:", allOrders);
+
+      const fullOrder = allOrders.find(
+        (o) =>
+          o.orderCode === order.orderId || // FE displays as "ORD-xxxx"
+          o.orderId == order.id // fallback for numeric id
+      );
+
+      console.log("✅ Full order fetched:", fullOrder);
+      console.log("🧩 Details inside order:", fullOrder?.details);
+
+      if (!fullOrder) {
+        alert("Không tìm thấy chi tiết đơn hàng này!");
+        return;
+      }
+
+      const mappedOrder = {
+        id: fullOrder.orderId,
+        orderId: fullOrder.orderCode,
+        orderDate: new Date(fullOrder.orderDate).toISOString().split("T")[0],
+        customerName: fullOrder.customerName,
+        phone: fullOrder.phone || "",
+        email: fullOrder.email || "",
+        address: fullOrder.address || "",
+        shipTo: `${fullOrder.shipCity || ""}, ${fullOrder.shipState || ""}, ${
+          fullOrder.shipCountry || ""
+        }`,
+        status: fullOrder.statusOderName,
+        totalAmount: `$${fullOrder.totalCost?.toFixed(2) || 0}`,
+        timeCreated: new Date(fullOrder.creationDate).toLocaleString(),
+        customerInfo: {
+          name: fullOrder.customerName,
+          phone: fullOrder.phone || "",
+          email: fullOrder.email || "",
+          address: fullOrder.address || "",
+          address1: fullOrder.address1 || "",
+          city: fullOrder.shipCity || "",
+          state: fullOrder.shipState || "",
+          zipcode: fullOrder.zipcode || "",
+          country: fullOrder.shipCountry || "",
+        },
+        orderNotes: fullOrder.details[0]?.note || "",
+        uploadedFiles: {
+          linkImg: {
+            name: "image.jpg",
+            url: fullOrder.details[0]?.linkImg || "/placeholder.svg",
+          },
+          linkThanksCard: {
+            name: "thanks-card.jpg",
+            url: fullOrder.details[0]?.linkThanksCard || "#",
+          },
+          linkFileDesign: {
+            name: "design-file.psd",
+            url: fullOrder.details[0]?.linkFileDesign || "#",
+          },
+        },
+        products: fullOrder.details.map((detail) => ({
+          name: detail.productName || `Product ${detail.productVariantID}`,
+          quantity: detail.quantity,
+          price: detail.price,
+          size: detail.size || "",
+          accessory: detail.accessory || "",
+          activeTTS: fullOrder.activeTTS || false, // Read from order level
+          linkFileDesign: detail.linkFileDesign,
+          linkThanksCard: detail.linkThanksCard,
+          linkImg: detail.linkImg,
+        })),
+      };
+      // </CHANGE>
+
+      console.log("🎯 Mapped order for modal:", mappedOrder);
+
+      setEditedOrder(mappedOrder);
+      setIsDialogOpen(true); // Use setIsDialogOpen to control the Dialog
+    } catch (err) {
+      console.error("❌ Failed to fetch order details:", err);
+      alert("Failed to load order details. Please try again.");
+    }
   };
 
   const handleEditMode = () => {
@@ -536,12 +640,14 @@ export default function ManageOrder() {
   const handleSaveUpdate = () => {
     console.log("Saving updated order:", editedOrder);
     setIsEditMode(false);
-    setSelectedOrder(editedOrder);
+    setSelectedOrder(editedOrder); // This line might be redundant if selectedOrder is unused
+    setIsDialogOpen(false); // Close the dialog after saving
   };
 
   const handleCancelEdit = () => {
-    setEditedOrder({ ...selectedOrder });
+    setEditedOrder({ ...selectedOrder }); // This might be problematic if selectedOrder is null or stale
     setIsEditMode(false);
+    setIsDialogOpen(false); // Close the dialog on cancel
   };
 
   const handleFieldChange = (field, value) => {
@@ -618,6 +724,12 @@ export default function ManageOrder() {
         return (
           <Badge className="bg-gray-500 hover:bg-gray-600 text-white">
             Draft
+          </Badge>
+        );
+      case "Designing":
+        return (
+          <Badge className="bg-purple-500 hover:bg-purple-600 text-white">
+            Designing
           </Badge>
         );
       default:
@@ -902,9 +1014,9 @@ export default function ManageOrder() {
                           >
                             Customer {renderSortIcon("customerName")}
                           </TableHead>
-                          <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
+                          {/* <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
                             Address
-                          </TableHead>
+                          </TableHead> */}
                           <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
                             Status
                           </TableHead>
@@ -961,11 +1073,11 @@ export default function ManageOrder() {
                                   )}
                                 </div>
                               </TableCell>
-                              <TableCell className="text-gray-600 max-w-[200px]">
+                              {/* <TableCell className="text-gray-600 max-w-[200px]">
                                 <div className="truncate" title={order.address}>
                                   {order.address || "N/A"}
                                 </div>
-                              </TableCell>
+                              </TableCell> */}
                               <TableCell className="whitespace-nowrap">
                                 {getStatusBadge(order.status)}
                               </TableCell>
@@ -974,7 +1086,12 @@ export default function ManageOrder() {
                               </TableCell>
                               <TableCell className="whitespace-nowrap">
                                 <div className="flex items-center gap-2">
-                                  <Dialog>
+                                  <Dialog
+                                    open={isDialogOpen}
+                                    onOpenChange={setIsDialogOpen}
+                                  >
+                                    {" "}
+                                    {/* Use isDialogOpen here */}
                                     <DialogTrigger asChild>
                                       <Button
                                         variant="outline"
@@ -988,7 +1105,7 @@ export default function ManageOrder() {
                                         </span>
                                       </Button>
                                     </DialogTrigger>
-                                    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                                    <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
                                       <DialogHeader>
                                         <DialogTitle className="flex items-center justify-between">
                                           <div className="flex items-center gap-2">
@@ -996,30 +1113,18 @@ export default function ManageOrder() {
                                             Order Details -{" "}
                                             {editedOrder?.orderId}
                                           </div>
-                                          {!isEditMode && (
-                                            <Button
-                                              variant="outline"
-                                              size="sm"
-                                              onClick={handleEditMode}
-                                              className="bg-transparent hover:bg-gray-50"
-                                            >
-                                              <Edit className="h-4 w-4 mr-2" />
-                                              Edit Order
-                                            </Button>
-                                          )}
                                         </DialogTitle>
                                       </DialogHeader>
                                       {editedOrder && (
                                         <div className="space-y-6">
-                                          {/* Customer Information */}
                                           <div className="bg-gray-50 p-4 rounded-lg">
                                             <h3 className="font-semibold text-lg mb-3 text-gray-900">
                                               Customer Information
                                             </h3>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                               <div>
                                                 <Label className="text-sm text-gray-500 font-medium">
-                                                  Name
+                                                  Name *
                                                 </Label>
                                                 {isEditMode ? (
                                                   <Input
@@ -1037,16 +1142,14 @@ export default function ManageOrder() {
                                                   />
                                                 ) : (
                                                   <p className="font-medium text-gray-900 mt-1">
-                                                    {
-                                                      editedOrder.customerInfo
-                                                        .name
-                                                    }
+                                                    {editedOrder.customerInfo
+                                                      .name || "N/A"}
                                                   </p>
                                                 )}
                                               </div>
                                               <div>
                                                 <Label className="text-sm text-gray-500 font-medium">
-                                                  Phone
+                                                  Phone *
                                                 </Label>
                                                 {isEditMode ? (
                                                   <Input
@@ -1064,16 +1167,14 @@ export default function ManageOrder() {
                                                   />
                                                 ) : (
                                                   <p className="font-medium text-gray-900 mt-1">
-                                                    {
-                                                      editedOrder.customerInfo
-                                                        .phone
-                                                    }
+                                                    {editedOrder.customerInfo
+                                                      .phone || "N/A"}
                                                   </p>
                                                 )}
                                               </div>
                                               <div>
                                                 <Label className="text-sm text-gray-500 font-medium">
-                                                  Email
+                                                  Email *
                                                 </Label>
                                                 {isEditMode ? (
                                                   <Input
@@ -1091,20 +1192,21 @@ export default function ManageOrder() {
                                                   />
                                                 ) : (
                                                   <p className="font-medium text-gray-900 mt-1">
-                                                    {
-                                                      editedOrder.customerInfo
-                                                        .email
-                                                    }
+                                                    {editedOrder.customerInfo
+                                                      .email || "N/A"}
                                                   </p>
                                                 )}
                                               </div>
                                               <div>
                                                 <Label className="text-sm text-gray-500 font-medium">
-                                                  Address
+                                                  Address *
                                                 </Label>
                                                 {isEditMode ? (
                                                   <Input
-                                                    value={`${editedOrder.customerInfo.address}, ${editedOrder.customerInfo.city}, ${editedOrder.customerInfo.state} ${editedOrder.customerInfo.zipcode}`}
+                                                    value={
+                                                      editedOrder.customerInfo
+                                                        .address
+                                                    }
                                                     onChange={(e) =>
                                                       handleCustomerInfoChange(
                                                         "address",
@@ -1115,31 +1217,139 @@ export default function ManageOrder() {
                                                   />
                                                 ) : (
                                                   <p className="font-medium text-gray-900 mt-1">
-                                                    {
+                                                    {editedOrder.customerInfo
+                                                      .address || "N/A"}
+                                                  </p>
+                                                )}
+                                              </div>
+                                              <div>
+                                                <Label className="text-sm text-gray-500 font-medium">
+                                                  Address Line 2
+                                                </Label>
+                                                {isEditMode ? (
+                                                  <Input
+                                                    value={
                                                       editedOrder.customerInfo
-                                                        .address
+                                                        .address1 || ""
                                                     }
-                                                    ,{" "}
-                                                    {
-                                                      editedOrder.customerInfo
-                                                        .city
+                                                    onChange={(e) =>
+                                                      handleCustomerInfoChange(
+                                                        "address1",
+                                                        e.target.value
+                                                      )
                                                     }
-                                                    ,{" "}
-                                                    {
-                                                      editedOrder.customerInfo
-                                                        .state
-                                                    }{" "}
-                                                    {
+                                                    className="mt-1"
+                                                  />
+                                                ) : (
+                                                  <p className="font-medium text-gray-900 mt-1">
+                                                    {editedOrder.customerInfo
+                                                      .address1 || "N/A"}
+                                                  </p>
+                                                )}
+                                              </div>
+                                              <div>
+                                                <Label className="text-sm text-gray-500 font-medium">
+                                                  Zipcode *
+                                                </Label>
+                                                {isEditMode ? (
+                                                  <Input
+                                                    value={
                                                       editedOrder.customerInfo
                                                         .zipcode
                                                     }
+                                                    onChange={(e) =>
+                                                      handleCustomerInfoChange(
+                                                        "zipcode",
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                    className="mt-1"
+                                                  />
+                                                ) : (
+                                                  <p className="font-medium text-gray-900 mt-1">
+                                                    {editedOrder.customerInfo
+                                                      .zipcode || "N/A"}
+                                                  </p>
+                                                )}
+                                              </div>
+                                              <div>
+                                                <Label className="text-sm text-gray-500 font-medium">
+                                                  Ship City *
+                                                </Label>
+                                                {isEditMode ? (
+                                                  <Input
+                                                    value={
+                                                      editedOrder.customerInfo
+                                                        .city
+                                                    }
+                                                    onChange={(e) =>
+                                                      handleCustomerInfoChange(
+                                                        "city",
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                    className="mt-1"
+                                                  />
+                                                ) : (
+                                                  <p className="font-medium text-gray-900 mt-1">
+                                                    {editedOrder.customerInfo
+                                                      .city || "N/A"}
+                                                  </p>
+                                                )}
+                                              </div>
+                                              <div>
+                                                <Label className="text-sm text-gray-500 font-medium">
+                                                  Ship State *
+                                                </Label>
+                                                {isEditMode ? (
+                                                  <Input
+                                                    value={
+                                                      editedOrder.customerInfo
+                                                        .state
+                                                    }
+                                                    onChange={(e) =>
+                                                      handleCustomerInfoChange(
+                                                        "state",
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                    className="mt-1"
+                                                  />
+                                                ) : (
+                                                  <p className="font-medium text-gray-900 mt-1">
+                                                    {editedOrder.customerInfo
+                                                      .state || "N/A"}
+                                                  </p>
+                                                )}
+                                              </div>
+                                              <div>
+                                                <Label className="text-sm text-gray-500 font-medium">
+                                                  Ship Country *
+                                                </Label>
+                                                {isEditMode ? (
+                                                  <Input
+                                                    value={
+                                                      editedOrder.customerInfo
+                                                        .country
+                                                    }
+                                                    onChange={(e) =>
+                                                      handleCustomerInfoChange(
+                                                        "country",
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                    className="mt-1"
+                                                  />
+                                                ) : (
+                                                  <p className="font-medium text-gray-900 mt-1">
+                                                    {editedOrder.customerInfo
+                                                      .country || "N/A"}
                                                   </p>
                                                 )}
                                               </div>
                                             </div>
                                           </div>
 
-                                          {/* Product Details */}
                                           <div>
                                             <h3 className="font-semibold text-lg mb-3 text-gray-900">
                                               Product Details
@@ -1149,12 +1359,12 @@ export default function ManageOrder() {
                                                 (product, index) => (
                                                   <div
                                                     key={index}
-                                                    className="border border-gray-200 rounded-lg p-4"
+                                                    className="border border-gray-200 rounded-lg p-4 bg-white"
                                                   >
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                                                       <div>
                                                         <Label className="text-sm text-gray-500 font-medium">
-                                                          Product
+                                                          Product Name
                                                         </Label>
                                                         {isEditMode ? (
                                                           <Input
@@ -1176,7 +1386,7 @@ export default function ManageOrder() {
                                                       </div>
                                                       <div>
                                                         <Label className="text-sm text-gray-500 font-medium">
-                                                          Size
+                                                          Size/Variant
                                                         </Label>
                                                         {isEditMode ? (
                                                           <Input
@@ -1192,7 +1402,8 @@ export default function ManageOrder() {
                                                           />
                                                         ) : (
                                                           <p className="font-medium text-gray-900 mt-1">
-                                                            {product.size}
+                                                            {product.size ||
+                                                              "N/A"}
                                                           </p>
                                                         )}
                                                       </div>
@@ -1225,6 +1436,31 @@ export default function ManageOrder() {
                                                       </div>
                                                       <div>
                                                         <Label className="text-sm text-gray-500 font-medium">
+                                                          Unit Price
+                                                        </Label>
+                                                        <p className="font-medium text-gray-900 mt-1">
+                                                          $
+                                                          {product.price?.toFixed(
+                                                            2
+                                                          ) || "0.00"}
+                                                        </p>
+                                                      </div>
+                                                      <div>
+                                                        <Label className="text-sm text-gray-500 font-medium">
+                                                          Total Price
+                                                        </Label>
+                                                        <p className="font-bold text-blue-600 mt-1">
+                                                          $
+                                                          {(
+                                                            (product.price ||
+                                                              0) *
+                                                            (product.quantity ||
+                                                              1)
+                                                          ).toFixed(2)}
+                                                        </p>
+                                                      </div>
+                                                      <div>
+                                                        <Label className="text-sm text-gray-500 font-medium">
                                                           Accessory
                                                         </Label>
                                                         {isEditMode ? (
@@ -1243,11 +1479,222 @@ export default function ManageOrder() {
                                                           />
                                                         ) : (
                                                           <p className="font-medium text-gray-900 mt-1">
-                                                            {product.accessory}
+                                                            {product.accessory ||
+                                                              "None"}
                                                           </p>
                                                         )}
                                                       </div>
+                                                      <div className="flex items-center space-x-2 lg:col-span-2">
+                                                        <Checkbox
+                                                          id={`activeTTS-${index}`}
+                                                          checked={
+                                                            product.activeTTS ||
+                                                            false
+                                                          }
+                                                          disabled={!isEditMode}
+                                                          onCheckedChange={(
+                                                            checked
+                                                          ) =>
+                                                            handleProductChange(
+                                                              index,
+                                                              "activeTTS",
+                                                              checked
+                                                            )
+                                                          }
+                                                        />
+                                                        <Label
+                                                          htmlFor={`activeTTS-${index}`}
+                                                          className="text-sm"
+                                                        >
+                                                          Active TTS (+$1.00)
+                                                        </Label>
+                                                      </div>
                                                     </div>
+
+                                                    <div className="mt-4 pt-4 border-t border-gray-200">
+                                                      <h4 className="font-medium text-sm text-gray-700 mb-3">
+                                                        Order Files for this
+                                                        Product
+                                                      </h4>
+                                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                        {/* Design File */}
+                                                        <div className="border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow bg-gray-50">
+                                                          <Label className="text-xs text-gray-500 font-medium">
+                                                            Design File
+                                                          </Label>
+                                                          <div className="mt-2">
+                                                            {product.linkFileDesign &&
+                                                            product.linkFileDesign !==
+                                                              "#" ? (
+                                                              <>
+                                                                <img
+                                                                  src={
+                                                                    product.linkFileDesign ||
+                                                                    "/placeholder.svg"
+                                                                  }
+                                                                  alt="Design File"
+                                                                  className="w-full h-32 object-cover rounded border"
+                                                                  onError={(
+                                                                    e
+                                                                  ) => {
+                                                                    console.log(
+                                                                      "[v0] Design file image failed to load:",
+                                                                      e.target
+                                                                        .src
+                                                                    );
+                                                                    e.target.style.display =
+                                                                      "none";
+                                                                    e.target.nextElementSibling.style.display =
+                                                                      "flex";
+                                                                  }}
+                                                                />
+                                                                <div
+                                                                  className="w-full h-32 bg-gray-100 rounded border flex items-center justify-center"
+                                                                  style={{
+                                                                    display:
+                                                                      "none",
+                                                                  }}
+                                                                >
+                                                                  <QrCode className="h-8 w-8 text-gray-400" />
+                                                                </div>
+                                                              </>
+                                                            ) : (
+                                                              <div className="w-full h-32 bg-gray-100 rounded border flex items-center justify-center">
+                                                                <QrCode className="h-8 w-8 text-gray-400" />
+                                                              </div>
+                                                            )}
+                                                            <p className="text-xs mt-2 text-gray-600 truncate">
+                                                              design-file-
+                                                              {index + 1}.psd
+                                                            </p>
+                                                            {product.linkFileDesign &&
+                                                              product.linkFileDesign !==
+                                                                "#" && (
+                                                                <a
+                                                                  href={
+                                                                    product.linkFileDesign
+                                                                  }
+                                                                  target="_blank"
+                                                                  rel="noopener noreferrer"
+                                                                  className="text-xs text-blue-600 hover:underline block mt-1 truncate"
+                                                                >
+                                                                  View file
+                                                                </a>
+                                                              )}
+                                                            <Button
+                                                              variant="outline"
+                                                              size="sm"
+                                                              className="mt-2 w-full bg-transparent hover:bg-gray-50"
+                                                              onClick={() =>
+                                                                handleDownload({
+                                                                  name: `design-file-${
+                                                                    index + 1
+                                                                  }.psd`,
+                                                                  url: product.linkFileDesign,
+                                                                })
+                                                              }
+                                                              disabled={
+                                                                !product.linkFileDesign ||
+                                                                product.linkFileDesign ===
+                                                                  "#"
+                                                              }
+                                                            >
+                                                              <Download className="h-4 w-4 mr-2" />
+                                                              Download
+                                                            </Button>
+                                                          </div>
+                                                        </div>
+
+                                                        {/* Thanks Card */}
+                                                        <div className="border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow bg-gray-50">
+                                                          <Label className="text-xs text-gray-500 font-medium">
+                                                            Thanks Card
+                                                          </Label>
+                                                          <div className="mt-2">
+                                                            {product.linkThanksCard &&
+                                                            product.linkThanksCard !==
+                                                              "#" ? (
+                                                              <>
+                                                                <img
+                                                                  src={
+                                                                    product.linkThanksCard ||
+                                                                    "/placeholder.svg"
+                                                                  }
+                                                                  alt="Thanks Card"
+                                                                  className="w-full h-32 object-cover rounded border"
+                                                                  onError={(
+                                                                    e
+                                                                  ) => {
+                                                                    console.log(
+                                                                      "[v0] Thanks card image failed to load:",
+                                                                      e.target
+                                                                        .src
+                                                                    );
+                                                                    e.target.style.display =
+                                                                      "none";
+                                                                    e.target.nextElementSibling.style.display =
+                                                                      "flex";
+                                                                  }}
+                                                                />
+                                                                <div
+                                                                  className="w-full h-32 bg-gray-100 rounded border flex items-center justify-center"
+                                                                  style={{
+                                                                    display:
+                                                                      "none",
+                                                                  }}
+                                                                >
+                                                                  <QrCode className="h-8 w-8 text-gray-400" />
+                                                                </div>
+                                                              </>
+                                                            ) : (
+                                                              <div className="w-full h-32 bg-gray-100 rounded border flex items-center justify-center">
+                                                                <QrCode className="h-8 w-8 text-gray-400" />
+                                                              </div>
+                                                            )}
+                                                            <p className="text-xs mt-2 text-gray-600 truncate">
+                                                              thanks-card-
+                                                              {index + 1}.jpg
+                                                            </p>
+                                                            {product.linkThanksCard &&
+                                                              product.linkThanksCard !==
+                                                                "#" && (
+                                                                <a
+                                                                  href={
+                                                                    product.linkThanksCard
+                                                                  }
+                                                                  target="_blank"
+                                                                  rel="noopener noreferrer"
+                                                                  className="text-xs text-blue-600 hover:underline block mt-1 truncate"
+                                                                >
+                                                                  View file
+                                                                </a>
+                                                              )}
+                                                            <Button
+                                                              variant="outline"
+                                                              size="sm"
+                                                              className="mt-2 w-full bg-transparent hover:bg-gray-50"
+                                                              onClick={() =>
+                                                                handleDownload({
+                                                                  name: `thanks-card-${
+                                                                    index + 1
+                                                                  }.jpg`,
+                                                                  url: product.linkThanksCard,
+                                                                })
+                                                              }
+                                                              disabled={
+                                                                !product.linkThanksCard ||
+                                                                product.linkThanksCard ===
+                                                                  "#"
+                                                              }
+                                                            >
+                                                              <Download className="h-4 w-4 mr-2" />
+                                                              Download
+                                                            </Button>
+                                                          </div>
+                                                        </div>
+                                                      </div>
+                                                    </div>
+                                                    {/* </CHANGE> */}
                                                   </div>
                                                 )
                                               )}
@@ -1280,12 +1727,11 @@ export default function ManageOrder() {
                                             )}
                                           </div>
 
-                                          {/* Order Status */}
                                           <div className="bg-gray-50 p-4 rounded-lg">
                                             <h3 className="font-semibold text-lg mb-3 text-gray-900">
-                                              Order Status
+                                              Order Status & Timeline
                                             </h3>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                               <div>
                                                 <Label className="text-sm text-gray-500 font-medium">
                                                   Current Status
@@ -1304,17 +1750,17 @@ export default function ManageOrder() {
                                                       <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
+                                                      <SelectItem value="Draft">
+                                                        Draft
+                                                      </SelectItem>
                                                       <SelectItem value="Pending Design">
                                                         Pending Design
                                                       </SelectItem>
-                                                      <SelectItem value="In Progress">
-                                                        In Progress
-                                                      </SelectItem>
-                                                      <SelectItem value="Completed">
-                                                        Completed
-                                                      </SelectItem>
                                                       <SelectItem value="Assigned Designer">
                                                         Assigned Designer
+                                                      </SelectItem>
+                                                      <SelectItem value="Designing">
+                                                        Designing
                                                       </SelectItem>
                                                       <SelectItem value="Check File Design">
                                                         Check File Design
@@ -1325,8 +1771,11 @@ export default function ManageOrder() {
                                                       <SelectItem value="Seller Reject Design">
                                                         Seller Reject Design
                                                       </SelectItem>
-                                                      <SelectItem value="Draft">
-                                                        Draft
+                                                      <SelectItem value="In Progress">
+                                                        In Progress
+                                                      </SelectItem>
+                                                      <SelectItem value="Completed">
+                                                        Completed
                                                       </SelectItem>
                                                     </SelectContent>
                                                   </Select>
@@ -1346,114 +1795,30 @@ export default function ManageOrder() {
                                                   {editedOrder.orderDate}
                                                 </p>
                                               </div>
-                                            </div>
-                                          </div>
-
-                                          {/* Order Files */}
-                                          <div>
-                                            <h3 className="font-semibold text-lg mb-3 text-gray-900">
-                                              Order Files
-                                            </h3>
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                              <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                                              <div>
                                                 <Label className="text-sm text-gray-500 font-medium">
-                                                  Reference Image
+                                                  Created Time
                                                 </Label>
-                                                <div className="mt-2">
-                                                  <img
-                                                    src={
-                                                      editedOrder.uploadedFiles
-                                                        .linkImg.url ||
-                                                      "/placeholder.svg"
-                                                    }
-                                                    alt="Reference"
-                                                    className="w-full h-32 object-cover rounded border"
-                                                  />
-                                                  <p className="text-sm mt-2 text-gray-600">
-                                                    {
-                                                      editedOrder.uploadedFiles
-                                                        .linkImg.name
-                                                    }
-                                                  </p>
-                                                  <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="mt-2 w-full bg-transparent hover:bg-gray-50"
-                                                    onClick={() =>
-                                                      handleDownload(
-                                                        editedOrder
-                                                          .uploadedFiles.linkImg
-                                                      )
-                                                    }
-                                                  >
-                                                    <Download className="h-4 w-4 mr-2" />
-                                                    Download
-                                                  </Button>
-                                                </div>
+                                                <p className="font-medium text-gray-900 mt-1">
+                                                  {editedOrder.timeCreated ||
+                                                    "N/A"}
+                                                </p>
                                               </div>
-
-                                              <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                                              <div>
                                                 <Label className="text-sm text-gray-500 font-medium">
-                                                  Thanks Card
+                                                  Order ID
                                                 </Label>
-                                                <div className="mt-2">
-                                                  <div className="w-full h-32 bg-gray-100 rounded border flex items-center justify-center">
-                                                    <QrCode className="h-8 w-8 text-gray-400" />
-                                                  </div>
-                                                  <p className="text-sm mt-2 text-gray-600">
-                                                    {
-                                                      editedOrder.uploadedFiles
-                                                        .linkThanksCard.name
-                                                    }
-                                                  </p>
-                                                  <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="mt-2 w-full bg-transparent hover:bg-gray-50"
-                                                    onClick={() =>
-                                                      handleDownload(
-                                                        editedOrder
-                                                          .uploadedFiles
-                                                          .linkThanksCard
-                                                      )
-                                                    }
-                                                  >
-                                                    <Download className="h-4 w-4 mr-2" />
-                                                    Download
-                                                  </Button>
-                                                </div>
+                                                <p className="font-medium text-gray-900 mt-1">
+                                                  {editedOrder.orderId}
+                                                </p>
                                               </div>
-
-                                              <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                                              <div>
                                                 <Label className="text-sm text-gray-500 font-medium">
-                                                  Design File
+                                                  Total Amount
                                                 </Label>
-                                                <div className="mt-2">
-                                                  <div className="w-full h-32 bg-gray-100 rounded border flex items-center justify-center">
-                                                    <QrCode className="h-8 w-8 text-gray-400" />
-                                                  </div>
-                                                  <p className="text-sm mt-2 text-gray-600">
-                                                    {
-                                                      editedOrder.uploadedFiles
-                                                        .linkFileDesign.name
-                                                    }
-                                                  </p>
-                                                  <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="mt-2 w-full bg-transparent hover:bg-gray-50"
-                                                    onClick={() =>
-                                                      handleDownload(
-                                                        editedOrder
-                                                          .uploadedFiles
-                                                          .linkFileDesign
-                                                      )
-                                                    }
-                                                  >
-                                                    <Download className="h-4 w-4 mr-2" />
-                                                    Download
-                                                  </Button>
-                                                </div>
+                                                <p className="font-bold text-green-600 text-lg mt-1">
+                                                  {editedOrder.totalAmount}
+                                                </p>
                                               </div>
                                             </div>
                                           </div>
@@ -1622,6 +1987,23 @@ export default function ManageOrder() {
               )}
             </div>
           </div>
+          {/* Result Popup */}
+          <AlertDialog
+            open={showResultDialog}
+            onOpenChange={setShowResultDialog}
+          >
+            <AlertDialogContent className="max-w-sm">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Kết quả thao tác</AlertDialogTitle>
+                <AlertDialogDescription>{resultMessage}</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogAction onClick={() => setShowResultDialog(false)}>
+                  OK
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </main>
       </div>
 

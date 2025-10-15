@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useRef } from "react";
 import {
   Select,
   SelectContent,
@@ -70,6 +71,10 @@ export default function MakeManualModal({ isOpen, onClose }) {
   const [errorMessage, setErrorMessage] = useState("");
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const [orderId, setOrderId] = useState("");
+  const [activeTTS, setActiveTTS] = useState(false);
+  const linkThanksCardRef = useRef(null);
+  const linkFileDesignRef = useRef(null);
 
   const [customerInfo, setCustomerInfo] = useState({
     name: "",
@@ -213,10 +218,12 @@ export default function MakeManualModal({ isOpen, onClose }) {
   ]);
 
   const calculateTotalMoney = () => {
-    return cartProducts.reduce(
-      (total, product) => total + product.totalPrice,
+    let total = cartProducts.reduce(
+      (sum, product) => sum + product.totalPrice,
       0
     );
+    if (activeTTS) total += 1; // ✅ cộng thêm 1$ khi bật Active TTS tổng
+    return total;
   };
 
   const handleNext = () => {
@@ -414,13 +421,13 @@ export default function MakeManualModal({ isOpen, onClose }) {
         shipCountry: customerInfo.shipCountry,
       },
       orderCreate: {
-        orderCode: `ORD-${Date.now()}`,
+        orderCode: orderId?.trim() || `ORD-${Date.now()}`,
         endCustomerID: 0,
         totalCost: calculateTotalMoney(),
         sellerUserId: null,
         orderDate: new Date().toISOString(),
         costScan: 1,
-        activeTTS: cartProducts.some((p) => p.config.activeTTS),
+        activeTTS: activeTTS,
         tracking: "",
         productionStatus: "Pending",
         paymentStatus: "Unpaid",
@@ -698,6 +705,21 @@ export default function MakeManualModal({ isOpen, onClose }) {
         </div>
       )}
 
+      {/* Nhập Order ID */}
+      <div className="mt-2">
+        <Label htmlFor="orderId" className="text-sm font-medium text-gray-700">
+          Order ID *
+        </Label>
+        <input
+          id="orderId"
+          type="text"
+          value={orderId}
+          onChange={(e) => setOrderId(e.target.value)}
+          placeholder="Nhập Order ID..."
+          className="border border-gray-300 rounded-md px-3 py-2 w-full sm:w-1/2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        />
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Select Size (map từ variants) */}
         <div>
@@ -739,10 +761,10 @@ export default function MakeManualModal({ isOpen, onClose }) {
             id="linkThanksCard"
             type="file"
             accept="image/*"
+            ref={linkThanksCardRef}
             onChange={(e) => handleFileUpload("linkThanksCard", e)}
           />
 
-          {/* Nếu đã upload */}
           {currentProductConfig.linkThanksCard && (
             <div className="mt-2 space-y-2">
               <p className="text-sm text-green-600 flex items-center gap-1">
@@ -756,19 +778,33 @@ export default function MakeManualModal({ isOpen, onClose }) {
                 </a>
               </p>
 
-              {/* Hiển thị ảnh nhỏ */}
-              {currentProductConfig.linkThanksCard.endsWith(".png") ||
-              currentProductConfig.linkThanksCard.endsWith(".jpg") ||
-              currentProductConfig.linkThanksCard.endsWith(".jpeg") ? (
-                <img
-                  src={currentProductConfig.linkThanksCard}
-                  alt="Thanks Card Preview"
-                  className="w-20 h-20 object-cover rounded border border-gray-300 shadow-sm"
-                />
-              ) : (
-                <p className="text-xs text-gray-500">
-                  (No image preview available)
-                </p>
+              {/* Ảnh + nút X nằm trong cùng khung */}
+              {(currentProductConfig.linkThanksCard.endsWith(".png") ||
+                currentProductConfig.linkThanksCard.endsWith(".jpg") ||
+                currentProductConfig.linkThanksCard.endsWith(".jpeg")) && (
+                <div className="relative inline-block">
+                  <img
+                    src={currentProductConfig.linkThanksCard}
+                    alt="Thanks Card Preview"
+                    className="w-20 h-20 object-cover rounded border border-gray-300 shadow-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentProductConfig((prev) => ({
+                        ...prev,
+                        linkThanksCard: null,
+                      }));
+                      // ✅ Reset input file để hiện “No file chosen”
+                      if (linkThanksCardRef.current) {
+                        linkThanksCardRef.current.value = "";
+                      }
+                    }}
+                    className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600 translate-x-1 -translate-y-1"
+                  >
+                    ×
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -781,10 +817,10 @@ export default function MakeManualModal({ isOpen, onClose }) {
             id="linkFileDesign"
             type="file"
             accept="image/*,.pdf,.zip,.ai,.psd"
+            ref={linkFileDesignRef}
             onChange={(e) => handleFileUpload("linkFileDesign", e)}
           />
 
-          {/* Nếu đã upload */}
           {currentProductConfig.linkFileDesign && (
             <div className="mt-2 space-y-2">
               <p className="text-sm text-green-600 flex items-center gap-1">
@@ -798,19 +834,32 @@ export default function MakeManualModal({ isOpen, onClose }) {
                 </a>
               </p>
 
-              {/* Hiển thị ảnh nhỏ */}
-              {currentProductConfig.linkFileDesign.endsWith(".png") ||
-              currentProductConfig.linkFileDesign.endsWith(".jpg") ||
-              currentProductConfig.linkFileDesign.endsWith(".jpeg") ? (
-                <img
-                  src={currentProductConfig.linkFileDesign}
-                  alt="Design File Preview"
-                  className="w-20 h-20 object-cover rounded border border-gray-300 shadow-sm"
-                />
-              ) : (
-                <p className="text-xs text-gray-500">
-                  (No image preview available)
-                </p>
+              {(currentProductConfig.linkFileDesign.endsWith(".png") ||
+                currentProductConfig.linkFileDesign.endsWith(".jpg") ||
+                currentProductConfig.linkFileDesign.endsWith(".jpeg")) && (
+                <div className="relative inline-block">
+                  <img
+                    src={currentProductConfig.linkFileDesign}
+                    alt="Design File Preview"
+                    className="w-20 h-20 object-cover rounded border border-gray-300 shadow-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentProductConfig((prev) => ({
+                        ...prev,
+                        linkFileDesign: null,
+                      }));
+                      // ✅ Reset input file để hiện “No file chosen”
+                      if (linkFileDesignRef.current) {
+                        linkFileDesignRef.current.value = "";
+                      }
+                    }}
+                    className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600 translate-x-1 -translate-y-1"
+                  >
+                    ×
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -824,29 +873,24 @@ export default function MakeManualModal({ isOpen, onClose }) {
             type="number"
             min="1"
             value={currentProductConfig.quantity}
-            onChange={(e) =>
-              setCurrentProductConfig((prev) => ({
-                ...prev,
-                quantity: e.target.value,
-              }))
-            }
+            onChange={(e) => {
+              const val = e.target.value;
+              // Chỉ chấp nhận ký tự số & >= 1
+              if (/^\d*$/.test(val)) {
+                const num = parseInt(val, 10);
+                if (isNaN(num) || num < 1) return;
+                setCurrentProductConfig((prev) => ({
+                  ...prev,
+                  quantity: num,
+                }));
+              }
+            }}
+            onKeyDown={(e) => {
+              // Ngăn nhập ký tự không hợp lệ như -, e, +, ., v.v.
+              if (["e", "E", "+", "-", "."].includes(e.key)) e.preventDefault();
+            }}
             placeholder="1"
           />
-        </div>
-
-        {/* Checkbox activeTTS */}
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="activeTTS"
-            checked={currentProductConfig.activeTTS}
-            onCheckedChange={(checked) =>
-              setCurrentProductConfig((prev) => ({
-                ...prev,
-                activeTTS: checked,
-              }))
-            }
-          />
-          <Label htmlFor="activeTTS">Active TTS</Label>
         </div>
 
         {/* Note */}
@@ -948,7 +992,6 @@ export default function MakeManualModal({ isOpen, onClose }) {
                 {expandedProducts[item.id] && (
                   <div className="mt-4 pt-4 border-t border-gray-200">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Size */}
                       <div>
                         <Label>Size</Label>
                         <Input
@@ -958,7 +1001,6 @@ export default function MakeManualModal({ isOpen, onClose }) {
                         />
                       </div>
 
-                      {/* Quantity */}
                       <div>
                         <Label>Quantity</Label>
                         <Input
@@ -969,13 +1011,6 @@ export default function MakeManualModal({ isOpen, onClose }) {
                         />
                       </div>
 
-                      {/* Active TTS */}
-                      <div className="flex items-center space-x-2">
-                        <Checkbox checked={item.config.activeTTS} disabled />
-                        <Label>Active TTS (+$1)</Label>
-                      </div>
-
-                      {/* Note */}
                       <div className="md:col-span-2">
                         <Label>Note</Label>
                         <Textarea
@@ -985,42 +1020,6 @@ export default function MakeManualModal({ isOpen, onClose }) {
                           rows={2}
                         />
                       </div>
-
-                      {/* Link File Design */}
-                      <div className="md:col-span-2">
-                        <Label>Link File Design</Label>
-                        {item.config.linkFileDesign ? (
-                          <a
-                            href={item.config.linkFileDesign}
-                            target="_blank"
-                            className="text-blue-600 underline block"
-                          >
-                            {item.config.linkFileDesign.split("/").pop()}
-                          </a>
-                        ) : (
-                          <p className="text-gray-500 text-sm">
-                            (No file uploaded)
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Link Thanks Card */}
-                      <div className="md:col-span-2">
-                        <Label>Link Thanks Card</Label>
-                        {item.config.linkThanksCard ? (
-                          <a
-                            href={item.config.linkThanksCard}
-                            target="_blank"
-                            className="text-blue-600 underline block"
-                          >
-                            {item.config.linkThanksCard.split("/").pop()}
-                          </a>
-                        ) : (
-                          <p className="text-gray-500 text-sm">
-                            (No file uploaded)
-                          </p>
-                        )}
-                      </div>
                     </div>
                   </div>
                 )}
@@ -1028,10 +1027,27 @@ export default function MakeManualModal({ isOpen, onClose }) {
             ))}
           </div>
 
-          <div className="mt-4 bg-green-50 p-4 rounded-lg flex justify-between items-center">
-            <Label className="text-lg font-semibold">
-              Total Money: ${calculateTotalMoney().toFixed(2)}
-            </Label>
+          {/* === Phần tổng cuối === */}
+          <div className="mt-4 bg-green-50 p-4 rounded-lg flex flex-col md:flex-row justify-between items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+              {/* Checkbox Active TTS */}
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="activeTTS"
+                  checked={activeTTS}
+                  onCheckedChange={(checked) => setActiveTTS(checked)}
+                />
+                <Label htmlFor="activeTTS">
+                  Active TTS (Cộng 1 Total Order)
+                </Label>
+              </div>
+
+              {/* Tổng tiền */}
+              <Label className="text-lg font-semibold text-green-700">
+                Total Money: ${calculateTotalMoney().toFixed(2)}
+              </Label>
+            </div>
+
             <Button
               onClick={handleMakeOrder}
               disabled={cartProducts.length === 0}
