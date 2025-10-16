@@ -69,7 +69,7 @@ builder.Services
 
 // Add AutoMapper
 builder.Services.AddAutoMapper(typeof(Program));
-
+builder.Services.AddScoped<IAccountService,AccountService>();
 // ================== JWT ==================
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

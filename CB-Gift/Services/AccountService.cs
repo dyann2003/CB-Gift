@@ -1,7 +1,9 @@
 ﻿using CB_Gift.Data;
 using CB_Gift.DTOs;
 using CB_Gift.Services.Email;
+using CB_Gift.Validators;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using System.Net;
 using System.Net.Mail;
 
@@ -11,9 +13,12 @@ namespace CB_Gift.Services
     {
         private readonly UserManager<AppUser> _userManager;
         private readonly IEmailSender _emailSender;
+     
+        private readonly RoleManager<IdentityRole> _roleManager;
 
-        public AccountService(UserManager<AppUser> userManager, IEmailSender emailSender)
+        public AccountService(UserManager<AppUser> userManager, IEmailSender emailSender, RoleManager<IdentityRole> roleManager)
         {
+            _roleManager = roleManager;
             _userManager = userManager;
             _emailSender = emailSender;
         }
@@ -113,5 +118,110 @@ namespace CB_Gift.Services
 
             await _emailSender.SendAsync(email, subject, body);
         }
+        public async Task<AccountViewDto?> GetByIdAsync(string id)
+        {
+            var u = await _userManager.Users.FirstOrDefaultAsync(x => x.Id == id);
+            if (u == null) return null;
+            var roles = await _userManager.GetRolesAsync(u);
+            return ToView(u, roles.FirstOrDefault());
+        }
+
+        public async Task<IEnumerable<AccountViewDto>> GetAllAsync(string? keyword = null)
+        {
+            var query = _userManager.Users.AsQueryable();
+            if (!string.IsNullOrWhiteSpace(keyword))
+                query = query.Where(x => x.FullName!.Contains(keyword) || x.Email!.Contains(keyword));
+
+            var list = await query.ToListAsync();
+            var result = new List<AccountViewDto>(list.Count);
+            foreach (var u in list)
+            {
+                var r = (await _userManager.GetRolesAsync(u)).FirstOrDefault();
+                result.Add(ToView(u, r));
+            }
+            return result;
+        }
+
+        public async Task<(bool ok, string? error, AccountViewDto? data)> CreateAsync(AccountCreateDto dto)
+        {
+            var v = AccountValidators.ValidateCreate(dto);
+            if (!v.ok) return (false, v.error, null);
+
+            var roleExists = await _roleManager.RoleExistsAsync(dto.Role);
+            if (!roleExists) return (false, "Role not found", null);
+
+            var existed = await _userManager.FindByEmailAsync(dto.Email);
+            if (existed != null) return (false, "Email already exists", null);
+
+            var user = new AppUser
+            {
+                Id = Guid.NewGuid().ToString(),      // UUID (string)
+                UserName = dto.Email,
+                Email = dto.Email,
+                PhoneNumber = dto.PhoneNumber,
+                FullName = dto.FullName,
+                IsActive = dto.IsActive
+            };
+
+            var create = await _userManager.CreateAsync(user, dto.Password);
+            if (!create.Succeeded) return (false, string.Join("; ", create.Errors.Select(e => e.Description)), null);
+
+            var addRole = await _userManager.AddToRoleAsync(user, dto.Role);
+            if (!addRole.Succeeded) return (false, string.Join("; ", addRole.Errors.Select(e => e.Description)), null);
+
+            return (true, null, ToView(user, dto.Role));
+        }
+
+        public async Task<(bool ok, string? error)> UpdateAsync(string id, AccountUpdateDto dto)
+        {
+            var v = AccountValidators.ValidateUpdate(dto);
+            if (!v.ok) return (false, v.error);
+
+            var user = await _userManager.Users.FirstOrDefaultAsync(x => x.Id == id);
+            if (user == null) return (false, "User not found");
+
+            user.FullName = dto.FullName;
+            user.PhoneNumber = dto.PhoneNumber;
+            user.IsActive = dto.IsActive;
+
+            var upd = await _userManager.UpdateAsync(user);
+            if (!upd.Succeeded) return (false, string.Join("; ", upd.Errors.Select(e => e.Description)));
+
+            // update role (1 role)
+            var currentRoles = await _userManager.GetRolesAsync(user);
+            if (!currentRoles.Contains(dto.Role))
+            {
+                if (currentRoles.Any())
+                    await _userManager.RemoveFromRolesAsync(user, currentRoles);
+                var roleExists = await _roleManager.RoleExistsAsync(dto.Role);
+                if (!roleExists) return (false, "Role not found");
+                var add = await _userManager.AddToRoleAsync(user, dto.Role);
+                if (!add.Succeeded) return (false, string.Join("; ", add.Errors.Select(e => e.Description)));
+            }
+
+            return (true, null);
+        }
+
+        public async Task<(bool ok, string? error)> DeleteAsync(string id)
+        {
+            var user = await _userManager.FindByIdAsync(id);
+            if (user == null) return (false, "User not found");
+
+            var del = await _userManager.DeleteAsync(user);
+            if (!del.Succeeded) return (false, string.Join("; ", del.Errors.Select(e => e.Description)));
+
+            return (true, null);
+        }
+
+        private static AccountViewDto ToView(AppUser u, string? role) =>
+            new AccountViewDto
+            {
+                Id = u.Id,
+                FullName = u.FullName,
+                Email = u.Email!,
+                PhoneNumber = u.PhoneNumber,
+                Role = role ?? string.Empty,
+                IsActive = u.IsActive
+            };
     }
 }
