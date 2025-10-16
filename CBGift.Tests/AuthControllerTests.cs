@@ -94,12 +94,12 @@ public class AuthControllerTests
         { ControllerContext = new ControllerContext { HttpContext = http } };
 
         // Case 1: user not found
-        var r1 = await ctl.Login(new LoginDto { UserNameOrEmail = "nope", Password = "x" });
+        var r1 = await ctl.Login(new LoginDto { UserNameOrEmail = "emailnotfound@gmail.com", Password = "x" });
         bool result1 = r1 is not UnauthorizedObjectResult;
         result1.Should().BeFalse();
 
         // Case 2: user inactive
-        var inactive = new AppUser { UserName = "u", Email = "u@x.com", IsActive = false };
+        var inactive = new AppUser { UserName = "u", Email = "userinactive@x.com", IsActive = false };
         um.Setup(m => m.FindByNameAsync("u")).ReturnsAsync(inactive);
 
         var r2 = await ctl.Login(new LoginDto { UserNameOrEmail = "u", Password = "x" });
@@ -117,17 +117,17 @@ public async Task Login_Returns_False_When_Bad_Password()
     var accounts = new Mock<IAccountService>();
     var config = BuildConfig();
 
-    var user = new AppUser { UserName = "u", Email = "u@x.com", IsActive = true };
+    var user = new AppUser { UserName = "u", Email = "useinactive@gmail.com", IsActive = true };
     um.Setup(m => m.FindByNameAsync("u")).ReturnsAsync(user);
     um.Setup(m => m.FindByEmailAsync("u")).ReturnsAsync((AppUser)null!);
 
-    sm.Setup(s => s.CheckPasswordSignInAsync(user, "bad", false))
+    sm.Setup(s => s.CheckPasswordSignInAsync(user, "badpass", false))
       .ReturnsAsync(IdentitySignInResult.Failed);
 
     var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
     { ControllerContext = new ControllerContext { HttpContext = http } };
 
-    var r = await ctl.Login(new LoginDto { UserNameOrEmail = "u", Password = "bad" });
+    var r = await ctl.Login(new LoginDto { UserNameOrEmail = "u", Password = "badpass" });
     LogResult("Login_BadPassword", r);
 
     
