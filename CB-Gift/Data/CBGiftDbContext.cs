@@ -202,21 +202,21 @@ namespace CB_Gift.Data
                     .HasForeignKey(ui => ui.UserId)
                     .IsRequired(); // Đảm bảo mỗi ảnh phải thuộc về một user
             });
-            modelBuilder.Entity<AppUser>(e =>
-            {
-                e.ToTable("Account");                 // thay AspNetUsers -> Account
-                e.Property(p => p.FullName).HasColumnName("FullName").HasMaxLength(256);
-                e.Property(p => p.IsActive).HasColumnName("IsActive");
+            //modelBuilder.Entity<AppUser>(e =>
+            //{
+            //    e.ToTable("Account");                 // thay AspNetUsers -> Account
+            //    e.Property(p => p.FullName).HasColumnName("FullName").HasMaxLength(256);
+            //    e.Property(p => p.IsActive).HasColumnName("IsActive");
             
-            });
+            //});
 
            
-            modelBuilder.Entity<IdentityRole>().ToTable("Role");
-            modelBuilder.Entity<IdentityUserRole<string>>().ToTable("UserRoles");
-            modelBuilder.Entity<IdentityUserClaim<string>>().ToTable("UserClaims");
-            modelBuilder.Entity<IdentityUserLogin<string>>().ToTable("UserLogins");
-            modelBuilder.Entity<IdentityRoleClaim<string>>().ToTable("RoleClaims");
-            modelBuilder.Entity<IdentityUserToken<string>>().ToTable("UserTokens");
+            //modelBuilder.Entity<IdentityRole>().ToTable("Role");
+            //modelBuilder.Entity<IdentityUserRole<string>>().ToTable("UserRoles");
+            //modelBuilder.Entity<IdentityUserClaim<string>>().ToTable("UserClaims");
+            //modelBuilder.Entity<IdentityUserLogin<string>>().ToTable("UserLogins");
+            //modelBuilder.Entity<IdentityRoleClaim<string>>().ToTable("RoleClaims");
+            //modelBuilder.Entity<IdentityUserToken<string>>().ToTable("UserTokens");
 
             OnModelCreatingPartial(modelBuilder);
         }
