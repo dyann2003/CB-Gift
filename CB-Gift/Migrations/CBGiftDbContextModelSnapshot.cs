@@ -319,6 +319,11 @@ namespace CB_Gift.Migrations
                         .HasColumnType("int")
                         .HasColumnName("ProductVariantID");
 
+                    b.Property<string>("ProductionStatus")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
                     b.Property<int>("Quantity")
                         .HasColumnType("int");
 

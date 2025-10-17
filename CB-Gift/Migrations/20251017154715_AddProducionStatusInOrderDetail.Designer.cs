@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CB_Gift.Migrations
 {
     [DbContext(typeof(CBGiftDbContext))]
-    [Migration("20251017135435_UpdateOrderFields")]
-    partial class UpdateOrderFields
+    [Migration("20251017154715_AddProducionStatusInOrderDetail")]
+    partial class AddProducionStatusInOrderDetail
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -321,6 +321,11 @@ namespace CB_Gift.Migrations
                     b.Property<int>("ProductVariantId")
                         .HasColumnType("int")
                         .HasColumnName("ProductVariantID");
+
+                    b.Property<string>("ProductionStatus")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
 
                     b.Property<int>("Quantity")
                         .HasColumnType("int");

@@ -2,6 +2,7 @@
 #nullable disable
 using System;
 using System.Collections.Generic;
+using CB_Gift.Models.Enums;
 
 namespace CB_Gift.Models;
 
@@ -26,6 +27,8 @@ public partial class OrderDetail
     public DateTime? CreatedDate { get; set; }
 
     public int Quantity { get; set; }
+    //Thêm ProductionStatus để theo dõi trạng thái của Product(Order Detail) 
+    public ProductionStatus? ProductionStatus { get; set; }
 
     public bool NeedDesign { get; set; }
 

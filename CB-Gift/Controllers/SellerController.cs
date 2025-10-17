@@ -48,12 +48,27 @@ namespace CB_Gift.Controllers
         }
 
 
-        [HttpPost("{id}/details")]
-        public async Task<IActionResult> AddOrderDetail(int id, [FromBody] OrderDetailCreateRequest request)
+        [HttpPost("{orderId}/details")]
+        public async Task<IActionResult> AddOrderDetail(int orderId, [FromBody] OrderDetailCreateRequest request)
         {
             string sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            await _orderService.AddOrderDetailAsync(id, request, sellerId);
-            return Ok(new { message = "Order detail added." });
+
+            try
+            {
+                // Gọi Service (đã thêm kiểm tra Variant ID)
+                await _orderService.AddOrderDetailAsync(orderId, request, sellerId);
+                return Ok(new { message = "Order detail added successfully." });
+            }
+            catch (ArgumentException ex)
+            {
+                // Bắt lỗi khi ProductVariantID không tồn tại
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                // Bắt các lỗi chung khác
+                return StatusCode(500, new { error = "An unexpected error occurred.", detail = ex.Message });
+            }
         }
 
         // Endpoint để giao việc

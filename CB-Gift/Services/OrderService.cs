@@ -139,6 +139,18 @@ namespace CB_Gift.Services
             .FirstOrDefaultAsync(o => o.OrderId == orderId && o.SellerUserId == sellerUserId);
             if (order == null) throw new Exception("Order not found or not yours.");
 
+            var productVariant = await _context.ProductVariants
+                                       .AnyAsync(pv => pv.ProductVariantId == request.ProductVariantID);
+
+            if (!productVariant)
+            {
+                // Sử dụng một loại Exception rõ ràng hơn cho nghiệp vụ (Ví dụ: ArgumentException)
+                throw new ArgumentException($"Product Variant with ID {request.ProductVariantID} does not exist.", nameof(request.ProductVariantID));
+            }
+            if (request.Quantity <= 0)
+            {
+                throw new ArgumentException("Quantity must be greater than zero.", nameof(request.Quantity));
+            }
             var price = await CalculatePriceAsync(request.ProductVariantID);
 
             var detail = _mapper.Map<OrderDetail>(request);

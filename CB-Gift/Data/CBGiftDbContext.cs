@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using CB_Gift.Models; // nơi đặt các entity scaffold (Category, Order, ...)
+using CB_Gift.Models;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using CB_Gift.Models.Enums;
 
 namespace CB_Gift.Data
 {
@@ -131,6 +133,9 @@ namespace CB_Gift.Data
                 entity.Property(e => e.Note).HasMaxLength(200);
                 entity.Property(e => e.OrderId).HasColumnName("OrderID");
                 entity.Property(e => e.ProductVariantId).HasColumnName("ProductVariantID");
+                entity.Property(e => e.ProductionStatus)
+                    .HasConversion(new EnumToStringConverter<ProductionStatus>()) // dùng cho enum
+                    .HasMaxLength(100); 
                 entity.HasOne(d => d.Order).WithMany(p => p.OrderDetails).HasForeignKey(d => d.OrderId).OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("FK_OrderDetail_Order");
                 entity.HasOne(d => d.ProductVariant).WithMany(p => p.OrderDetails).HasForeignKey(d => d.ProductVariantId).OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("FK_OrderDetail_Variant");
             });
