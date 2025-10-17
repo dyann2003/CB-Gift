@@ -1,15 +1,16 @@
-﻿using System.Threading.Tasks;
-using CB_Gift.Data;
+﻿using CB_Gift.Data;
 using CB_Gift.DTOs;
 using CB_Gift.Services;
 using CB_Gift.Services.Email;
 using FluentAssertions;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Moq;
-using Xunit;
-using Xunit.Abstractions;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.Tasks;
+using Xunit;
+using Xunit.Abstractions;
 
 public class AccountServiceTests
 {
@@ -38,7 +39,12 @@ public class AccountServiceTests
         um.Setup(m => m.FindByEmailAsync("e@x.com")).ReturnsAsync(new AppUser { Email = "e@x.com" });
 
         var emailSender = new Mock<IEmailSender>();
-        var svc = new AccountService(um.Object, emailSender.Object);
+        var roleStore = new Mock<IRoleStore<IdentityRole>>();
+        var roleManager = new Mock<RoleManager<IdentityRole>>(
+            roleStore.Object,
+            null, null, null, null
+        );
+        var svc = new AccountService(um.Object, emailSender.Object, roleManager.Object);
 
         var rs = await svc.RegisterAsync(new RegisterRequestDto { Email = "e@x.com" });
 
@@ -57,7 +63,12 @@ public class AccountServiceTests
           .ReturnsAsync(IdentityResult.Failed(new IdentityError { Description = "boom" }));
 
         var emailSender = new Mock<IEmailSender>();
-        var svc = new AccountService(um.Object, emailSender.Object);
+        var roleStore = new Mock<IRoleStore<IdentityRole>>();
+        var roleManager = new Mock<RoleManager<IdentityRole>>(
+           roleStore.Object,
+           null, null, null, null
+       );
+        var svc = new AccountService(um.Object, emailSender.Object,roleManager.Object);
 
         var rs = await svc.RegisterAsync(new RegisterRequestDto { Email = "new@x.com" });
 
@@ -76,7 +87,12 @@ public class AccountServiceTests
           .ReturnsAsync(IdentityResult.Success);
 
         var emailSender = new Mock<IEmailSender>();
-        var svc = new AccountService(um.Object, emailSender.Object);
+        var roleStore = new Mock<IRoleStore<IdentityRole>>();
+        var roleManager = new Mock<RoleManager<IdentityRole>>(
+           roleStore.Object,
+           null, null, null, null
+       );
+        var svc = new AccountService(um.Object, emailSender.Object,roleManager.Object);
 
         var rs = await svc.RegisterAsync(new RegisterRequestDto { Email = "ok@x.com" });
 
@@ -98,7 +114,12 @@ public class AccountServiceTests
     {
         var um = CreateUserManagerMock();
         var emailSender = new Mock<IEmailSender>();
-        var svc = new AccountService(um.Object, emailSender.Object);
+        var roleStore = new Mock<IRoleStore<IdentityRole>>();
+        var roleManager = new Mock<RoleManager<IdentityRole>>(
+           roleStore.Object,
+           null, null, null, null
+       );
+        var svc = new AccountService(um.Object, emailSender.Object,roleManager.Object);
 
         await svc.SendResetPasswordEmailAsync("u@x.com", "https://x/reset?token=abc");
 
