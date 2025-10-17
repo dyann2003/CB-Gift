@@ -2,6 +2,8 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System.Text.Json.Serialization;
+using CB_Gift.Models.Enums;
+using System.ComponentModel.DataAnnotations;
 
 namespace CB_Gift.DTOs
 {
@@ -60,6 +62,7 @@ namespace CB_Gift.DTOs
         public string ProductName { get; set; }
         public int Quantity { get; set; }
         public decimal? Price { get; set; }
+        public ProductionStatus? ProductionStatus { get; set; }
         public string? LinkImg { get; set; }
         public bool NeedDesign { get; set; }
         public string LinkThanksCard { get; set; }
@@ -102,16 +105,21 @@ namespace CB_Gift.DTOs
     public class OrderDetailCreateRequest
     {
         public int OrderId { get; set; }
+        [Required(ErrorMessage = "ProductVariantID must be provided.")]
+        [Range(1, int.MaxValue, ErrorMessage = "ProductVariantID must be a positive integer.")]
         public int ProductVariantID { get; set; }
+        [Required(ErrorMessage = "Quantity is required.")]
+       /* [Range(1, 10000, ErrorMessage = "Quantity must be between 1 and 1000.")] */
         public int Quantity { get; set; } = 1;
         public decimal? Price { get; set; }
         public string? LinkImg { get; set; }
+        [Required(ErrorMessage = "NeedDesign is required.")]
         public bool NeedDesign { get; set; } = false;
         public string? LinkThanksCard { get; set; }
         public string? LinkDesign {  get; set; }
         public string? Accessory { get; set; }
         public string? Note { get; set; }
-        
+        public ProductionStatus ProductionStatus { get; set; } = ProductionStatus.DRAFT;
     }
 
     public class EndCustomerCreateRequest
@@ -180,6 +188,7 @@ namespace CB_Gift.DTOs
         public string? LinkDesign { get; set; }
         public string? Accessory { get; set; }
         public string? Note { get; set; }
+        public ProductionStatus? ProductionStatus { get; set; }
     }
     public class OrderUpdateDto 
     {
