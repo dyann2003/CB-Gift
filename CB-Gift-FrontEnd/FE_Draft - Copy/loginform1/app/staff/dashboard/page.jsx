@@ -199,6 +199,7 @@ export default function StaffProductionStatusPage() {
                                                                 <th className="p-3 text-left font-semibold text-gray-600">Name</th>
                                                                 <th className="p-3 text-left font-semibold text-gray-600">Note</th>
                                                                 <th className="p-3 text-center font-semibold text-gray-600" colSpan="3">Documents</th>
+                                                                <th className="p-3 text-left font-semibold text-gray-600">Action</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-gray-200">
@@ -227,6 +228,12 @@ export default function StaffProductionStatusPage() {
                                                                         <a href="#" className="inline-flex items-center gap-2 text-purple-600 hover:text-purple-800 hover:underline">
                                                                             <LabelIcon /> Print Label
                                                                         </a>
+                                                                    </td>
+                                                                    <td className="p-3">
+                                                                        <button
+                                                                            className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition">
+                                                                            Update Status
+                                                                        </button>
                                                                     </td>
                                                                 </tr>
                                                             ))}

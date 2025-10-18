@@ -14,7 +14,6 @@ namespace CB_Gift.Controllers
     {
         private readonly IImageManagementService _imageService;
 
-        // Sử dụng service quản lý ảnh ở tầng cao hơn
         public ImagesController(IImageManagementService imageService)
         {
             _imageService = imageService;
@@ -37,27 +36,41 @@ namespace CB_Gift.Controllers
                     return BadRequest(new { message = "Vui lòng chọn một tệp." });
                 }
 
+                // Validate định dạng file hình ảnh
+                var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+                var fileExtension = Path.GetExtension(uploadDto.File.FileName).ToLowerInvariant();
+
+                if (!allowedExtensions.Contains(fileExtension))
+                {
+                    return BadRequest(new
+                    {
+                        message = $"Định dạng file không hợp lệ. Chỉ chấp nhận các file ảnh: {string.Join(", ", allowedExtensions)}"
+                    });
+                }
+
+                // Giới hạn kích thước (ví dụ 5MB)
+                const long maxFileSize = 5 * 1024 * 1024; // 5 MB
+                if (uploadDto.File.Length > maxFileSize)
+                {
+                    return BadRequest(new { message = "Kích thước file vượt quá giới hạn cho phép (tối đa 5MB)." });
+                }
+
                 await using var stream = uploadDto.File.OpenReadStream();
 
                 var result = await _imageService.UploadImageForUserAsync(stream, uploadDto.File.FileName, userId);
 
                 return Ok(result);
             }
-            catch (Exception ex) // SỬA LỖI Ở ĐÂY
+            catch (Exception ex)
             {
-                // Tạo một biến để lặp và tìm ra lỗi gốc
                 Exception currentEx = ex;
                 while (currentEx.InnerException != null)
                 {
                     currentEx = currentEx.InnerException;
                 }
-                // Lấy thông báo lỗi từ exception trong cùng nhất
                 var rootErrorMessage = currentEx.Message;
-
-                // Ghi log lỗi chi tiết ra console trên server để bạn xem
                 Console.WriteLine($"---> DATABASE SAVE FAILED (ROOT): {rootErrorMessage}");
 
-                // Trả về lỗi chi tiết cho client
                 return StatusCode(500, new { message = "Lỗi khi lưu dữ liệu vào database.", error = rootErrorMessage });
             }
         }
