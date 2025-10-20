@@ -326,7 +326,7 @@ export default function CheckProduct() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" colSpan="2">
                       Actions
                     </th>
                   </tr>
@@ -362,6 +362,14 @@ export default function CheckProduct() {
                         >
                           <Eye className="h-4 w-4 mr-1" />
                           Inspect
+                        </Button>
+
+                        <Button
+                          onClick={() => setShowQRScanner(true)}
+                          className="bg-blue-600 hover:bg-blue-700"
+                          >
+                          <QrCode className="h-4 w-4 mr-2" />
+                          Scan QR
                         </Button>
                       </td>
                     </tr>

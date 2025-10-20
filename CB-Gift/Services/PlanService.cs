@@ -101,13 +101,14 @@ namespace CB_Gift.Services
 
             if (!string.IsNullOrEmpty(status))
             {
+                //0 là needs_production, 1 là đang sản xuất , 2 là produced
                 if (status.Equals("produced", StringComparison.OrdinalIgnoreCase))
                 {
-                    query = query.Where(pd => pd.OrderDetail.Order.StatusOrder >= 10);
+                    query = query.Where(pd => pd.StatusOrder == 2);
                 }
                 else if (status.Equals("needs_production", StringComparison.OrdinalIgnoreCase))
                 {
-                    query = query.Where(pd => pd.OrderDetail.Order.StatusOrder == 8);
+                    query = query.Where(pd => pd.StatusOrder == 0 || pd.StatusOrder == 1);
                 }
                 else
                 {
@@ -142,12 +143,30 @@ namespace CB_Gift.Services
                                 NoteOrEngravingContent = pd.OrderDetail.Note,
                                 ProductionFileUrl = pd.OrderDetail.LinkFileDesign,
                                 ThankYouCardUrl = pd.OrderDetail.LinkThanksCard,
+                                Quantity = pd.OrderDetail.Quantity,
+                                StatusOrder = pd.StatusOrder
                             }).ToList()
                         }).ToList()
                 })
                 .ToListAsync();
 
             return results;
+        }
+
+        public async Task<bool> UpdatePlanDetailStatusAsync(int planDetailId, int newStatus)
+        {
+            var planDetail = await _context.PlanDetails.FindAsync(planDetailId);
+
+            if (planDetail == null)
+            {
+                return false;
+            }
+
+            planDetail.StatusOrder = newStatus;
+
+            await _context.SaveChangesAsync();
+
+            return true;
         }
     }
 }
