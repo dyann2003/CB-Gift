@@ -69,6 +69,7 @@ export default function StaffProductionStatusPage() {
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [selectedDate, setSelectedDate] = useState('');
     const [statusFilter, setStatusFilter] = useState('needs_production');
+    const [updateTrigger, setUpdateTrigger] = useState(0); // State to trigger re-fetch
 
     // --- Data Fetching Effect ---
     useEffect(() => {
@@ -96,7 +97,33 @@ export default function StaffProductionStatusPage() {
         };
 
         fetchProductionData();
-    }, [selectedCategory, selectedDate, statusFilter]);
+    }, [selectedCategory, selectedDate, statusFilter, updateTrigger]); // Added updateTrigger to dependency array
+
+    // --- Status Update Handler ---
+    const handleUpdateStatus = async (planDetailId, newStatus) => {
+        console.log(`Attempting to update PlanDetail ID: ${planDetailId} to new status: ${newStatus}`);
+        try {
+            const response = await fetch(`https://localhost:7015/api/plan/update-status/${planDetailId}?newStatus=${newStatus}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(`API call failed with status: ${response.status}`);
+            }
+
+            // Trigger a re-fetch of the data to show the update
+            setUpdateTrigger(prev => prev + 1); 
+
+        } catch (error) {
+            console.error("Failed to update status:", error);
+            // Optionally, set an error message to display to the user
+            alert(`Error updating status: ${error.message}`);
+        }
+    };
+
 
     const getUniqueCategories = () => {
         const categories = productionData.map(item => ({ id: item.categoryId, name: item.categoryName }));
@@ -197,8 +224,10 @@ export default function StaffProductionStatusPage() {
                                                                 <th className="p-3 text-left font-semibold text-gray-600 w-12">#</th>
                                                                 <th className="p-3 text-left font-semibold text-gray-600 w-24">Image</th>
                                                                 <th className="p-3 text-left font-semibold text-gray-600">Name</th>
+                                                                <th className="p-3 text-center font-semibold text-gray-600">Quantity</th>
                                                                 <th className="p-3 text-left font-semibold text-gray-600">Note</th>
                                                                 <th className="p-3 text-center font-semibold text-gray-600" colSpan="3">Documents</th>
+                                                                <th className="p-3 text-left font-semibold text-gray-600">Status</th>
                                                                 <th className="p-3 text-left font-semibold text-gray-600">Action</th>
                                                             </tr>
                                                         </thead>
@@ -213,6 +242,7 @@ export default function StaffProductionStatusPage() {
                                                                         <div className="font-bold text-gray-800">{detail.customerName}</div>
                                                                         <div className="text-xs text-gray-500">{detail.orderCode}</div>
                                                                     </td>
+                                                                    <td className="p-3 text-center font-medium text-gray-700">{detail.quantity}</td>
                                                                     <td className="p-3 text-gray-600 max-w-xs truncate">{detail.noteOrEngravingContent || 'N/A'}</td>
                                                                     <td className="p-3 text-center">
                                                                         <a href={detail.productionFileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 hover:underline disabled:opacity-50">
@@ -230,10 +260,47 @@ export default function StaffProductionStatusPage() {
                                                                         </a>
                                                                     </td>
                                                                     <td className="p-3">
-                                                                        <button
-                                                                            className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition">
-                                                                            Update Status
-                                                                        </button>
+                                                                        {detail.statusOrder === 0 && (
+                                                                            <span className="inline-flex items-center bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                                                                                <span className="w-2 h-2 me-1 bg-gray-500 rounded-full"></span>
+                                                                            Chờ sản xuất
+                                                                        </span>
+                                                                        )}
+
+                                                                        {detail.statusOrder === 1 && (
+                                                                            <span className="inline-flex items-center bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                                                                                <span className="w-2 h-2 me-1 bg-yellow-500 rounded-full"></span>
+                                                                            Đang sản xuất
+                                                                        </span>
+                                                                        )}
+
+                                                                        {detail.statusOrder === 2 && (
+                                                                            <span className="inline-flex items-center bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                                                                                <span className="w-2 h-2 me-1 bg-green-500 rounded-full"></span>
+                                                                            Đã hoàn thành
+                                                                        </span>
+                                                                        )}
+                                                                    </td>
+                                                                    <td className="p-3">
+                                                                        {/* Case 1: Status is 0 (Needs Production) -> Show button to start production (change to 1) */}
+                                                                        {detail.statusOrder === 0 && (
+                                                                            <button
+                                                                                onClick={() => handleUpdateStatus(detail.planDetailId, 1)}
+                                                                                className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition"
+                                                                            >
+                                                                                Bắt đầu sản xuất
+                                                                            </button>
+                                                                        )}
+
+                                                                        {/* Case 2: Status is 1 (In Production) -> Show button to complete (change to 2) */}
+                                                                        {detail.statusOrder === 1 && (
+                                                                            <button
+                                                                                onClick={() => handleUpdateStatus(detail.planDetailId, 2)}
+                                                                                className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition"
+                                                                            >
+                                                                                Hoàn thành
+                                                                            </button>
+                                                                        )}
                                                                     </td>
                                                                 </tr>
                                                             ))}
