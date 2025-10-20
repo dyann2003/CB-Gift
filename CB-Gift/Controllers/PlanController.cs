@@ -36,9 +36,9 @@ namespace CB_Gift.Controllers
         public async Task<IActionResult> UpdateStatus(int planDetailId, [FromQuery] int newStatus)
         {
             // Kiểm tra giá trị newStatus hợp lệ
-            if (newStatus < 0 || newStatus > 2)
+            if (newStatus < 6 || newStatus > 8)
             {
-                return BadRequest("Trạng thái mới không hợp lệ. Chỉ chấp nhận các giá trị 0, 1, hoặc 2.");
+                return BadRequest("Trạng thái mới không hợp lệ. Chỉ chấp nhận các giá trị 6, 7, hoặc 8.");
             }
 
             try

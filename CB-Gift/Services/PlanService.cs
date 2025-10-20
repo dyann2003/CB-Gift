@@ -1,5 +1,6 @@
 ﻿using CB_Gift.Data;
 using CB_Gift.Models;
+using CB_Gift.Models.Enums;
 using CB_Gift.Services.IService;
 using Microsoft.EntityFrameworkCore;
 using static CB_Gift.DTOs.StaffViewDtos;
@@ -104,11 +105,16 @@ namespace CB_Gift.Services
                 //0 là needs_production, 1 là đang sản xuất , 2 là produced
                 if (status.Equals("produced", StringComparison.OrdinalIgnoreCase))
                 {
-                    query = query.Where(pd => pd.StatusOrder == 2);
+                    //query = query.Where(pd => pd.StatusOrder == 2);
+                    query = query.Where(pd => pd.OrderDetail.ProductionStatus == ProductionStatus.FINISHED);
+
                 }
                 else if (status.Equals("needs_production", StringComparison.OrdinalIgnoreCase))
                 {
-                    query = query.Where(pd => pd.StatusOrder == 0 || pd.StatusOrder == 1);
+                    //query = query.Where(pd => pd.StatusOrder == 0 || pd.StatusOrder == 1);
+                    query = query.Where(pd => pd.OrderDetail.ProductionStatus == ProductionStatus.READY_PROD 
+                    || pd.OrderDetail.ProductionStatus == ProductionStatus.IN_PROD 
+                    || pd.OrderDetail.ProductionStatus == ProductionStatus.PROD_REWORK);
                 }
                 else
                 {
@@ -144,7 +150,7 @@ namespace CB_Gift.Services
                                 ProductionFileUrl = pd.OrderDetail.LinkFileDesign,
                                 ThankYouCardUrl = pd.OrderDetail.LinkThanksCard,
                                 Quantity = pd.OrderDetail.Quantity,
-                                StatusOrder = pd.StatusOrder
+                                StatusOrder = pd.OrderDetail.ProductionStatus
                             }).ToList()
                         }).ToList()
                 })
@@ -162,7 +168,14 @@ namespace CB_Gift.Services
                 return false;
             }
 
-            planDetail.StatusOrder = newStatus;
+            var orderDetail = await _context.OrderDetails.FindAsync(planDetail.OrderDetailId);
+
+            if (orderDetail == null)
+            {
+                return false;
+            }
+
+            orderDetail.ProductionStatus = (ProductionStatus)newStatus;
 
             await _context.SaveChangesAsync();
 

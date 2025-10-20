@@ -260,21 +260,28 @@ export default function StaffProductionStatusPage() {
                                                                         </a>
                                                                     </td>
                                                                     <td className="p-3">
-                                                                        {detail.statusOrder === 0 && (
+                                                                        {detail.statusOrder === 6 && (
                                                                             <span className="inline-flex items-center bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
                                                                                 <span className="w-2 h-2 me-1 bg-gray-500 rounded-full"></span>
                                                                             Chờ sản xuất
                                                                         </span>
                                                                         )}
 
-                                                                        {detail.statusOrder === 1 && (
+                                                                        {detail.statusOrder === 11 && (
+                                                                            <span className="inline-flex items-center bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                                                                                <span className="w-2 h-2 me-1 bg-red-500 rounded-full"></span>
+                                                                            Sản xuất lỗi
+                                                                        </span>
+                                                                        )}
+
+                                                                        {detail.statusOrder === 7 && (
                                                                             <span className="inline-flex items-center bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
                                                                                 <span className="w-2 h-2 me-1 bg-yellow-500 rounded-full"></span>
                                                                             Đang sản xuất
                                                                         </span>
                                                                         )}
 
-                                                                        {detail.statusOrder === 2 && (
+                                                                        {detail.statusOrder === 8 && (
                                                                             <span className="inline-flex items-center bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
                                                                                 <span className="w-2 h-2 me-1 bg-green-500 rounded-full"></span>
                                                                             Đã hoàn thành
@@ -282,20 +289,29 @@ export default function StaffProductionStatusPage() {
                                                                         )}
                                                                     </td>
                                                                     <td className="p-3">
-                                                                        {/* Case 1: Status is 0 (Needs Production) -> Show button to start production (change to 1) */}
-                                                                        {detail.statusOrder === 0 && (
+                                                                        {/* Case 1: Status is 6 (Ready Production) -> Show button to start production (change to 7) */}
+                                                                        {detail.statusOrder === 6 && (
                                                                             <button
-                                                                                onClick={() => handleUpdateStatus(detail.planDetailId, 1)}
+                                                                                onClick={() => handleUpdateStatus(detail.planDetailId, 7)}
                                                                                 className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition"
                                                                             >
                                                                                 Bắt đầu sản xuất
                                                                             </button>
                                                                         )}
 
-                                                                        {/* Case 2: Status is 1 (In Production) -> Show button to complete (change to 2) */}
-                                                                        {detail.statusOrder === 1 && (
+                                                                         {detail.statusOrder === 11 && (
                                                                             <button
-                                                                                onClick={() => handleUpdateStatus(detail.planDetailId, 2)}
+                                                                                onClick={() => handleUpdateStatus(detail.planDetailId, 7)}
+                                                                                className="bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition"
+                                                                            >
+                                                                                Sản xuất lại
+                                                                            </button>
+                                                                        )}
+
+                                                                        {/* Case 2: Status is 1 (In Production) -> Show button to complete (change to 8) */}
+                                                                        {detail.statusOrder === 7 && (
+                                                                            <button
+                                                                                onClick={() => handleUpdateStatus(detail.planDetailId, 8)}
                                                                                 className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition"
                                                                             >
                                                                                 Hoàn thành

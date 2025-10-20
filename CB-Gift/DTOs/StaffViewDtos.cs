@@ -1,4 +1,6 @@
-﻿namespace CB_Gift.DTOs
+﻿using CB_Gift.Models.Enums;
+
+namespace CB_Gift.DTOs
 {
     public class StaffViewDtos
     {
@@ -20,7 +22,7 @@
 
             public int Quantity { get; set; }
 
-            public int? StatusOrder { get; set; }
+            public ProductionStatus? StatusOrder { get; set; }
         }
 
         public class StaffDateGroupDto
