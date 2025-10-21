@@ -34,6 +34,7 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -101,6 +102,9 @@ export default function ManageOrder() {
   const [isDialogOpen, setIsDialogOpen] = useState(false); // Added for dialog state management
   const [showResultDialog, setShowResultDialog] = useState(false);
   const [resultMessage, setResultMessage] = useState("");
+  const [isAssignPopupOpen, setIsAssignPopupOpen] = useState(false);
+  const [designers, setDesigners] = useState([]);
+  const [selectedDesignerId, setSelectedDesignerId] = useState("");
 
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -347,6 +351,57 @@ export default function ManageOrder() {
   const handleDateSelect = (range) => {
     setDateRange(range || { from: null, to: null });
     setPage(1);
+  };
+
+  const handleOpenAssignPopup = async () => {
+    try {
+      const res = await fetch("https://localhost:7015/api/Seller/my-designer", {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to fetch designers");
+      const data = await res.json();
+      setDesigners(data);
+      setIsAssignPopupOpen(true);
+    } catch (err) {
+      console.error("Fetch designers failed:", err);
+      alert("❌ Failed to load designers");
+    }
+  };
+
+  const handleConfirmAssignDesigner = async () => {
+    if (!selectedDesignerId) {
+      alert("Please select a designer");
+      return;
+    }
+
+    if (!selectedOrders || selectedOrders.length === 0) {
+      alert("Please select at least one order");
+      return;
+    }
+
+    try {
+      for (const orderId of selectedOrders) {
+        const res = await fetch(
+          `https://localhost:7015/api/Seller/orders/${orderId}/assign-designer`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ designerUserId: selectedDesignerId }),
+          }
+        );
+        if (!res.ok) throw new Error(`Failed to assign order ${orderId}`);
+      }
+
+      alert("✅ Successfully assigned designer to selected orders!");
+      setIsAssignPopupOpen(false);
+      setSelectedDesignerId("");
+      // reload data nếu cần
+      fetchOrders && fetchOrders();
+    } catch (err) {
+      console.error("Assign error:", err);
+      alert("❌ Failed to assign designer: " + err.message);
+    }
   };
 
   const handleExport = () => {
@@ -924,6 +979,13 @@ export default function ManageOrder() {
                 className="bg-white"
               >
                 Assign to Designer ({selectedOrders.length})
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleOpenAssignPopup}
+                disabled={selectedOrders.length === 0}
+              >
+                Assign Designer ({selectedOrders.length})
               </Button>
             </div>
 
@@ -1952,7 +2014,6 @@ export default function ManageOrder() {
                               } else {
                                 pageNum = page - 2 + i;
                               }
-
                               return (
                                 <Button
                                   key={pageNum}
@@ -2011,6 +2072,46 @@ export default function ManageOrder() {
         isOpen={showMakeManualModal}
         onClose={() => setShowMakeManualModal(false)}
       />
+      <Dialog open={isAssignPopupOpen} onOpenChange={setIsAssignPopupOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assign Designer</DialogTitle>
+            <DialogDescription>
+              Choose a designer to assign to {selectedOrders.length} selected
+              order(s).
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-4 space-y-4">
+            <Label htmlFor="designer">Select Designer</Label>
+            <Select
+              value={selectedDesignerId}
+              onValueChange={(value) => setSelectedDesignerId(value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Choose designer" />
+              </SelectTrigger>
+              <SelectContent>
+                {designers.map((d) => (
+                  <SelectItem key={d.designerUserId} value={d.designerUserId}>
+                    {d.designerName || "Unnamed Designer"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <div className="flex justify-end gap-2 mt-4">
+              <Button
+                variant="outline"
+                onClick={() => setIsAssignPopupOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleConfirmAssignDesigner}>OK</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
