@@ -1,8 +1,10 @@
 ﻿using CB_Gift.Data;
 using CB_Gift.DTOs;
 using CB_Gift.Models;
+using CB_Gift.Models.Enums;
 using CB_Gift.Services.IService; 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using System;
 using System.IO;
 using System.Linq;
@@ -23,13 +25,28 @@ namespace CB_Gift.Services
 
         public async Task<IEnumerable<DesignTaskDto>> GetAssignedTasksAsync(string designerId)
         {
+            // Định nghĩa các trạng thái ProductionStatus liên quan đến công việc của designer
+            var designStatuses = new[]
+            {
+                ProductionStatus.NEED_DESIGN,
+                ProductionStatus.DESIGNING,
+                ProductionStatus.CHECK_DESIGN,
+                ProductionStatus.DESIGN_REDO
+            };
+            // Định nghĩa các trạng thái OrderStatus liên quan đến thiết kế
+            var designOrderStatuses = new[] { 3, 4, 5, 6 }; // StatusOrder là kiểu int
             var tasks = await _context.OrderDetails
                 .Include(od => od.Order)
                 .Include(od => od.ProductVariant.Product)
                 .Where(od => od.AssignedDesignerUserId == designerId &&
                              od.NeedDesign == true &&
-                             (od.Order.StatusOrder == 3 || od.Order.StatusOrder == 4 || od.Order.StatusOrder == 5|| od.Order.StatusOrder == 6)) // Trạng thái NEEDDESIGN hoặc DESIGN_REDO
-                .Select(od => new DesignTaskDto {
+                             // Lọc theo ProductionStatus của OrderDetail
+                             od.ProductionStatus.HasValue &&
+                             designStatuses.Contains(od.ProductionStatus.Value) &&
+                             // <<< TIÊU CHÍ 2: Lọc theo StatusOrder của Order >>>
+                             designOrderStatuses.Contains(od.Order.StatusOrder))
+                .Select(od => new DesignTaskDto
+                {
                     OrderDetailId = od.OrderDetailId,
                     OrderId = od.OrderId,
                     OrderCode = od.Order.OrderCode,
@@ -38,85 +55,96 @@ namespace CB_Gift.Services
                     ProductTemplate = od.ProductVariant.Product.Template,
                     OrderStatus = od.Order.StatusOrder,
                     Quantity = od.Quantity,
-                    LinkImg  = od.ProductVariant.Product.ItemLink,
-                    Note  = od.Note,
+                    LinkImg = od.ProductVariant.Product.ItemLink,
+                    Note = od.Note,
                     AssignedAt = od.AssignedAt,
+                    // THÊM ProductionStatus vào DTO để designer xem trạng thái chi tiết
+                    ProductionStatus = od.ProductionStatus.ToString(),
                     ProductDetails = od.ProductVariant != null ? new ProductDetails
                     {
-                    ProductVariantId = od.ProductVariant.ProductVariantId.ToString(), // Assuming ProductVariantId is int
-                    LengthCm = od.ProductVariant.LengthCm,
-                    HeightCm = od.ProductVariant.HeightCm,
-                    WidthCm = od.ProductVariant.WidthCm,
-                    ThicknessMm = od.ProductVariant.ThicknessMm,
-                    SizeInch = od.ProductVariant.SizeInch,
-                    Layer = od.ProductVariant.Layer,
-                    CustomShape = od.ProductVariant.CustomShape,
-                    Sku = od.ProductVariant.Sku
-                    } : null 
-                     // =================================
+                        ProductVariantId = od.ProductVariant.ProductVariantId.ToString(),
+                        LengthCm = od.ProductVariant.LengthCm,
+                        HeightCm = od.ProductVariant.HeightCm,
+                        WidthCm = od.ProductVariant.WidthCm,
+                        ThicknessMm = od.ProductVariant.ThicknessMm,
+                        SizeInch = od.ProductVariant.SizeInch,
+                        Layer = od.ProductVariant.Layer,
+                        CustomShape = od.ProductVariant.CustomShape,
+                        Sku = od.ProductVariant.Sku
+                    } : null
                 })
                 .AsNoTracking()
                 .ToListAsync();
             return tasks;
         }
 
-        // === PHƯƠNG THỨC UPLOAD ĐÃ ĐƯỢC NÂNG CẤP ===
+        // DesignerTaskService.cs
         public async Task<bool> UploadDesignFileAsync(int orderDetailId, string designerId, UploadDesignDto dto)
         {
-            // Bắt đầu một transaction để đảm bảo tất cả các bước đều thành công hoặc thất bại cùng nhau
             using var transaction = await _context.Database.BeginTransactionAsync();
 
             try
             {
-                // 1. Kiểm tra quyền và sự tồn tại của OrderDetail
-                var orderDetail = await _context.OrderDetails
-                    .Include(od => od.Order) // Quan trọng: phải include Order để cập nhật status
-                    .FirstOrDefaultAsync(od => od.OrderDetailId == orderDetailId);
+                var orderDetail = await _context.OrderDetails.FirstOrDefaultAsync(od => od.OrderDetailId == orderDetailId);
 
-                // Nếu không tìm thấy, hoặc designer không được gán, hoặc đơn hàng không ở trạng thái cần design -> từ chối
-              /*  if (orderDetail == null || orderDetail.AssignedDesignerUserId != designerId || (orderDetail.Order.StatusOrder != 3 && orderDetail.Order.StatusOrder != 6))
+                if (orderDetail == null || orderDetail.AssignedDesignerUserId != designerId)
                 {
                     return false;
-                }*/
+                }
 
-                // 2. Sử dụng ImageManagementService để upload file lên Cloudinary
+                // === CORRECT LOGIC: Access the nullable enum directly ===
+                // Use null-coalescing operator (??) to treat null DB value as NEED_DESIGN (your default)
+                var currentStatus = orderDetail.ProductionStatus ?? ProductionStatus.NEED_DESIGN;
+
+                // Logic nghiệp vụ: Chỉ cho phép upload khi đang ở DESIGNING hoặc DESIGN_REDO
+                if (currentStatus != ProductionStatus.DESIGNING && currentStatus != ProductionStatus.DESIGN_REDO)
+                {
+                    throw new InvalidOperationException($"Cannot upload design file. Current status is {currentStatus}. Must be DESIGNING or DESIGN_REDO.");
+                }
+
+                // ********** Logic sau khi đã xác thực trạng thái **********
+
+                // 2. Sử dụng ImageManagementService để upload file
                 await using var stream = dto.DesignFile.OpenReadStream();
-                var uploadedImage = await _imageService.UploadImageForUserAsync(stream, dto.DesignFile.FileName, designerId);
+                // *** KHUYẾN NGHỊ: Thêm logic try/catch/log chi tiết ở đây cho bước upload, vì đây là nguồn lỗi 500 tiềm ẩn ***
+                var uploadedFile = await _imageService.UploadImageForUserAsync(stream, dto.DesignFile.FileName, designerId);
+
 
                 // 3. Tạo một record OrderDetailDesign mới
                 var newDesignRecord = new OrderDetailDesign
                 {
                     OrderDetailId = orderDetailId,
                     DesignerUserId = designerId,
-                    FileUrl = uploadedImage.SecureUrl, // Lấy URL từ kết quả upload
+                    FileUrl = uploadedFile.SecureUrl,
                     Note = dto.Note,
                     IsFinal = false,
                     CreatedAt = DateTime.UtcNow
                 };
                 _context.OrderDetailDesigns.Add(newDesignRecord);
 
-                // 4. Cập nhật lại LinkFileDesign trong OrderDetail
-                orderDetail.LinkFileDesign = uploadedImage.SecureUrl;
+                // 4. Cập nhật lại LinkFileDesign và ProductionStatus trong OrderDetail
+                orderDetail.LinkFileDesign = uploadedFile.SecureUrl;
 
-                // 5. Cập nhật trạng thái của Order thành "CHECKDESIGN" (ID = 5)
-                orderDetail.Order.StatusOrder = 5;
+                // CẬP NHẬT TRẠNG THÁI ORDER DETAIL: DESIGNING/DESIGN_REDO -> CHECK_DESIGN
+                // Set giá trị Enum. EF Core Value Converter sẽ tự chuyển nó sang chuỗi (varchar) trong DB.
+                orderDetail.ProductionStatus = ProductionStatus.CHECK_DESIGN;
 
-                // 6. Lưu tất cả thay đổi vào database
+                // 5. Lưu tất cả thay đổi vào database
                 await _context.SaveChangesAsync();
 
-                // 7. Nếu mọi thứ thành công, commit transaction
                 await transaction.CommitAsync();
 
                 return true;
             }
             catch (Exception)
             {
-                // Nếu có bất kỳ lỗi nào xảy ra, rollback transaction
+                // Khi xảy ra Exception trong quá trình Upload (bước 2), nó sẽ được bắt ở đây.
+                // Bạn cần kiểm tra log chi tiết lỗi server (500) để fix lỗi Cloudinary/ImageService.
                 await transaction.RollbackAsync();
-                // Ném lại lỗi để controller có thể xử lý và log lại
                 throw;
             }
         }
+        //
         public async Task<bool> AssignDesignerToOrderDetailAsync(int orderDetailId, string designerUserId, string sellerId)
         {
             using var transaction = await _context.Database.BeginTransactionAsync();
@@ -205,6 +233,8 @@ namespace CB_Gift.Services
                 {
                     detail.AssignedDesignerUserId = designerUserId;
                     detail.AssignedAt = assignmentTime;
+                    // <<< CẬP NHẬT MỚI: Đặt ProductionStatus của OrderDetail thành NEED_DESIGN >>>
+                    detail.ProductionStatus = ProductionStatus.NEED_DESIGN;
                 }
 
                 // 4. Cập nhật trạng thái của Order chính thành "NEEDDESIGN" (ID = 3).
@@ -229,25 +259,34 @@ namespace CB_Gift.Services
                 throw; // Ném lại lỗi để controller xử lý và trả về lỗi 500.
             }
         }
+        // DesignerTaskService.cs
+
         /// <summary>
-        /// Cập nhật trạng thái thiết kế của một chi tiết đơn hàng.
+        /// Cập nhật trạng thái thiết kế của một chi tiết đơn hàng (OrderDetail).
         /// </summary>
         /// <param name="orderDetailId">ID chi tiết đơn hàng.</param>
-        /// <param name="newStatus">Trạng thái mới (3, 4, 5, hoặc 6).</param>
+        /// <param name="newStatus">Trạng thái ProductionStatus mới.</param>
         /// <returns>True nếu cập nhật thành công, False nếu thất bại hoặc không tìm thấy.</returns>
-        public async Task<bool> UpdateStatusAsync(int orderDetailId, int newStatus)
+        public async Task<bool> UpdateStatusAsync(int orderDetailId, ProductionStatus newStatus)
         {
-            // === 1. Xác thực trạng thái đầu vào (Validation) ===
-            if (newStatus < 3 || newStatus > 6)
+            // 1. Xác thực trạng thái đầu vào (Validation)
+            // Tận dụng enum: chỉ kiểm tra nếu trạng thái nằm trong phạm vi design
+            var designStatuses = new[]
             {
-                // Trả về false hoặc throw exception tùy theo quy ước của dự án
-                throw new ArgumentException("Invalid design status code provided.");
+        ProductionStatus.NEED_DESIGN,
+        ProductionStatus.DESIGNING,
+        ProductionStatus.CHECK_DESIGN,
+        ProductionStatus.DESIGN_REDO
+    };
+
+            if (!designStatuses.Contains(newStatus))
+            {
+                // Lỗi này sẽ được gửi về client
+                throw new ArgumentException($"Invalid design status: {newStatus}. Must be one of {string.Join(", ", designStatuses)}.");
             }
 
-            // === 2. Tìm kiếm chi tiết đơn hàng ===
-            // Giả định OrderDetail là tên bảng/entity
+            // 2. Tìm kiếm chi tiết đơn hàng
             var orderDetail = await _context.OrderDetails
-                .Include(od=>od.Order)
                 .FirstOrDefaultAsync(od => od.OrderDetailId == orderDetailId);
 
             if (orderDetail == null)
@@ -255,41 +294,39 @@ namespace CB_Gift.Services
                 return false; // Không tìm thấy bản ghi
             }
 
-            // === 3. Logic Nghiệp vụ (Business Rules) ===
+            // Lấy trạng thái hiện tại (nếu null, giả định là NEED_DESIGN, hoặc trạng thái đầu tiên)
+            var currentStatus = orderDetail.ProductionStatus ?? ProductionStatus.NEED_DESIGN;
 
-            // Ví dụ: Logic Accept Design (Chỉ cho phép chuyển từ NEEDDESIGN(3) sang DESIGNING(4))
-            if (orderDetail.Order.StatusOrder == 3 && newStatus == 4)
+
+            // 3. Logic Nghiệp vụ (Business Rules)
+
+            // Logic 1: Accept Design (NEED_DESIGN -> DESIGNING)
+            if (currentStatus == ProductionStatus.NEED_DESIGN && newStatus == ProductionStatus.DESIGNING)
             {
-                // Cập nhật trạng thái
-                orderDetail.Order.StatusOrder = newStatus;
-               // orderDetail.UpdatedAt = DateTime.UtcNow;
+                orderDetail.ProductionStatus = newStatus;
             }
-            // Ví dụ: Logic Gửi QA (Chỉ cho phép chuyển từ DESIGNING(4) sang CHECKDESIGN(5))
-            else if (orderDetail.Order.StatusOrder == 4 && newStatus == 5)
+            // Logic 2: Upload/Send to Check (DESIGNING -> CHECK_DESIGN)
+            else if (currentStatus == ProductionStatus.DESIGNING && newStatus == ProductionStatus.CHECK_DESIGN)
             {
-                // Cập nhật trạng thái
-                orderDetail.Order.StatusOrder = newStatus;
-               // orderDetail.UpdatedAt = DateTime.UtcNow;
+                orderDetail.ProductionStatus = newStatus;
             }
-            // Ví dụ: Xử lý Redo (Chỉ cho phép chuyển từ DESIGN_REDO(6) sang DESIGNING(4))
-            else if (orderDetail.Order.StatusOrder == 6 && newStatus == 4)
+            // Logic 3: Start Redo (DESIGN_REDO -> DESIGNING)
+            else if (currentStatus == ProductionStatus.DESIGN_REDO && newStatus == ProductionStatus.DESIGNING)
             {
-                // Cập nhật trạng thái
-                orderDetail.Order.StatusOrder = newStatus;
-             //   orderDetail.UpdatedAt = DateTime.UtcNow;
+                orderDetail.ProductionStatus = newStatus;
             }
-            else if (orderDetail.Order.StatusOrder == newStatus)
+            // Logic 4: Trạng thái đã đúng
+            else if (currentStatus == newStatus)
             {
-                // Trạng thái đã đúng, không cần cập nhật
                 return true;
             }
             else
             {
                 // Trường hợp chuyển trạng thái không hợp lệ theo logic nghiệp vụ
-                throw new InvalidOperationException($"Cannot transition status from {orderDetail.Order.StatusOrder} to {newStatus}.");
+                throw new InvalidOperationException($"Invalid transition from {currentStatus} to {newStatus} for Order Detail {orderDetailId}.");
             }
 
-            // === 4. Lưu thay đổi vào Database ===
+            // 4. Lưu thay đổi vào Database
             await _context.SaveChangesAsync();
 
             return true;

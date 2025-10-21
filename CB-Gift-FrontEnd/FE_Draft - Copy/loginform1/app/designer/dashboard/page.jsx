@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-// Import các components UI cần thiết cho Dashboard, Filter và Dialog
+// Import các components UI
 import { Input } from "@/components/ui/input";
 import {
     Select,
@@ -33,12 +33,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Eye, Search, Download } from "lucide-react";
 
-// Định nghĩa các trạng thái design cố định
+// CẬP NHẬT CONSTANTS SANG TÊN ENUM STRING (ProductionStatus)
+// Lưu ý: Key là tên enum (string)
 const DESIGN_STATUSES = {
-    "3": { name: "Cần Design", color: "bg-red-500", code: "NEEDDESIGN" },
-    "4": { name: "Đang làm Design", color: "bg-yellow-500", code: "DESIGNING" },
-    "5": { name: "Cần Check Design", color: "bg-blue-500", code: "CHECKDESIGN" },
-    "6": { name: "Thiết kế Lại (Design Lỗi)", color: "bg-purple-500", code: "DESIGN_REDO" },
+    "NEED_DESIGN": { name: "Cần Design", color: "bg-red-500", code: 2 },
+    "DESIGNING": { name: "Đang làm Design", color: "bg-yellow-500", code: 3 },
+    "CHECK_DESIGN": { name: "Cần Check Design", color: "bg-blue-500", code: 4 },
+    "DESIGN_REDO": { name: "Thiết kế Lại (Lỗi)", color: "bg-purple-500", code: 5 },
 };
 
 export default function DesignerDashboard() {
@@ -49,7 +50,8 @@ export default function DesignerDashboard() {
     
     // State cho tính năng Filter và View Detail
     const [searchTerm, setSearchTerm] = useState("");
-    const [statusFilter, setStatusFilter] = useState("all");
+    // Cập nhật giá trị filter mặc định là "all" (sẽ filter theo string keys)
+    const [statusFilter, setStatusFilter] = useState("all"); 
     const [selectedAssignment, setSelectedAssignment] = useState(null); 
 
     // Hàm gọi API và xử lý dữ liệu
@@ -71,8 +73,8 @@ export default function DesignerDashboard() {
                 const mappedData = (apiData || []).map((item) => ({
                     ...item,
                     id: item.orderDetailId.toString(), 
-                    // <<< ĐÃ SỬA: LẤY TRỰC TIẾP TỪ orderStatus VÀ CHUYỂN THÀNH CHUỖI >>>
-                    OrderStatus: String(item.orderStatus) || "3", 
+                    // <<< THAY THẾ OrderStatus bằng ProductionStatus (dạng chuỗi) >>>
+                    ProductionStatus: item.productionStatus || "NEED_DESIGN", 
                     customerName: `Customer for ${item.orderCode}`, 
                 }));
 
@@ -92,11 +94,18 @@ export default function DesignerDashboard() {
 
     // Hàm tính toán số lượng cho Stats Cards và Filter Count
     const calculateCounts = (orders) => {
-        const initialCounts = { "3": 0, "4": 0, "5": 0, "6": 0, total: orders.length };
+        // Khởi tạo counts với các key là tên Enum
+        const initialCounts = { 
+            "NEED_DESIGN": 0, 
+            "DESIGNING": 0, 
+            "CHECK_DESIGN": 0, 
+            "DESIGN_REDO": 0, 
+            total: orders.length 
+        };
         
         const newCounts = orders.reduce((acc, order) => {
-            // <<< Dùng order.OrderStatus >>>
-            const statusKey = String(order.OrderStatus || "3");
+            // <<< Dùng order.ProductionStatus >>>
+            const statusKey = order.ProductionStatus || "NEED_DESIGN";
             
             if (acc.hasOwnProperty(statusKey)) {
                 acc[statusKey] += 1;
@@ -130,6 +139,7 @@ export default function DesignerDashboard() {
 
     // Hàm hiển thị Badge trạng thái (có thể click)
     const getStatusBadge = (statusKey) => {
+        // Dùng statusKey (chuỗi enum)
         const statusInfo = DESIGN_STATUSES[String(statusKey)] || { name: "Không xác định", color: "bg-gray-500" };
         
         return (
@@ -155,8 +165,8 @@ export default function DesignerDashboard() {
             assignment.orderCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
             assignment.productName.toLowerCase().includes(searchTerm.toLowerCase());
 
-        // <<< Dùng assignment.OrderStatus >>>
-        const orderStatusKey = String(assignment.OrderStatus || "3");
+        // <<< Dùng assignment.ProductionStatus >>>
+        const orderStatusKey = assignment.ProductionStatus || "NEED_DESIGN";
 
         const matchesStatus =
             statusFilter === "all" ||
@@ -166,7 +176,7 @@ export default function DesignerDashboard() {
     });
 
 
-    let previousOrderCode = null;
+    //let previousOrderCode = null;
 
 
     return (
@@ -195,53 +205,53 @@ export default function DesignerDashboard() {
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                                 
-                                {/* 1. Cần Design (Status 3) */}
+                                {/* 1. Cần Design (Status NEED_DESIGN) */}
                                 <div 
-                                    className="bg-white p-6 rounded-lg shadow cursor-pointer hover:ring-2 hover:ring-red-300 transition-all"
-                                    onClick={() => handleStatusBadgeClick("3")}
+                                    className={`bg-white p-6 rounded-lg shadow cursor-pointer hover:ring-2 hover:ring-red-300 transition-all ${statusFilter === 'NEED_DESIGN' ? 'ring-2 ring-offset-2 ring-red-500' : ''}`}
+                                    onClick={() => handleStatusBadgeClick("NEED_DESIGN")}
                                 >
                                     <h3 className="text-sm font-medium text-gray-500">
-                                        {DESIGN_STATUSES["3"].name}
+                                        {DESIGN_STATUSES["NEED_DESIGN"].name}
                                     </h3>
-                                    <p className="text-2xl font-bold text-gray-900 mt-2">{counts["3"] || 0}</p>
+                                    <p className="text-2xl font-bold text-gray-900 mt-2">{counts["NEED_DESIGN"] || 0}</p>
                                 </div>
                                 
-                                {/* 2. Đang làm Design (Status 4) */}
+                                {/* 2. Đang làm Design (Status DESIGNING) */}
                                 <div 
-                                    className="bg-white p-6 rounded-lg shadow cursor-pointer hover:ring-2 hover:ring-yellow-300 transition-all"
-                                    onClick={() => handleStatusBadgeClick("4")}
+                                    className={`bg-white p-6 rounded-lg shadow cursor-pointer hover:ring-2 hover:ring-yellow-300 transition-all ${statusFilter === 'DESIGNING' ? 'ring-2 ring-offset-2 ring-yellow-500' : ''}`}
+                                    onClick={() => handleStatusBadgeClick("DESIGNING")}
                                 >
                                     <h3 className="text-sm font-medium text-gray-500">
-                                        {DESIGN_STATUSES["4"].name}
+                                        {DESIGN_STATUSES["DESIGNING"].name}
                                     </h3>
-                                    <p className="text-2xl font-bold text-gray-900 mt-2">{counts["4"] || 0}</p>
+                                    <p className="text-2xl font-bold text-gray-900 mt-2">{counts["DESIGNING"] || 0}</p>
                                 </div>
                                 
-                                {/* 3. Cần Check Design (Status 5) */}
+                                {/* 3. Cần Check Design (Status CHECK_DESIGN) */}
                                 <div 
-                                    className="bg-white p-6 rounded-lg shadow cursor-pointer hover:ring-2 hover:ring-blue-300 transition-all"
-                                    onClick={() => handleStatusBadgeClick("5")}
+                                    className={`bg-white p-6 rounded-lg shadow cursor-pointer hover:ring-2 hover:ring-blue-300 transition-all ${statusFilter === 'CHECK_DESIGN' ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`}
+                                    onClick={() => handleStatusBadgeClick("CHECK_DESIGN")}
                                 >
                                     <h3 className="text-sm font-medium text-gray-500">
-                                        {DESIGN_STATUSES["5"].name}
+                                        {DESIGN_STATUSES["CHECK_DESIGN"].name}
                                     </h3>
-                                    <p className="text-2xl font-bold text-gray-900 mt-2">{counts["5"] || 0}</p>
+                                    <p className="text-2xl font-bold text-gray-900 mt-2">{counts["CHECK_DESIGN"] || 0}</p>
                                 </div>
 
-                                {/* 4. Thiết kế Lại (Design Lỗi) (Status 6) */}
+                                {/* 4. Thiết kế Lại (Design Lỗi) (Status DESIGN_REDO) */}
                                 <div 
-                                    className="bg-white p-6 rounded-lg shadow cursor-pointer hover:ring-2 hover:ring-purple-300 transition-all"
-                                    onClick={() => handleStatusBadgeClick("6")}
+                                    className={`bg-white p-6 rounded-lg shadow cursor-pointer hover:ring-2 hover:ring-purple-300 transition-all ${statusFilter === 'DESIGN_REDO' ? 'ring-2 ring-offset-2 ring-purple-500' : ''}`}
+                                    onClick={() => handleStatusBadgeClick("DESIGN_REDO")}
                                 >
                                     <h3 className="text-sm font-medium text-gray-500">
-                                        {DESIGN_STATUSES["6"].name}
+                                        {DESIGN_STATUSES["DESIGN_REDO"].name}
                                     </h3>
-                                    <p className="text-2xl font-bold text-gray-900 mt-2">{counts["6"] || 0}</p>
+                                    <p className="text-2xl font-bold text-gray-900 mt-2">{counts["DESIGN_REDO"] || 0}</p>
                                 </div>
                                 
                                 {/* 5. Tổng số Order Details (Tất cả) */}
                                 <div 
-                                    className="bg-white p-6 rounded-lg shadow cursor-pointer hover:ring-2 hover:ring-gray-300 transition-all"
+                                    className={`bg-white p-6 rounded-lg shadow cursor-pointer hover:ring-2 hover:ring-gray-300 transition-all ${statusFilter === 'all' ? 'ring-2 ring-offset-2 ring-gray-500' : ''}`}
                                     onClick={() => handleStatusBadgeClick("all")}
                                 >
                                     <h3 className="text-sm font-medium text-gray-500">
@@ -252,8 +262,8 @@ export default function DesignerDashboard() {
                             </div>
                         )}
                     
-                        {/* Search and Filter Section */}
-                        {/* <div className="bg-white p-4 rounded-lg shadow mb-6">
+                        {/* Search and Filter Section (Sử dụng Filter Select cho tính nhất quán) */}
+                        <div className="bg-white p-4 rounded-lg shadow">
                             <div className="flex gap-4 items-center">
                                 <div className="flex-1">
                                     <div className="relative">
@@ -291,7 +301,7 @@ export default function DesignerDashboard() {
                                     </Select>
                                 </div>
                             </div>
-                        </div> */}
+                        </div>
                         
                         {/* Recent Assignments Table */}
                         <div className="bg-white rounded-lg shadow">
@@ -322,13 +332,12 @@ export default function DesignerDashboard() {
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {/* Khởi tạo biến theo dõi OrderCode trùng lặp */}
-                                        {previousOrderCode = null} 
+                                        
                                         {filteredAssignments.map((assignment) => {
                                             
                                             // 1. Logic kiểm tra trùng lặp
-                                            const isDuplicateOrderCode = assignment.orderCode === previousOrderCode;
-                                            previousOrderCode = assignment.orderCode;
+                                            //const isDuplicateOrderCode = assignment.orderCode === previousOrderCode;
+                                            //previousOrderCode = assignment.orderCode;
                                             
                                             return (
                                                 <TableRow key={assignment.id}>
@@ -347,7 +356,7 @@ export default function DesignerDashboard() {
                                                     <TableCell>{new Date(assignment.assignedAt).toLocaleDateString()}</TableCell>
                                                     
                                                     {/* Ô Status */}
-                                                    <TableCell>{getStatusBadge(assignment.OrderStatus)}</TableCell>
+                                                    <TableCell>{getStatusBadge(assignment.ProductionStatus)}</TableCell>
                                                     
                                                     <TableCell>
                                                         {/* Nút View chi tiết */}
@@ -380,12 +389,11 @@ export default function DesignerDashboard() {
                                                                             <Label className="text-sm text-gray-500">Product Name</Label>
                                                                             <p className="font-medium">{selectedAssignment.productName}</p>
                                                                         </div>
-                                                                        // MỚI (Khắc phục lỗi)
+                                                                        {/* MỚI: Hiển thị Production Status */}
                                                                         <div>
                                                                             <Label className="text-sm text-gray-500">Status</Label>
-                                                                            {/* Dùng <div> thay cho <p> để chứa Badge Status phức tạp */}
                                                                             <div className="font-medium">
-                                                                                {getStatusBadge(selectedAssignment.OrderStatus)}
+                                                                                {getStatusBadge(selectedAssignment.ProductionStatus)}
                                                                             </div>
                                                                         </div>
                                                                         <div>
@@ -396,7 +404,7 @@ export default function DesignerDashboard() {
                                                                             <Label className="text-sm text-gray-500">Customer Note</Label>
                                                                             <p className="font-medium">{selectedAssignment.note || 'Không có ghi chú.'}</p>
                                                                         </div>
-                                                                        {/* Thêm phần download/view file nếu cần */}
+                                                                        {/* Link Download */}
                                                                         {selectedAssignment.linkImg && (
                                                                             <div>
                                                                                 <Label className="text-sm text-gray-500">Reference Image</Label>
@@ -406,7 +414,7 @@ export default function DesignerDashboard() {
                                                                                 </a>
                                                                             </div>
                                                                         )}
-                                                                        {/* Thêm chi tiết size */}
+                                                                        {/* Chi tiết Size */}
                                                                         {selectedAssignment.productDetails && (
                                                                             <div>
                                                                                 <Label className="text-sm text-gray-500">Product Size</Label>

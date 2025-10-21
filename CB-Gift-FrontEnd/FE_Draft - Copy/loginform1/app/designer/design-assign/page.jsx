@@ -34,19 +34,19 @@ import {
     Eye,
     Upload,
     Check,
-    Download,
-    ImageIcon,
     Search,
     Send,
+    ImageIcon,
 } from "lucide-react";
 import DesignerHeader from "@/components/layout/designer/header";
 import DesignerSidebar from "@/components/layout/designer/sidebar";
 
+// CẬP NHẬT CONSTANTS DỰA TRÊN ENUM ProductionStatus MỚI
 const DESIGN_STATUSES = {
-    "3": { name: "NEED DESIGN", color: "bg-red-500", code: "NEEDDESIGN" },
-    "4": { name: "DESIGNING", color: "bg-yellow-500", code: "DESIGNING" },
-    "5": { name: "CHECKDESIGN", color: "bg-blue-500", code: "CHECKDESIGN" },
-    "6": { name: "DESIGN_REDO", color: "bg-purple-500", code: "DESIGN_REDO" },
+    "NEED_DESIGN": { name: "NEED DESIGN", color: "bg-red-500", code: 2 },
+    "DESIGNING": { name: "DESIGNING", color: "bg-yellow-500", code: 3 },
+    "CHECK_DESIGN": { name: "CHECK DESIGN", color: "bg-blue-500", code:4 },
+    "DESIGN_REDO": { name: "DESIGN REDO", color: "bg-purple-500", code: 5 },
 };
 
 export default function DesignAssignPage() {
@@ -60,7 +60,8 @@ export default function DesignAssignPage() {
     const [selectAll, setSelectAll] = useState(false);
 
     const [searchTerm, setSearchTerm] = useState("");
-    const [statusFilter, setStatusFilter] = useState("all");
+    // Cập nhật trạng thái filter mặc định
+    const [statusFilter, setStatusFilter] = useState("all"); 
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
     const [confirmAction, setConfirmAction] = useState(null);
     const [confirmMessage, setConfirmMessage] = useState("");
@@ -68,8 +69,19 @@ export default function DesignAssignPage() {
     const [loading, setLoading] = useState(true);
     const [assignedOrders, setAssignedOrders] = useState([]); 
 
-    // --- HÀM GỌI API CẬP NHẬT TRẠNG THÁI (Đã sửa lỗi JSON input) ---
+    // Hàm lấy giá trị Code (Int) từ tên Status (String)
+    const getStatusCode = (statusKey) => DESIGN_STATUSES[statusKey]?.code;
+
+
+    // --- HÀM GỌI API CẬP NHẬT TRẠNG THÁI (Sử dụng ProductionStatus) ---
     const updateDesignStatusApi = async (orderDetailId, newStatusKey) => {
+        const newStatusCode = getStatusCode(newStatusKey); 
+    if (!newStatusCode && newStatusCode !== 0) { // Kiểm tra cả trường hợp code = 0 (DRAFT)
+        console.error("Invalid status key:", newStatusKey);
+        alert(`Lỗi: Trạng thái ${newStatusKey} không hợp lệ.`);
+        return false;
+    }
+
         const url = `https://localhost:7015/api/designer/tasks/status/${orderDetailId}`; 
         
         try {
@@ -79,7 +91,7 @@ export default function DesignAssignPage() {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({ 
-                    orderStatus: parseInt(newStatusKey),
+                    productionStatus: newStatusCode, // Gửi ProductionStatus Code
                 }),
                 credentials: 'include',
             });
@@ -88,7 +100,6 @@ export default function DesignAssignPage() {
                 const contentType = response.headers.get("content-type");
                 
                 if (!contentType || !contentType.includes("application/json")) {
-                    // Nếu không phải JSON (ví dụ: 400 Bad Request trả về text)
                     const errorText = await response.text();
                     throw new Error(`Server returned status ${response.status}. Response: ${errorText.substring(0, 50)}...`);
                 }
@@ -97,7 +108,6 @@ export default function DesignAssignPage() {
                 throw new Error(errorData.message || `Failed to update status: ${response.status}`);
             }
 
-            // Xử lý thành công (200 OK, 204 No Content)
             return true;
 
         } catch (error) {
@@ -108,31 +118,33 @@ export default function DesignAssignPage() {
     };
     
     // Hàm cập nhật trạng thái trên frontend (chỉ khi API thành công)
+    // Cập nhật để sử dụng ProductionStatus
     const handleUpdateStatusLocal = (orderId, newStatusKey) => {
         setAssignedOrders(prevOrders => 
             prevOrders.map(order => 
-                order.id === orderId ? { ...order, OrderStatus: newStatusKey } : order
+                order.id === orderId ? { ...order, ProductionStatus: newStatusKey } : order
             )
         );
         console.log(`Cập nhật trạng thái Order Detail ${orderId} thành ${newStatusKey} (Local)`);
     };
 
-    // Hàm chấp nhận thiết kế (3 -> 4)
+    // Hàm chấp nhận thiết kế (NEED_DESIGN -> DESIGNING)
     const handleAcceptDesign = async (orderId) => {
-        const success = await updateDesignStatusApi(orderId, "4");
+        const success = await updateDesignStatusApi(orderId, "DESIGNING");
         
         if (success) {
-            handleUpdateStatusLocal(orderId, "4");
+            handleUpdateStatusLocal(orderId, "DESIGNING");
         }
     };
 
-    // Hàm Gửi QA (4/5/6 -> 5/QA)
+    // Hàm Gửi QA (DESIGNING/DESIGN_REDO -> CHECK_DESIGN)
+    // Dùng cho nút nhanh bên trong Dialog
     const handleSendToQA = (orderId) => {
-        setConfirmMessage(`Bạn có chắc muốn gửi Order Detail ${orderId} sang CHECKDESIGN (5)?`);
+        setConfirmMessage(`Bạn có chắc muốn gửi Order Detail ${orderId} sang CHECK DESIGN?`);
         setConfirmAction(() => async () => {
-            const success = await updateDesignStatusApi(orderId, "5");
+            const success = await updateDesignStatusApi(orderId, "CHECK_DESIGN");
             if (success) {
-                handleUpdateStatusLocal(orderId, "5");
+                handleUpdateStatusLocal(orderId, "CHECK_DESIGN");
             }
             setShowConfirmDialog(false);
         });
@@ -140,27 +152,101 @@ export default function DesignAssignPage() {
     };
     
     // Hàm Upload Design (và chuyển trạng thái)
-    const handleUploadDesign = async () => {
-        if (designFile && selectedOrder) {
-            console.log(`Uploading design file for ${selectedOrder.id}`);
-            
-            // 1. Logic Upload File lên server (BẠN CẦN VIẾT HÀM NÀY)
-            // Tạm thời giả định thành công
-            const uploadSuccess = true; 
-            
-            if (uploadSuccess) {
-                // 2. Chuyển trạng thái sang 5 (CHECKDESIGN)
-                const apiSuccess = await updateDesignStatusApi(selectedOrder.id, "5"); 
+const handleUploadDesign = async () => {
+        if (!designFile || !selectedOrder) {
+        alert("Vui lòng chọn file thiết kế.");
+        return;
+        }
 
-                if (apiSuccess) {
-                    handleUpdateStatusLocal(selectedOrder.id, "5"); 
-                    setDesignFile(null);
-                    setDesignNotes("");
-                    setSelectedOrder(null); 
+    const orderDetailId = selectedOrder.id;
+    const url = `https://localhost:7015/api/designer/tasks/${orderDetailId}/upload`; 
+    
+    setLoading(true); // Bật loading khi bắt đầu upload
+
+    try {
+        const formData = new FormData();
+        formData.append('DesignFile', designFile); 
+        // FIX ĐƠN GIẢN VÀ CHẮC CHẮN NHẤT:
+        // Đảm bảo designNotes luôn là chuỗi rỗng nếu nó là null/undefined, sau đó gửi nó đi.
+        // Nếu designNotes không được khởi tạo (undefined), ta dùng chuỗi rỗng.
+       const noteToSend = designNotes || "";
+       formData.append('Note', noteToSend);
+        // --- 1. Thực hiện Upload File ---
+        const response = await fetch(url, {
+            method: 'POST',
+            // Quan trọng: Không set Content-Type 'application/json' khi dùng FormData,
+            // trình duyệt sẽ tự động thiết lập Content-Type: multipart/form-data.
+            body: formData,
+            credentials: 'include',
+        });
+
+        const contentType = response.headers.get("content-type");
+        let responseData = {};
+        
+        // Cố gắng đọc JSON nếu có
+        if (contentType && contentType.includes("application/json")) {
+            responseData = await response.json();
+        }
+
+        if (!response.ok) {
+            let errorDetails = response.statusText || `Status ${response.status}`;
+            
+            // Cố gắng đọc JSON (Problem Details)
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.includes("application/json")) {
+                const errorData = await response.json();
+                
+                // ASP.NET Core Model Binding Errors nằm trong đối tượng 'errors'
+                if (errorData.errors) {
+                    const modelErrors = Object.values(errorData.errors)
+                        .flat()
+                        .join('; ');
+                    errorDetails = errorData.title || "Model Binding Error";
+                    errorDetails += ` [Details: ${modelErrors}]`;
+                } else {
+                    // Lỗi generic (ví dụ: từ Controller)
+                    errorDetails = errorData.message || errorDetails;
                 }
             } else {
-                alert("Lỗi: Không thể upload file thiết kế.");
+                // Nếu không phải JSON, chỉ lấy Status Text
+                errorDetails = await response.text();
             }
+            
+            throw new Error(errorDetails);
+        }
+        
+        // --- 2. Cập nhật trạng thái trên Frontend (API backend đã xử lý chuyển trạng thái thành CHECK_DESIGN) ---
+        
+        // API backend của bạn đã xử lý cập nhật trạng thái (Order.StatusOrder = 5) và lưu Record
+        // Tuy nhiên, để đồng bộ ProductionStatus trong OrderDetail, 
+        // chúng ta cần cập nhật trạng thái local thành "CHECK_DESIGN"
+        handleUpdateStatusLocal(orderDetailId, "CHECK_DESIGN"); 
+        
+        // Reset state và đóng dialog
+        setDesignFile(null);
+        setDesignNotes("");
+        // Đặt selectedOrder về null để đóng Dialog (nếu Dialog được điều khiển bằng state này)
+        setSelectedOrder(null); 
+        alert("Upload file thiết kế thành công và đã gửi đi kiểm duyệt!");
+
+        return true; 
+        
+    } catch (error) {
+        console.error("Lỗi khi upload file thiết kế:", error);
+        alert(`Lỗi khi upload file thiết kế: ${error.message}`);
+        return false;
+    } finally {
+        setLoading(false); // Tắt loading
+    }
+};
+
+    // Hàm Bắt đầu Redo (DESIGN_REDO -> DESIGNING)
+    const handleStartRedo = async (orderId) => {
+        // Cần xác nhận API call không cần body nếu chỉ chuyển trạng thái
+        const success = await updateDesignStatusApi(orderId, "DESIGNING");
+        
+        if (success) {
+            handleUpdateStatusLocal(orderId, "DESIGNING");
         }
     };
 
@@ -184,8 +270,8 @@ export default function DesignAssignPage() {
                 const mappedData = (apiData || []).map((item) => ({
                     ...item,
                     id: item.orderDetailId.toString(), 
-                    // LẤY TRỰC TIẾP TỪ orderStatus VÀ CHUYỂN THÀNH CHUỖI
-                    OrderStatus: String(item.orderStatus), 
+                    // LẤY ProductionStatus TỪ DTO
+                    ProductionStatus: item.productionStatus || "NEED_DESIGN", 
                     customerName: `Customer for ${item.orderCode}`, 
                 }));
 
@@ -207,7 +293,7 @@ export default function DesignAssignPage() {
             order.orderCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
             order.productName.toLowerCase().includes(searchTerm.toLowerCase());
 
-        const orderStatusKey = String(order.OrderStatus || "3");
+        const orderStatusKey = order.ProductionStatus || "NEED_DESIGN";
 
         const matchesStatus =
             statusFilter === "all" ||
@@ -224,7 +310,7 @@ export default function DesignAssignPage() {
         });
 
         assignedOrders.forEach(order => {
-            const statusKey = String(order.OrderStatus || "3");
+            const statusKey = order.ProductionStatus || "NEED_DESIGN";
             if (counts.hasOwnProperty(statusKey)) {
                 counts[statusKey] += 1;
             }
@@ -233,7 +319,7 @@ export default function DesignAssignPage() {
     };
     const filterCounts = getFilterCounts();
 
-    // --- LOGIC CHECKBOX/BULK ACTIONS ---
+    // --- LOGIC CHECKBOX/BULK ACTIONS (Giữ nguyên, cần thêm logic bulk API) ---
     const handleSelectAll = (checked) => {
         setSelectAll(checked);
         if (checked) {
@@ -254,9 +340,9 @@ export default function DesignAssignPage() {
         setSelectAll(newSelected.size === filteredOrders.length && filteredOrders.length > 0);
     };
 
-    // Hàm hiển thị Badge trạng thái
+    // Hàm hiển thị Badge trạng thái (Sử dụng ProductionStatus)
     const getOrderStatus = (order) => {
-        const statusKey = order.OrderStatus ? String(order.OrderStatus) : "3";
+        const statusKey = order.ProductionStatus || "NEED_DESIGN";
         const statusInfo = DESIGN_STATUSES[statusKey] || { name: "UNKNOWN", color: "bg-gray-500" };
 
         return (
@@ -267,7 +353,7 @@ export default function DesignAssignPage() {
     };
     
     // Biến theo dõi OrderCode trùng lặp
-    let previousOrderCode = null;
+    //let previousOrderCode = null;
 
 
     return (
@@ -307,7 +393,6 @@ export default function DesignAssignPage() {
                             <div className="w-48">
                                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                                     <SelectTrigger>
-                                        {/* Hiển thị count bên cạnh giá trị đang chọn */}
                                         <SelectValue placeholder="Filter by status">
                                             {statusFilter === "all" ? (
                                                 `Tất cả Status (${filterCounts.all})`
@@ -344,6 +429,7 @@ export default function DesignAssignPage() {
                                         onClick={() => { /* Bulk accept logic */ }}
                                         className="bg-green-600 hover:bg-green-700"
                                         size="sm"
+                                        disabled={true} // Tạm thời disable bulk actions
                                     >
                                         <Check className="h-4 w-4 mr-1" />
                                         Accept Selected ({selectedOrderDetails.size})
@@ -391,13 +477,11 @@ export default function DesignAssignPage() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {previousOrderCode = null}
+                                   
                                     {filteredOrders.map((order) => {
-                                        // Logic ẩn OrderCode trùng lặp
-                                        const isDuplicateOrderCode = order.orderCode === previousOrderCode;
-                                        previousOrderCode = order.orderCode;
+                                       
                                         
-                                        const currentStatus = String(order.OrderStatus || "3");
+                                        const currentStatus = order.ProductionStatus || "NEED_DESIGN";
 
                                         return (
                                             <TableRow key={order.id}> 
@@ -408,9 +492,7 @@ export default function DesignAssignPage() {
                                                     />
                                                 </TableCell>
                                                 <TableCell className="font-medium">{order.orderDetailId}</TableCell>
-                                                <TableCell className={isDuplicateOrderCode ? "text-gray-400 font-normal" : "font-medium"}>
-                                                    {!isDuplicateOrderCode ? order.orderCode : "—"}
-                                                </TableCell>
+                                                <TableCell className="font-medium">{order.orderCode }</TableCell>
                                                 <TableCell>{order.productName}</TableCell>
                                                 <TableCell>{order.productDescribe || 'N/A'}</TableCell>
                                                 <TableCell>{order.quantity}</TableCell>
@@ -426,7 +508,12 @@ export default function DesignAssignPage() {
                                                                 <Button
                                                                     variant="outline"
                                                                     size="sm"
-                                                                    onClick={() => setSelectedOrder(order)}
+                                                                    onClick={() => {
+                                                                        setSelectedOrder(order);
+                                                                        // Reset upload state khi mở dialog
+                                                                        setDesignFile(null); 
+                                                                        setDesignNotes("");
+                                                                    }}
                                                                 >
                                                                     <Eye className="h-4 w-4 mr-1" /> View
                                                                 </Button>
@@ -451,31 +538,23 @@ export default function DesignAssignPage() {
                                                                         </div>
 
                                                                         {/* UPLOAD DESIGN SECTION */}
-                                                                        {/* HIỂN THỊ KHI ĐANG DESIGNING (4) HOẶC DESIGN_REDO (6) */}
-                                                                        {(currentStatus === "4" || currentStatus === "6") && (
+                                                                        {/* HIỂN THỊ KHI ĐANG DESIGNING HOẶC DESIGN_REDO */}
+                                                                        {(currentStatus === "DESIGNING" || currentStatus === "DESIGN_REDO") && (
                                                                             <div className="border-t pt-4">
                                                                                 <h3 className="font-semibold text-lg mb-3">Upload Design</h3>
                                                                                 <div className="space-y-4">
-                                                                                    <div><Label htmlFor="design-file">Design File</Label><Input id="design-file" type="file" accept=".jpg,.jpeg,.png,.pdf,.ai,.psd" onChange={(e) => setDesignFile(e.target.files[0])}/></div>
+                                                                                    <div><Label htmlFor="design-file">Design File</Label><Input id="design-file" type="file" accept=".zip,.rar,.7z,.pdf,.ai,.psd,.jpg,.jpeg,.png" onChange={(e) => setDesignFile(e.target.files[0])}/></div>
                                                                                     <div><Label htmlFor="design-notes">Design Notes</Label><Textarea id="design-notes" placeholder="Add notes..." value={designNotes} onChange={(e) => setDesignNotes(e.target.value)} /></div>
                                                                                     <div className="flex gap-2">
                                                                                         <Button onClick={handleUploadDesign} className="flex-1" disabled={!designFile}>
-                                                                                            <Upload className="h-4 w-4 mr-2" /> Upload & Send to Check (5)
+                                                                                            <Upload className="h-4 w-4 mr-2" /> Upload & Send to Check
                                                                                         </Button>
                                                                                     </div>
                                                                                 </div>
                                                                             </div>
                                                                         )}
-                                                                        {/* HIỂN THỊ NÚT SEND TO QA (CHỈ KHI ĐÃ CÓ FILE DESIGN VÀ CHƯA GỬI CHECK) */}
-                                                                        {currentStatus === "5" && (
-                                                                            <div className="border-t pt-4">
-                                                                                <Button onClick={() => handleSendToQA(selectedOrder.id)} className="w-full bg-blue-600 hover:bg-blue-700">
-                                                                                    <Send className="h-4 w-4 mr-1" /> Send to QA
-                                                                                </Button>
-                                                                            </div>
-                                                                        )}
                                                                         
-                                                                         {/* FILES FROM SELLER (Tạm thời giữ nguyên logic file cũ) */}
+                                                                        {/* FILES FROM SELLER (Tạm thời giữ nguyên logic file cũ) */}
                                                                         <div className="border-t pt-4">
                                                                             <h3 className="font-semibold text-lg mb-3">Files from Seller</h3>
                                                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -495,8 +574,8 @@ export default function DesignAssignPage() {
                                                             {/* END DIALOG CONTENT */}
                                                         </Dialog>
 
-                                                        {/* ACCEPT BUTTON (Chỉ hiển thị khi NEED DESIGN - 3) */}
-                                                        {currentStatus === "3" && (
+                                                        {/* ACCEPT BUTTON (Chỉ hiển thị khi NEED_DESIGN) */}
+                                                        {currentStatus === "NEED_DESIGN" && (
                                                             <Button
                                                                 size="sm"
                                                                 onClick={() => handleAcceptDesign(order.id)}
@@ -506,11 +585,11 @@ export default function DesignAssignPage() {
                                                             </Button>
                                                         )}
 
-                                                        {/* Nút REDO/START DESIGN (Cho Status 6) */}
-                                                        {currentStatus === "6" && (
+                                                        {/* Nút START REDO (Cho Status DESIGN_REDO) */}
+                                                        {currentStatus === "DESIGN_REDO" && (
                                                             <Button
                                                                 size="sm"
-                                                                onClick={() => handleUpdateStatusLocal(order.id, "4")} // Chuyển về DESIGNING để bắt đầu lại
+                                                                onClick={() => handleStartRedo(order.id)} // Chuyển về DESIGNING để bắt đầu lại
                                                                 className="bg-purple-600 hover:bg-purple-700"
                                                             >
                                                                 <Check className="h-4 w-4 mr-1" />
@@ -518,20 +597,57 @@ export default function DesignAssignPage() {
                                                             </Button>
                                                         )}
                                                         
-                                                        {/* NÚT UPLOAD/GỬI QA NHANH (Chỉ khi đang DESIGNING (4) */}
-                                                        {currentStatus === "4" && (
-                                                             <Button
-                                                                size="sm"
-                                                                onClick={() => setSelectedOrder(order)} // Mở Dialog để Upload
-                                                                className="bg-blue-600 hover:bg-blue-700"
-                                                            >
-                                                                <Upload className="h-4 w-4 mr-1" />
-                                                                Upload Design
-                                                            </Button>
+                                                        {/* NÚT UPLOAD/GỬI QA NHANH (Chỉ khi đang DESIGNING) */}
+                                                        {/* Dùng DialogTrigger như trên để mở form upload */}
+                                                        {currentStatus === "DESIGNING" && (
+                                                            <Dialog>
+                                                                <DialogTrigger asChild>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        onClick={() => {
+                                                                            setSelectedOrder(order);
+                                                                            setDesignFile(null); 
+                                                                            setDesignNotes("");
+                                                                        }}
+                                                                        className="bg-blue-600 hover:bg-blue-700"
+                                                                    >
+                                                                        <Upload className="h-4 w-4 mr-1" />
+                                                                        Upload Design
+                                                                    </Button>
+                                                                </DialogTrigger>
+                                                                {selectedOrder && selectedOrder.id === order.id && ( 
+                                                                    <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                                                                        <DialogHeader><DialogTitle>Order Detail - {selectedOrder.orderDetailId} ({selectedOrder.orderCode})</DialogTitle></DialogHeader>
+                                                                        <div className="space-y-6">
+                                                                            {/* PRODUCT DETAILS (tối giản) */}
+                                                                            <div>
+                                                                                <h3 className="font-semibold text-lg mb-3">Product Details</h3>
+                                                                                <div className="grid grid-cols-2 gap-4">
+                                                                                    <div><Label className="text-sm text-gray-500">Product</Label><p className="font-medium">{selectedOrder.productName}</p></div>
+                                                                                    <div><Label className="text-sm text-gray-500">Size</Label><p className="font-medium">{selectedOrder.productDetails?.lengthCm}x{selectedOrder.productDetails?.heightCm}x{selectedOrder.productDetails?.widthCm}cm</p></div>
+                                                                                </div>
+                                                                            </div>
+                                                                            {/* UPLOAD DESIGN SECTION */}
+                                                                            <div className="border-t pt-4">
+                                                                                <h3 className="font-semibold text-lg mb-3">Upload Design</h3>
+                                                                                <div className="space-y-4">
+                                                                                    <div><Label htmlFor="design-file-quick">Design File</Label><Input id="design-file-quick" type="file" accept=".zip,.rar,.7z,.pdf,.ai,.psd,.jpg,.jpeg,.png" onChange={(e) => setDesignFile(e.target.files[0])}/></div>
+                                                                                    <div><Label htmlFor="design-notes-quick">Design Notes</Label><Textarea id="design-notes-quick" placeholder="Add notes..." value={designNotes} onChange={(e) => setDesignNotes(e.target.value)} /></div>
+                                                                                    <div className="flex gap-2">
+                                                                                        <Button onClick={handleUploadDesign} className="flex-1" disabled={!designFile}>
+                                                                                            <Upload className="h-4 w-4 mr-2" /> Upload & Send to Check
+                                                                                        </Button>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </DialogContent>
+                                                                )}
+                                                            </Dialog>
                                                         )}
                                                         
-                                                        {/* NÚT SEND QA (Chỉ khi CHECKDESIGN (5)) */}
-                                                        {currentStatus === "5" && (
+                                                        {/* NÚT SEND QA (Chỉ khi CHECK_DESIGN) - Có thể là bước kiểm tra nội bộ đã hoàn tất */}
+                                                        {currentStatus === "CHECK_DESIGN" && (
                                                             <Button
                                                                 size="sm"
                                                                 onClick={() => handleSendToQA(order.id)}
