@@ -346,9 +346,9 @@ export default function DesignerDashboard() {
                                                     </TableCell>
                                                     
                                                     <TableCell 
-                                                        className={isDuplicateOrderCode ? "text-gray-400 font-normal" : "font-medium"}
+                                                        className= "font-medium"
                                                     >
-                                                        {!isDuplicateOrderCode ? assignment.orderCode : "—"}
+                                                        {assignment.orderCode }
                                                     </TableCell>
                                                     
                                                     <TableCell>{assignment.productName}</TableCell>

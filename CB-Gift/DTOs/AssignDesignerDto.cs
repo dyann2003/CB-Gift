@@ -57,8 +57,13 @@ namespace CB_Gift.DTOs
     }
     public class UploadDesignDto
     {
-        [Required]
-        public IFormFile DesignFile { get; set; }
+        // Không còn [Required] ở đây. Chúng ta sẽ kiểm tra trong Service/Controller.
+        public IFormFile? DesignFile { get; set; }
+
+        // Trường mới: Dùng để nhận URL của ảnh đã có sẵn từ kho ảnh của designer
+        public string? FileUrl { get; set; }
+
+        // Dùng để nhận ghi chú
         public string? Note { get; set; }
     }
     public class AssignDesignerToOrderDetailDto

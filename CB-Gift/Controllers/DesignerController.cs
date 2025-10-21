@@ -59,10 +59,10 @@ public class DesignerController : ControllerBase
             var designerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(designerId)) return Unauthorized();
 
-            // Kiểm tra file rỗng đã được thực hiện ở đây:
-            if (dto.DesignFile == null || dto.DesignFile.Length == 0)
+            // KIỂM TRA MỚI: Phải có FILE MỚI hoặc URL CŨ
+            if ((dto.DesignFile == null || dto.DesignFile.Length == 0) && string.IsNullOrEmpty(dto.FileUrl))
             {
-                return BadRequest(new { message = "File thiết kế không được để trống." });
+                return BadRequest(new { message = "Vui lòng cung cấp File thiết kế mới hoặc chọn File từ kho ảnh." });
             }
 
             var success = await _designerTaskService.UploadDesignFileAsync(orderDetailId, designerId, dto);
