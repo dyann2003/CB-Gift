@@ -31,30 +31,60 @@ public class DesignerController : ControllerBase
     [HttpPost("{orderDetailId}/upload")]
     public async Task<IActionResult> UploadDesign(int orderDetailId, [FromForm] UploadDesignDto dto)
     {
+        // Thêm kiểm tra ModelState để bắt lỗi Model Binding (400 Bad Request)
+        if (!ModelState.IsValid)
+        {
+            // TRẢ VỀ LỖI CHI TIẾT ĐỂ XÁC ĐỊNH TRƯỜNG NÀO LỖI
+            var errors = ModelState.Values
+                .SelectMany(v => v.Errors)
+                .Select(e => e.ErrorMessage)
+                .ToList();
+
+            // Nếu errors rỗng, lấy tên trường bị lỗi
+            if (!errors.Any())
+            {
+                var invalidFields = ModelState.Keys.Where(k => ModelState[k].Errors.Any());
+                errors.Add($"Invalid fields: {string.Join(", ", invalidFields)}");
+            }
+
+            return BadRequest(new
+            {
+                message = "Model binding failed.",
+                errors = errors
+            });
+        }
+
         try
         {
             var designerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(designerId)) return Unauthorized();
 
-            if (dto.DesignFile == null || dto.DesignFile.Length == 0)
+            // KIỂM TRA MỚI: Phải có FILE MỚI hoặc URL CŨ
+            if ((dto.DesignFile == null || dto.DesignFile.Length == 0) && string.IsNullOrEmpty(dto.FileUrl))
             {
-                return BadRequest(new { message = "File thiết kế không được để trống." });
+                return BadRequest(new { message = "Vui lòng cung cấp File thiết kế mới hoặc chọn File từ kho ảnh." });
             }
 
             var success = await _designerTaskService.UploadDesignFileAsync(orderDetailId, designerId, dto);
 
             if (!success)
             {
+                // Trả về 403 nếu Service trả về false (Designer ID không khớp hoặc OrderDetail không tồn tại)
                 return StatusCode(403, new { message = "Bạn không có quyền thực hiện hoặc đơn hàng không ở trạng thái hợp lệ để upload." });
             }
 
             return Ok(new { message = "Upload file thiết kế thành công. Đơn hàng đã được chuyển sang trạng thái chờ duyệt." });
         }
+        catch (InvalidOperationException ex)
+        {
+            // Lỗi logic nghiệp vụ từ Service
+            return StatusCode(403, new { message = ex.Message });
+        }
         catch (Exception ex)
         {
-            // Log lỗi ra console hoặc hệ thống log của bạn
             Console.WriteLine($"ERROR uploading design: {ex.Message}");
-            return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn trong quá trình upload." });
+            // TRẢ VỀ THÔNG BÁO LỖI SERVER RÕ RÀNG HƠN
+            return StatusCode(500, new { message = $"Đã xảy ra lỗi server: {ex.Message}" });
         }
     }
     /// <summary>
@@ -69,7 +99,7 @@ public class DesignerController : ControllerBase
         try
         {
             // 1. Gọi Service để xử lý logic
-            var success = await _designerTaskService.UpdateStatusAsync(orderDetailId, request.OrderStatus);
+            var success = await _designerTaskService.UpdateStatusAsync(orderDetailId, request.ProductionStatus);
 
             if (!success)
             {

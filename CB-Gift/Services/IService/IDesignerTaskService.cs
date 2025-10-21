@@ -1,4 +1,5 @@
 ﻿using CB_Gift.DTOs;
+using CB_Gift.Models.Enums;
 
 namespace CB_Gift.Services.IService
 {
@@ -8,6 +9,6 @@ namespace CB_Gift.Services.IService
         Task<bool> UploadDesignFileAsync(int orderDetailId, string designerId, UploadDesignDto dto);
         Task<bool> AssignDesignerToOrderDetailAsync(int orderDetailId, string designerUserId, string sellerId);
         Task<bool> AssignDesignerToOrderAsync(int orderId, string designerUserId, string sellerId);
-        Task<bool> UpdateStatusAsync(int orderDetailId, int newStatus);
+        Task<bool> UpdateStatusAsync(int orderDetailId, ProductionStatus newStatus);
     }
 }
