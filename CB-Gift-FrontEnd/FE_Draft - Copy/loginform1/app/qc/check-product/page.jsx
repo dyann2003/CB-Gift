@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import RoleSidebar from "@/components/layout/shared/role-sidebar";
-import SellerHeader from "@/components/layout/seller/header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +17,7 @@ import {
 } from "lucide-react";
 import QcSidebar from "@/components/layout/qc/sidebar";
 import QcHeader from "@/components/layout/qc/header";
+import { useRouter } from "next/navigation";
 
 export default function CheckProduct() {
   const [currentPage, setCurrentPage] = useState("check-product");
@@ -32,6 +31,7 @@ export default function CheckProduct() {
   const [confirmAction, setConfirmAction] = useState(null);
   const [confirmMessage, setConfirmMessage] = useState("");
   const [manualOrderId, setManualOrderId] = useState("");
+  const router = useRouter();
 
   const productOrders = [
     {
@@ -326,7 +326,7 @@ export default function CheckProduct() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" colSpan="2">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
@@ -358,18 +358,12 @@ export default function CheckProduct() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setSelectedOrder(order)}
+                          onClick={() =>
+                            router.push(`/qc/inspect-product/${order.id}`)
+                          }
                         >
                           <Eye className="h-4 w-4 mr-1" />
                           Inspect
-                        </Button>
-
-                        <Button
-                          onClick={() => setShowQRScanner(true)}
-                          className="bg-blue-600 hover:bg-blue-700"
-                          >
-                          <QrCode className="h-4 w-4 mr-2" />
-                          Scan QR
                         </Button>
                       </td>
                     </tr>
