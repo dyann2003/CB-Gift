@@ -8,6 +8,8 @@ namespace CB_Gift.DTOs
         {
             public int PlanDetailId { get; set; }
             public int OrderId { get; set; }
+
+            public int OrderDetailId { get; set; }
             public string OrderCode { get; set; }
 
             public string CustomerName { get; set; }
