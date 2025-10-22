@@ -79,6 +79,17 @@ namespace CB_Gift.Services
             foreach (var order in ordersToUpdate)
             {
                 order.StatusOrder = 8; // Chuyển trạng thái sang "Đã gom đơn"
+
+                // lấy danh sách của OrderDetails để cập nhật ProductionStatus
+                var orderDetails = await _context.OrderDetails
+                    .Where(od => od.OrderId == order.OrderId)
+                    .ToListAsync();
+
+                //cật nhật ProductionStatus của các OrderDetail thành READY_PROD
+                foreach (var detail in orderDetails)
+                {
+                    detail.ProductionStatus = ProductionStatus.READY_PROD;
+                }
             }
 
             await _context.SaveChangesAsync();
@@ -142,6 +153,7 @@ namespace CB_Gift.Services
                             Details = dateGroup.Select(pd => new StaffPlanDetailDto
                             {
                                 PlanDetailId = pd.PlanDetailId,
+                                OrderDetailId = pd.OrderDetailId,
                                 OrderId = pd.OrderDetail.OrderId,
                                 OrderCode = pd.OrderDetail.Order.OrderCode,
                                 CustomerName = pd.OrderDetail.Order.EndCustomer.Name,
