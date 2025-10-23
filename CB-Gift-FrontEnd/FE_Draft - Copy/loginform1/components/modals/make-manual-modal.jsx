@@ -75,6 +75,7 @@ export default function MakeManualModal({ isOpen, onClose }) {
   const [activeTTS, setActiveTTS] = useState(false);
   const linkThanksCardRef = useRef(null);
   const linkFileDesignRef = useRef(null);
+  const linkImgRef = useRef(null);
 
   const [customerInfo, setCustomerInfo] = useState({
     name: "",
@@ -93,6 +94,7 @@ export default function MakeManualModal({ isOpen, onClose }) {
   const [currentProductConfig, setCurrentProductConfig] = useState({
     size: "",
     accessory: "",
+    linkImg: null,
     linkThanksCard: null,
     linkFileDesign: null,
     quantity: 1,
@@ -400,7 +402,7 @@ export default function MakeManualModal({ isOpen, onClose }) {
       productVariantID: p.config.variantId,
       quantity: Number(p.config.quantity),
       price: p.config.productPrice || 0,
-      linkImg: p.product.image || null,
+      linkImg: p.config.linkImg || p.product.image || null,
       needDesign: true,
       linkThanksCard: p.config.linkThanksCard || null,
       linkDesign: p.config.linkFileDesign || null,
@@ -752,6 +754,60 @@ export default function MakeManualModal({ isOpen, onClose }) {
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        {/* Link Image */}
+        <div>
+          <Label htmlFor="linkImg">Link Image</Label>
+          <Input
+            id="linkImg"
+            type="file"
+            accept="image/*"
+            ref={linkImgRef}
+            onChange={(e) => handleFileUpload("linkImg", e)}
+          />
+
+          {currentProductConfig.linkImg && (
+            <div className="mt-2 space-y-2">
+              <p className="text-sm text-green-600 flex items-center gap-1">
+                Uploaded:{" "}
+                <a
+                  href={currentProductConfig.linkImg}
+                  target="_blank"
+                  className="underline text-blue-600 truncate max-w-[200px]"
+                >
+                  {currentProductConfig.linkImg.split("/").pop()}
+                </a>
+              </p>
+
+              {(currentProductConfig.linkImg.endsWith(".png") ||
+                currentProductConfig.linkImg.endsWith(".jpg") ||
+                currentProductConfig.linkImg.endsWith(".jpeg")) && (
+                <div className="relative inline-block">
+                  <img
+                    src={currentProductConfig.linkImg}
+                    alt="Uploaded Image Preview"
+                    className="w-20 h-20 object-cover rounded border border-gray-300 shadow-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentProductConfig((prev) => ({
+                        ...prev,
+                        linkImg: null,
+                      }));
+                      if (linkImgRef.current) {
+                        linkImgRef.current.value = "";
+                      }
+                    }}
+                    className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600 translate-x-1 -translate-y-1"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Link Thanks Card */}

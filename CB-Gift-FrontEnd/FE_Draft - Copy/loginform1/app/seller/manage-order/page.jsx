@@ -106,6 +106,12 @@ export default function ManageOrder() {
   const [designers, setDesigners] = useState([]);
   const [selectedDesignerId, setSelectedDesignerId] = useState("");
 
+  // 🧩 Thêm vào đầu file (trong component ManageOrder)
+  const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [showErrorDialog, setShowErrorDialog] = useState(false);
+
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -241,6 +247,56 @@ export default function ManageOrder() {
       iconColor: "text-red-500",
       statusFilter: "Thiết kế Lại (Design Lỗi)",
     },
+    {
+      title: "Sẵn sàng Sản xuất",
+      color: "bg-cyan-50 border-cyan-200",
+      icon: Package,
+      iconColor: "text-cyan-500",
+      statusFilter: "Sẵn sàng Sản xuất",
+    },
+    {
+      title: "Sản xuất Xong",
+      color: "bg-teal-50 border-teal-200",
+      icon: CheckCircle,
+      iconColor: "text-teal-500",
+      statusFilter: "Sản xuất Xong",
+    },
+    {
+      title: "Lỗi Sản xuất (Cần Rework)",
+      color: "bg-red-50 border-red-200",
+      icon: AlertTriangle,
+      iconColor: "text-red-600",
+      statusFilter: "Lỗi Sản xuất (Cần Rework)",
+    },
+    {
+      title: "Đã Kiểm tra Chất lượng",
+      color: "bg-emerald-50 border-emerald-200",
+      icon: CheckCircle,
+      iconColor: "text-emerald-500",
+      statusFilter: "Đã Kiểm tra Chất lượng",
+    },
+    {
+      title: "Đã Ship",
+      color: "bg-blue-50 border-blue-200",
+      icon: Package,
+      iconColor: "text-blue-600",
+      statusFilter: "Đã Ship",
+    },
+    {
+      title: "Cancel",
+      color: "bg-gray-50 border-gray-300",
+      icon: AlertTriangle,
+      iconColor: "text-gray-600",
+      statusFilter: "Cancel",
+    },
+    {
+      title: "Hoàn Hàng",
+      color: "bg-amber-50 border-amber-200",
+      icon: Package,
+      iconColor: "text-amber-600",
+      statusFilter: "Hoàn Hàng",
+    },
+    // </CHANGE>
   ];
 
   let statsWithCounts = stats.map((stat) => ({
@@ -354,6 +410,25 @@ export default function ManageOrder() {
   };
 
   const handleOpenAssignPopup = async () => {
+    // Lấy danh sách order đã chọn
+    const selectedOrdersData = orders.filter((order) =>
+      selectedOrders.includes(order.id)
+    );
+
+    // Kiểm tra có order nào KHÔNG phải là Draft (Nháp)
+    const nonDraftOrders = selectedOrdersData.filter(
+      (order) => order.status !== "Draft (Nháp)"
+    );
+
+    if (nonDraftOrders.length > 0) {
+      setCannotAssignMessage(
+        `Cannot assign ${nonDraftOrders.length} order(s) to designer. Only orders with "Draft (Nháp)" status can be assigned.`
+      );
+      setShowCannotAssignDialog(true);
+      return;
+    }
+
+    // Nếu tất cả đều hợp lệ, fetch danh sách designer
     try {
       const res = await fetch("https://localhost:7015/api/Seller/my-designer", {
         credentials: "include",
@@ -369,17 +444,15 @@ export default function ManageOrder() {
   };
 
   const handleConfirmAssignDesigner = async () => {
-    if (!selectedDesignerId) {
-      alert("Please select a designer");
-      return;
-    }
-
-    if (!selectedOrders || selectedOrders.length === 0) {
-      alert("Please select at least one order");
+    // ✅ Kiểm tra nếu chưa chọn designer hoặc chưa chọn order
+    if (!selectedDesignerId || selectedOrders.length === 0) {
+      setErrorMessage("⚠️ Please select a designer and at least one order.");
+      setShowErrorDialog(true);
       return;
     }
 
     try {
+      // ✅ Gọi API assign cho từng order
       for (const orderId of selectedOrders) {
         const res = await fetch(
           `https://localhost:7015/api/Seller/orders/${orderId}/assign-designer`,
@@ -390,17 +463,28 @@ export default function ManageOrder() {
             body: JSON.stringify({ designerUserId: selectedDesignerId }),
           }
         );
-        if (!res.ok) throw new Error(`Failed to assign order ${orderId}`);
+
+        if (!res.ok) throw new Error(`Failed to assign for order ${orderId}`);
       }
 
-      alert("✅ Successfully assigned designer to selected orders!");
+      // ✅ Hiển thị popup thành công
+      setSuccessMessage(
+        `✅ Successfully assigned designer to ${selectedOrders.length} order(s).`
+      );
+      setShowSuccessDialog(true);
+
+      // ✅ Đóng popup chọn designer
       setIsAssignPopupOpen(false);
       setSelectedDesignerId("");
-      // reload data nếu cần
-      fetchOrders && fetchOrders();
+
+      // ✅ Reload lại trang sau 1.5s để cập nhật dữ liệu
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
     } catch (err) {
-      console.error("Assign error:", err);
-      alert("❌ Failed to assign designer: " + err.message);
+      console.error("❌ Assign designer failed:", err);
+      setErrorMessage(`❌ Failed to assign: ${err.message}`);
+      setShowErrorDialog(true);
     }
   };
 
@@ -753,40 +837,29 @@ export default function ManageOrder() {
         );
       case "Assigned Designer":
         return (
-          <Badge className="bg-purple-500 hover:bg-purple-600 text-white">
-            Assigned Designer
+          <Badge className="bg-purple-500 hover:bg-…-emerald-500 hover:bg-emerald-600 text-white">
+            Đã Kiểm tra Chất lượng
           </Badge>
         );
-      case "Check File Design":
+      case "Đã Ship":
         return (
-          <Badge className="bg-indigo-500 hover:bg-indigo-600 text-white">
-            Check File Design
+          <Badge className="bg-blue-600 hover:bg-blue-700 text-white">
+            Đã Ship
           </Badge>
         );
-      case "Seller Approved Design":
+      case "Cancel":
         return (
-          <Badge className="bg-orange-500 hover:bg-orange-600 text-white">
-            Seller Approved Design
+          <Badge className="bg-gray-600 hover:bg-gray-700 text-white">
+            Cancel
           </Badge>
         );
-      case "Seller Reject Design":
+      case "Hoàn Hàng":
         return (
-          <Badge className="bg-red-500 hover:bg-red-600 text-white">
-            Seller Reject Design
+          <Badge className="bg-amber-600 hover:bg-amber-700 text-white">
+            Hoàn Hàng
           </Badge>
         );
-      case "Draft":
-        return (
-          <Badge className="bg-gray-500 hover:bg-gray-600 text-white">
-            Draft
-          </Badge>
-        );
-      case "Designing":
-        return (
-          <Badge className="bg-purple-500 hover:bg-purple-600 text-white">
-            Designing
-          </Badge>
-        );
+      // </CHANGE>
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
@@ -1754,6 +1827,96 @@ export default function ManageOrder() {
                                                             </Button>
                                                           </div>
                                                         </div>
+                                                        {/* Product Image */}
+                                                        <div className="border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow bg-gray-50">
+                                                          <Label className="text-xs text-gray-500 font-medium">
+                                                            Product Image
+                                                          </Label>
+                                                          <div className="mt-2">
+                                                            {product.linkImg &&
+                                                            product.linkImg !==
+                                                              "#" ? (
+                                                              <>
+                                                                <img
+                                                                  src={
+                                                                    product.linkImg ||
+                                                                    "/placeholder.svg"
+                                                                  }
+                                                                  alt="Product Image"
+                                                                  className="w-full h-32 object-cover rounded border"
+                                                                  onError={(
+                                                                    e
+                                                                  ) => {
+                                                                    console.log(
+                                                                      "[v0] Product image failed to load:",
+                                                                      e.target
+                                                                        .src
+                                                                    );
+                                                                    e.target.style.display =
+                                                                      "none";
+                                                                    e.target.nextElementSibling.style.display =
+                                                                      "flex";
+                                                                  }}
+                                                                />
+                                                                <div
+                                                                  className="w-full h-32 bg-gray-100 rounded border flex items-center justify-center"
+                                                                  style={{
+                                                                    display:
+                                                                      "none",
+                                                                  }}
+                                                                >
+                                                                  <QrCode className="h-8 w-8 text-gray-400" />
+                                                                </div>
+                                                              </>
+                                                            ) : (
+                                                              <div className="w-full h-32 bg-gray-100 rounded border flex items-center justify-center">
+                                                                <QrCode className="h-8 w-8 text-gray-400" />
+                                                              </div>
+                                                            )}
+
+                                                            <p className="text-xs mt-2 text-gray-600 truncate">
+                                                              product-image-
+                                                              {index + 1}.jpg
+                                                            </p>
+
+                                                            {product.linkImg &&
+                                                              product.linkImg !==
+                                                                "#" && (
+                                                                <a
+                                                                  href={
+                                                                    product.linkImg
+                                                                  }
+                                                                  target="_blank"
+                                                                  rel="noopener noreferrer"
+                                                                  className="text-xs text-blue-600 hover:underline block mt-1 truncate"
+                                                                >
+                                                                  View file
+                                                                </a>
+                                                              )}
+
+                                                            <Button
+                                                              variant="outline"
+                                                              size="sm"
+                                                              className="mt-2 w-full bg-transparent hover:bg-gray-50"
+                                                              onClick={() =>
+                                                                handleDownload({
+                                                                  name: `product-image-${
+                                                                    index + 1
+                                                                  }.jpg`,
+                                                                  url: product.linkImg,
+                                                                })
+                                                              }
+                                                              disabled={
+                                                                !product.linkImg ||
+                                                                product.linkImg ===
+                                                                  "#"
+                                                              }
+                                                            >
+                                                              <Download className="h-4 w-4 mr-2" />
+                                                              Download
+                                                            </Button>
+                                                          </div>
+                                                        </div>
                                                       </div>
                                                     </div>
                                                     {/* </CHANGE> */}
@@ -2110,6 +2273,31 @@ export default function ManageOrder() {
               <Button onClick={handleConfirmAssignDesigner}>OK</Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+      {/* ✅ Success Dialog */}
+      <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-green-600">Success</DialogTitle>
+          </DialogHeader>
+          <p className="text-gray-700 py-4">{successMessage}</p>
+          <DialogFooter>
+            <Button onClick={() => setShowSuccessDialog(false)}>OK</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ❌ Error Dialog */}
+      <Dialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-red-600">Error</DialogTitle>
+          </DialogHeader>
+          <p className="text-gray-700 py-4">{errorMessage}</p>
+          <DialogFooter>
+            <Button onClick={() => setShowErrorDialog(false)}>Close</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
