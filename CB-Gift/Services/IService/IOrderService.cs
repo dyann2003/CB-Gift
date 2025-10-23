@@ -1,6 +1,7 @@
 
 ﻿using CB_Gift.Models;
 ﻿using CB_Gift.DTOs;
+using CB_Gift.Models.Enums;
 
 namespace CB_Gift.Services.IService
 {
@@ -24,6 +25,7 @@ namespace CB_Gift.Services.IService
         Task<MakeOrderResponse> MakeOrder(MakeOrderDto request, string sellerUserId);
         Task<MakeOrderResponse> UpdateOrderAsync(int orderId, OrderUpdateDto request, string sellerUserId);
         Task<bool> DeleteOrderAsync(int orderId, string sellerUserId);
+        Task<bool> SellerApproveOrderDesignAsync(int orderId, ProductionStatus action, string sellerId);
 
     }
 }

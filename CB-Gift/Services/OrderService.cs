@@ -7,6 +7,7 @@ using CB_Gift.DTOs;
 using CB_Gift.Models;
 using CB_Gift.Services.IService;
 using Microsoft.EntityFrameworkCore;
+using CB_Gift.Models.Enums;
 
 namespace CB_Gift.Services
 {
@@ -402,6 +403,83 @@ namespace CB_Gift.Services
             await _context.SaveChangesAsync();
             return true;
         }
+        public async Task<bool> SellerApproveOrderDesignAsync(
+        int orderId,
+        ProductionStatus action,
+        string sellerId)
+        {
+            // 1. Tải Order cha và TẤT CẢ OrderDetail cần design
+            var order = await _context.Orders
+                // Đảm bảo chỉ include các OrderDetail cần thiết kế
+                .Include(o => o.OrderDetails.Where(od => od.NeedDesign == true))
+                .FirstOrDefaultAsync(o => o.OrderId == orderId);
+
+            if (order == null)
+            {
+                return false;
+            }
+
+            // 2. Kiểm tra Quyền
+            if (order.SellerUserId != sellerId)
+            {
+                throw new UnauthorizedAccessException($"Seller {sellerId} is not authorized to modify Order {orderId}.");
+            }
+
+            // 3. Kiểm tra trạng thái hiện tại của Order cha
+            // Phải đang ở trạng thái CHECK_DESIGN (StatusOrder = 5 là CHECK_DESIGN)
+            if (order.StatusOrder != 5)
+            {
+                throw new InvalidOperationException($"Order {orderId} is not in CHECK_DESIGN status (4). Current status: {order.StatusOrder}.");
+            }
+
+            // 4. Kiểm tra ProductionStatus của OrderDetails
+            // Tất cả chi tiết phải đang ở CHECK_DESIGN để cho phép duyệt/từ chối
+            var allDetailsInCheckDesign = order.OrderDetails.All(od =>
+                od.ProductionStatus.GetValueOrDefault() == ProductionStatus.CHECK_DESIGN
+            );
+
+            if (!allDetailsInCheckDesign)
+            {
+                throw new InvalidOperationException($"Not all OrderDetails in Order {orderId} are in CHECK_DESIGN status. Cannot proceed with approval/rejection.");
+            }
+
+            // 5. Xác định trạng thái đích cho Order và OrderDetails
+            int newOrderStatus;
+            ProductionStatus newProductionStatus;
+
+            if (action == ProductionStatus.DESIGN_REDO)
+            {
+                // Thiết kế lại (Reject)
+                newOrderStatus = 6; // Giả định 6 là Order Status cho DESIGN_REDO
+                newProductionStatus = ProductionStatus.DESIGN_REDO; // Trạng thái mới cho OrderDetail
+            }
+            else if (action == ProductionStatus.READY_PROD)
+            {
+                // Chốt Đơn (Confirm)
+                newOrderStatus = 7; // Giả định 7 là Order Status cho CONFIRMED/READY_PROD
+                newProductionStatus = ProductionStatus.READY_PROD; // Trạng thái cuối cho OrderDetail
+            }
+            else
+            {
+                // Trạng thái không hợp lệ đã được Controller chặn, nhưng vẫn kiểm tra phòng hờ
+                throw new InvalidOperationException($"Invalid action status {action}. Must be DESIGN_REDO (3) or CONFIRMED (5).");
+            }
+
+            // 6. Cập nhật Order cha
+            order.StatusOrder = newOrderStatus;
+
+            // 7. Cập nhật HÀNG LOẠT ProductionStatus của các OrderDetail
+            foreach (var detail in order.OrderDetails)
+            {
+                detail.ProductionStatus = newProductionStatus;
+            }
+
+            // 8. Lưu thay đổi
+            await _context.SaveChangesAsync();
+
+            return true;
+        }
+
     }
 }
 
