@@ -30,12 +30,14 @@ namespace CB_Gift.DTOs
         public string ProductDescribe { get; set; }
         public string ProductTemplate { get; set; }
         public string? ProductionStatus { get; set; }
-        public ProductDetails ProductDetails { get; set; }
         public int Quantity { get; set; }
         public string LinkImg { get; set; } // Link ảnh mẫu
+        public string LinkThankCard { get; set; }
+        public string LinkFileDesign { get; set; }
         public string Note { get; set; } // Ghi chú từ Seller
         public int OrderStatus { get; set; }
         public DateTime? AssignedAt { get; set; }
+        public ProductDetails ProductDetails { get; set; }
     }
     public class ProductDetails
     {

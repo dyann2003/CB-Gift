@@ -13,7 +13,7 @@
         DESIGN_REDO,
 
         // Sẵn sàng sản xuất
-        READY_PROD,
+        READY_PROD, // Design được chấp nhận.
 
         // Trạng thái liên quan đến Sản xuất
         IN_PROD,

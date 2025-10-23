@@ -55,7 +55,9 @@ namespace CB_Gift.Services
                     ProductTemplate = od.ProductVariant.Product.Template,
                     OrderStatus = od.Order.StatusOrder,
                     Quantity = od.Quantity,
-                    LinkImg = od.ProductVariant.Product.ItemLink,
+                    LinkImg = od.LinkImg,
+                    LinkThankCard = od.LinkThanksCard,
+                    LinkFileDesign = od.LinkFileDesign,
                     Note = od.Note,
                     AssignedAt = od.AssignedAt,
                     // THÊM ProductionStatus vào DTO để designer xem trạng thái chi tiết
@@ -92,8 +94,6 @@ namespace CB_Gift.Services
                     return false;
                 }
 
-                // === CORRECT LOGIC: Access the nullable enum directly ===
-                // Use null-coalescing operator (??) to treat null DB value as NEED_DESIGN (your default)
                 var currentStatus = orderDetail.ProductionStatus ?? ProductionStatus.NEED_DESIGN;
 
                 // Logic nghiệp vụ: Chỉ cho phép upload khi đang ở DESIGNING hoặc DESIGN_REDO
@@ -144,7 +144,7 @@ namespace CB_Gift.Services
 
                 // CẬP NHẬT TRẠNG THÁI ORDER DETAIL: DESIGNING/DESIGN_REDO -> CHECK_DESIGN
                 // Set giá trị Enum. EF Core Value Converter sẽ tự chuyển nó sang chuỗi (varchar) trong DB.
-                orderDetail.ProductionStatus = ProductionStatus.CHECK_DESIGN;
+                orderDetail.ProductionStatus = ProductionStatus.CHECK_DESIGN; 
 
                 // 5. Lưu tất cả thay đổi vào database
                 await _context.SaveChangesAsync();
@@ -156,12 +156,186 @@ namespace CB_Gift.Services
             catch (Exception)
             {
                 // Khi xảy ra Exception trong quá trình Upload (bước 2), nó sẽ được bắt ở đây.
-                // Bạn cần kiểm tra log chi tiết lỗi server (500) để fix lỗi Cloudinary/ImageService.
                 await transaction.RollbackAsync();
                 throw;
             }
         }
-        //
+        /// <summary>
+        /// Cập nhật trạng thái thiết kế của một chi tiết đơn hàng (OrderDetail) 
+        /// và kiểm tra điều kiện để chuyển trạng thái tổng thể của Order.
+        /// </summary>
+        /// <param name="orderDetailId">ID của chi tiết đơn hàng cần cập nhật.</param>
+        /// <param name="newStatus">Trạng thái ProductionStatus mới (dạng Enum).</param>
+        /// <returns>True nếu cập nhật thành công.</returns>
+        public async Task<bool> UpdateStatusAsync(int orderDetailId, ProductionStatus newStatus)
+        {
+            // 1. Tải chi tiết đơn hàng VÀ Order cha (BẮT BUỘC INCLUDE)
+            var orderDetail = await _context.OrderDetails
+                // Bắt buộc phải Include Order để có thể thay đổi thuộc tính StatusOrder
+                .Include(od => od.Order)
+                .FirstOrDefaultAsync(od => od.OrderDetailId == orderDetailId);
+
+            if (orderDetail == null)
+            {
+                return false;
+            }
+
+            // Lấy trạng thái Production hiện tại
+            var currentStatus = orderDetail.ProductionStatus;
+            // var currentStatus = orderDetail.ProductionStatus ?? ProductionStatus.NEED_DESIGN;
+
+            bool isStatusChanged = false; // Đặt mặc định là false
+
+            // 2. Logic Chuyển đổi Trạng thái
+
+            // Logic 1: GỬI KIỂM TRA QA (DESIGNING -> CHECK_DESIGN)
+            if (newStatus == ProductionStatus.CHECK_DESIGN)
+            {
+                // Kiểm tra xem trạng thái hiện tại có hợp lệ để chuyển sang CHECK_DESIGN không
+                if (currentStatus != ProductionStatus.DESIGNING && currentStatus != ProductionStatus.DESIGN_REDO && currentStatus != ProductionStatus.CHECK_DESIGN)
+                {
+                    throw new InvalidOperationException($"Invalid transition from {currentStatus} to {newStatus} for Order Detail {orderDetailId}.");
+                }
+
+                // A. Cập nhật ProductionStatus của chi tiết hiện tại (Chỉ cập nhật nếu trạng thái thay đổi)
+                if (currentStatus != ProductionStatus.CHECK_DESIGN)
+                {
+                    orderDetail.ProductionStatus = newStatus;
+                    isStatusChanged = true;
+                }
+
+                // B. <<< LOGIC KIỂM TRA VÀ CẬP NHẬT TRẠNG THÁI ORDER CHỦ >>>
+
+                // 1. Tải TẤT CẢ OrderDetails của Order cha cần design
+                var allDesignDetails = await _context.OrderDetails
+                    .Where(od => od.OrderId == orderDetail.OrderId && od.NeedDesign == true)
+                    .Select(od => od.ProductionStatus)
+                    .ToListAsync();
+
+                // 2. Kiểm tra xem TẤT CẢ các chi tiết đã chuyển sang CHECK_DESIGN chưa.
+                // Điều kiện: Tất cả phải có giá trị (HasValue) và giá trị phải là CHECK_DESIGN (5).
+                // Cần đảm bảo chi tiết hiện tại đã được cập nhật ProductionStatus trước khi kiểm tra.
+                // Dùng `allDesignDetails.Count == allDesignDetails.Count(status => status.HasValue && status.Value == ProductionStatus.CHECK_DESIGN)` 
+                // để chắc chắn rằng số lượng khớp.
+
+                var allDesignChecked = allDesignDetails.All(status =>
+                    status.HasValue && status.Value == ProductionStatus.CHECK_DESIGN
+                );
+
+                if (allDesignChecked && orderDetail.Order.StatusOrder != 5) // Chỉ cập nhật nếu trạng thái chưa phải là 5
+                {
+                    // C. Cập nhật trạng thái Order cha (StatusOrder 5 = Check Design)
+                    orderDetail.Order.StatusOrder = 5;
+                    isStatusChanged = true;
+                }
+            }
+            // -------------------------------------------------------------------------------------------------------------
+            // Logic 2: ACCEPT DESIGN (NEED_DESIGN -> DESIGNING)
+            else if (newStatus == ProductionStatus.DESIGNING && currentStatus == ProductionStatus.NEED_DESIGN)
+            {
+                orderDetail.ProductionStatus = newStatus;
+                isStatusChanged = true; // Chi tiết đã thay đổi, cần lưu
+
+                // <<< LOGIC MỚI: KIỂM TRA VÀ CẬP NHẬT TRẠNG THÁI ORDER CHỦ LÊN DESIGNING (3) >>>
+
+                // 1. Tải TẤT CẢ OrderDetails của Order cha cần design
+                // Lưu ý: Chúng ta cần tải lại hoặc cẩn thận với chi tiết hiện tại.
+                // Cách an toàn nhất là tải lại tất cả ProductionStatus SAU KHI chi tiết hiện tại đã được gán (nhưng chưa lưu DB).
+
+                var orderId = orderDetail.OrderId;
+                var allDetailsStatuses = await _context.OrderDetails
+                    .Where(od => od.OrderId == orderId && od.NeedDesign == true)
+                    .Select(od => new { od.OrderDetailId, od.ProductionStatus })
+                    .ToListAsync();
+
+                // Cập nhật trạng thái mới cho chi tiết hiện tại trong danh sách tạm thời (nếu tìm thấy)
+                var currentDetailStatus = allDetailsStatuses.FirstOrDefault(od => od.OrderDetailId == orderDetailId);
+                if (currentDetailStatus != null)
+                {
+                    // Vì chúng ta không thể thay đổi giá trị trong List<AnonymousType>, 
+                    // chúng ta sẽ kiểm tra thủ công.
+
+                    // 2. Kiểm tra xem TẤT CẢ các chi tiết đã chuyển sang DESIGNING chưa.
+                    // Điều kiện: Chi tiết hiện tại phải là DESIGNING (newStatus), và TẤT CẢ
+                    // các chi tiết khác phải là DESIGNING HOẶC newStatus.
+
+                    // Sử dụng một cờ để kiểm tra:
+                    bool allDesignersAssigned = true;
+                    foreach (var detailStatus in allDetailsStatuses)
+                    {
+                        if (detailStatus.OrderDetailId == orderDetailId)
+                        {
+                            // Chi tiết hiện tại phải là DESIGNING
+                            if (newStatus != ProductionStatus.DESIGNING)
+                            {
+                                allDesignersAssigned = false;
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            // Các chi tiết khác phải là DESIGNING
+                            if (detailStatus.ProductionStatus.GetValueOrDefault(ProductionStatus.NEED_DESIGN) != ProductionStatus.DESIGNING)
+                            {
+                                allDesignersAssigned = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Cách kiểm tra đơn giản và hiệu quả hơn (Giả sử DESIGNING là 3)
+                    // Lấy ra tất cả trạng thái, bao gồm cả trạng thái MỚI của chi tiết hiện tại.
+                    var allStatuses = allDetailsStatuses.Select(s => s.ProductionStatus).ToList();
+
+                    // Thay thế trạng thái cũ của chi tiết hiện tại bằng trạng thái mới
+                    int indexToUpdate = allStatuses.FindIndex(status =>
+                        status.GetValueOrDefault(ProductionStatus.NEED_DESIGN) == currentStatus && currentDetailStatus.OrderDetailId == orderDetailId
+                    );
+                    if (indexToUpdate != -1)
+                    {
+                        allStatuses[indexToUpdate] = newStatus;
+                    }
+
+                    bool allAreDesigning = allStatuses.All(status =>
+                        status.HasValue && status.Value == ProductionStatus.DESIGNING
+                    );
+
+                    if (allAreDesigning && orderDetail.Order.StatusOrder < 4) // Giả sử StatusOrder 3 = Designing
+                    {
+                        // C. Cập nhật trạng thái Order cha
+                        orderDetail.Order.StatusOrder = 4;
+                        isStatusChanged = true;
+                    }
+                }
+            }
+            // -------------------------------------------------------------------------------------------------------------
+            // Logic 3: START REDO (DESIGN_REDO -> DESIGNING)
+            else if (newStatus == ProductionStatus.DESIGNING && currentStatus == ProductionStatus.DESIGN_REDO)
+            {
+                orderDetail.ProductionStatus = newStatus;
+                isStatusChanged = true;
+                // KHÔNG cập nhật Order cha ở đây vì Order đã ở trạng thái Designing (3) hoặc cao hơn.
+            }
+            else if (currentStatus == newStatus)
+            {
+                // Trạng thái không thay đổi
+                isStatusChanged = false;
+            }
+            else
+            {
+                // Chuyển đổi trạng thái không hợp lệ theo logic nghiệp vụ
+                throw new InvalidOperationException($"Invalid transition from {currentStatus} to {newStatus} for Order Detail {orderDetailId}.");
+            }
+
+            // 3. Lưu thay đổi vào Database
+            if (isStatusChanged)
+            {
+                await _context.SaveChangesAsync();
+            }
+
+            return true;
+        }
+         //
         public async Task<bool> AssignDesignerToOrderDetailAsync(int orderDetailId, string designerUserId, string sellerId)
         {
             using var transaction = await _context.Database.BeginTransactionAsync();
@@ -351,108 +525,5 @@ namespace CB_Gift.Services
 
              return true;
          }*/
-        /// <summary>
-        /// Cập nhật trạng thái thiết kế của một chi tiết đơn hàng (OrderDetail) 
-        /// và kiểm tra điều kiện để chuyển trạng thái tổng thể của Order.
-        /// </summary>
-        /// <param name="orderDetailId">ID của chi tiết đơn hàng cần cập nhật.</param>
-        /// <param name="newStatus">Trạng thái ProductionStatus mới (dạng Enum).</param>
-        /// <returns>True nếu cập nhật thành công.</returns>
-        public async Task<bool> UpdateStatusAsync(int orderDetailId, ProductionStatus newStatus)
-        {
-            // 1. Tải chi tiết đơn hàng VÀ Order cha (BẮT BUỘC INCLUDE)
-            var orderDetail = await _context.OrderDetails
-                // Bắt buộc phải Include Order để có thể thay đổi thuộc tính StatusOrder
-                .Include(od => od.Order)
-                .FirstOrDefaultAsync(od => od.OrderDetailId == orderDetailId);
-
-            if (orderDetail == null)
-            {
-                return false;
-            }
-
-            // Lấy trạng thái Production hiện tại
-            var currentStatus = orderDetail.ProductionStatus ?? ProductionStatus.NEED_DESIGN;
-
-            bool isStatusChanged = true;
-
-            // 2. Logic Chuyển đổi Trạng thái
-
-            // Logic 1: GỬI KIỂM TRA QA (CHECK_DESIGN)
-            if (newStatus == ProductionStatus.CHECK_DESIGN)
-            {
-                // Kiểm tra xem trạng thái hiện tại có hợp lệ để chuyển sang CHECK_DESIGN không
-                if (currentStatus != ProductionStatus.DESIGNING && currentStatus != ProductionStatus.DESIGN_REDO)
-                {
-                    // Nếu đã là CHECK_DESIGN (4) rồi, chúng ta chỉ chạy logic kiểm tra Order cha bên dưới.
-                    // Nếu là trạng thái khác (ví dụ: NEED_DESIGN), nó là invalid transition.
-                    if (currentStatus != ProductionStatus.CHECK_DESIGN)
-                    {
-                        throw new InvalidOperationException($"Invalid transition from {currentStatus} to {newStatus} for Order Detail {orderDetailId}.");
-                    }
-                }
-
-                // A. Cập nhật ProductionStatus của chi tiết hiện tại (Chỉ cập nhật nếu trạng thái thay đổi)
-                if (currentStatus != ProductionStatus.CHECK_DESIGN)
-                {
-                    orderDetail.ProductionStatus = newStatus;
-                }
-
-                // B. <<< LOGIC KIỂM TRA VÀ CẬP NHẬT TRẠNG THÁI ORDER CHỦ >>>
-
-                // 1. Tải TẤT CẢ OrderDetails của Order cha cần design
-                var allDesignDetails = await _context.OrderDetails
-                    .Where(od => od.OrderId == orderDetail.OrderId && od.NeedDesign == true)
-                    .Select(od => od.ProductionStatus)
-                    .ToListAsync();
-
-                // 2. Kiểm tra xem TẤT CẢ các chi tiết đã chuyển sang CHECK_DESIGN chưa.
-                // Điều kiện: Tất cả phải có giá trị (HasValue) và giá trị phải là CHECK_DESIGN (5).
-                var allDesignChecked = allDesignDetails.All(status =>
-                    status.HasValue && status.Value == ProductionStatus.CHECK_DESIGN
-                );
-
-                if (allDesignChecked)
-                {
-                    // C. Cập nhật trạng thái Order cha (Giả sử StatusOrder 5 = Check Design)
-                    orderDetail.Order.StatusOrder = 5;
-                    isStatusChanged = true; // Đảm bảo SaveChanges được gọi
-                }
-                else
-                {
-                    // Nếu không phải tất cả đều được kiểm tra, không thay đổi StatusOrder
-                    // Chỉ đặt isStatusChanged là true nếu ProductionStatus của chi tiết hiện tại được cập nhật
-                    isStatusChanged = (currentStatus != ProductionStatus.CHECK_DESIGN);
-                }
-            }
-            // Logic 2: ACCEPT DESIGN (NEED_DESIGN -> DESIGNING)
-            else if (newStatus == ProductionStatus.DESIGNING && currentStatus == ProductionStatus.NEED_DESIGN)
-            {
-                orderDetail.ProductionStatus = newStatus;
-            }
-            // Logic 3: START REDO (DESIGN_REDO -> DESIGNING)
-            else if (newStatus == ProductionStatus.DESIGNING && currentStatus == ProductionStatus.DESIGN_REDO)
-            {
-                orderDetail.ProductionStatus = newStatus;
-            }
-            else if (currentStatus == newStatus)
-            {
-                // Trạng thái không thay đổi
-                isStatusChanged = false;
-            }
-            else
-            {
-                // Chuyển đổi trạng thái không hợp lệ theo logic nghiệp vụ
-                throw new InvalidOperationException($"Invalid transition from {currentStatus} to {newStatus} for Order Detail {orderDetailId}.");
-            }
-
-            // 3. Lưu thay đổi vào Database
-            if (isStatusChanged)
-            {
-                await _context.SaveChangesAsync();
-            }
-
-            return true;
-        }
     }
 }
