@@ -118,84 +118,84 @@ export default function ManageOrder() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchOrders = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  const fetchOrders = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-        const response = await fetch("https://localhost:7015/api/seller", {
-          credentials: "include",
-        });
+      const response = await fetch("https://localhost:7015/api/seller", {
+        credentials: "include",
+      });
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        console.log("📦 Orders fetched:", data);
-
-        const mappedOrders = data.map((order) => ({
-          id: order.orderId,
-          orderId: order.orderCode,
-          orderDate: new Date(order.orderDate).toISOString().split("T")[0], // Format: YYYY-MM-DD
-          customerName: order.customerName,
-          phone: "", // Not provided in API
-          email: "", // Not provided in API
-          products: order.details.map((detail) => ({
-            name: `Product ${detail.productVariantID}`,
-            quantity: detail.quantity,
-            price: detail.price,
-            size: "",
-            accessory: detail.accessory || "",
-            activeTTS: order.activeTTS || false, // Read from order level
-            linkFileDesign: detail.linkFileDesign,
-            linkThanksCard: detail.linkThanksCard,
-            linkImg: detail.linkImg,
-          })),
-          address: "", // Not provided in API
-          shipTo: "", // Not provided in API
-          status: order.statusOderName,
-          totalAmount: `$${order.totalCost.toFixed(2)}`,
-          timeCreated: new Date(order.creationDate).toLocaleString(),
-          selected: false,
-          customerInfo: {
-            name: order.customerName,
-            phone: order.phone,
-            email: order.email,
-            address: order.address,
-            city: order.city,
-            state: order.state,
-            zipcode: order.zipcode,
-            country: order.country,
-          },
-          orderNotes: order.details[0]?.note || "",
-          uploadedFiles: {
-            linkImg: {
-              name: "image.jpg",
-              url: order.details[0]?.linkImg || "/placeholder.svg",
-            },
-            linkThanksCard: {
-              name: "thanks-card.jpg",
-              url: order.details[0]?.linkThanksCard || "#",
-            },
-            linkFileDesign: {
-              name: "design-file.psd",
-              url: order.details[0]?.linkFileDesign || "#",
-            },
-          },
-        }));
-        // </CHANGE>
-
-        setOrders(mappedOrders);
-      } catch (err) {
-        console.error("[v0] Error fetching orders:", err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    };
 
+      const data = await response.json();
+      console.log("📦 Orders fetched:", data);
+
+      const mappedOrders = data.map((order) => ({
+        id: order.orderId,
+        orderId: order.orderCode,
+        orderDate: new Date(order.orderDate).toISOString().split("T")[0], // Format: YYYY-MM-DD
+        customerName: order.customerName,
+        phone: "", // Not provided in API
+        email: "", // Not provided in API
+        products: order.details.map((detail) => ({
+          name: `Product ${detail.productVariantID}`,
+          quantity: detail.quantity,
+          price: detail.price,
+          size: "",
+          accessory: detail.accessory || "",
+          activeTTS: order.activeTTS || false, // Read from order level
+          linkFileDesign: detail.linkFileDesign,
+          linkThanksCard: detail.linkThanksCard,
+          linkImg: detail.linkImg,
+        })),
+        address: "", // Not provided in API
+        shipTo: "", // Not provided in API
+        status: order.statusOderName,
+        totalAmount: `$${order.totalCost.toFixed(2)}`,
+        timeCreated: new Date(order.creationDate).toLocaleString(),
+        selected: false,
+        customerInfo: {
+          name: order.customerName,
+          phone: order.phone,
+          email: order.email,
+          address: order.address,
+          city: order.city,
+          state: order.state,
+          zipcode: order.zipcode,
+          country: order.country,
+        },
+        orderNotes: order.details[0]?.note || "",
+        uploadedFiles: {
+          linkImg: {
+            name: "image.jpg",
+            url: order.details[0]?.linkImg || "/placeholder.svg",
+          },
+          linkThanksCard: {
+            name: "thanks-card.jpg",
+            url: order.details[0]?.linkThanksCard || "#",
+          },
+          linkFileDesign: {
+            name: "design-file.psd",
+            url: order.details[0]?.linkFileDesign || "#",
+          },
+        },
+      }));
+      // </CHANGE>
+
+      setOrders(mappedOrders);
+    } catch (err) {
+      console.error("[v0] Error fetching orders:", err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchOrders();
   }, []);
 
@@ -419,12 +419,12 @@ export default function ManageOrder() {
 
     // Kiểm tra có order nào KHÔNG phải là Draft (Nháp)
     const nonDraftOrders = selectedOrdersData.filter(
-      (order) => order.status !== "Draft"
+      (order) => order.status !== "Draft (Nháp)"
     );
 
     if (nonDraftOrders.length > 0) {
       setCannotAssignMessage(
-        `Cannot assign ${nonDraftOrders.length} order(s) to designer. Only orders with "Draft " status can be assigned.`
+        `Cannot assign ${nonDraftOrders.length} order(s) to designer. Only orders with "Draft (Nháp)" status can be assigned.`
       );
       setShowCannotAssignDialog(true);
       return;
@@ -827,16 +827,46 @@ export default function ManageOrder() {
 
   const handleApproveDesign = async (orderId) => {
     try {
+      if (!orderId) {
+        console.error("[v0] Invalid orderId:", orderId);
+        throw new Error("Order ID is missing");
+      }
+
+      console.log(
+        "[v0] Approving design for order:",
+        orderId,
+        "Type:",
+        typeof orderId
+      );
+
       const res = await fetch(
-        `https://localhost:7015/api/Seller/orders/${orderId}/approve-design`,
+        `https://localhost:7015/api/Seller/orders/${orderId}/approve-or-reject-design`,
         {
-          method: "POST",
+          method: "PUT",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
+          body: JSON.stringify({ productionStatus: 6 }), // 6 = READY_PROD (Approve)
         }
       );
 
-      if (!res.ok) throw new Error("Failed to approve design");
+      console.log("[v0] API Response status:", res.status);
+      console.log("[v0] API Response headers:", res.headers);
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("[v0] API Error response text:", errorText);
+
+        let errorData = {};
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          console.error("[v0] Failed to parse error response as JSON");
+        }
+
+        throw new Error(
+          errorData.message || `HTTP ${res.status}: Failed to approve design`
+        );
+      }
 
       setSuccessMessage("✅ Design approved successfully!");
       setShowSuccessDialog(true);
@@ -846,7 +876,7 @@ export default function ManageOrder() {
         window.location.reload();
       }, 1500);
     } catch (err) {
-      console.error("❌ Approve design failed:", err);
+      console.error("[v0] Approve design failed:", err);
       setErrorMessage(`❌ Failed to approve: ${err.message}`);
       setShowErrorDialog(true);
     }
@@ -854,16 +884,46 @@ export default function ManageOrder() {
 
   const handleRejectDesign = async (orderId) => {
     try {
+      if (!orderId) {
+        console.error("[v0] Invalid orderId:", orderId);
+        throw new Error("Order ID is missing");
+      }
+
+      console.log(
+        "[v0] Rejecting design for order:",
+        orderId,
+        "Type:",
+        typeof orderId
+      );
+
       const res = await fetch(
-        `https://localhost:7015/api/Seller/orders/${orderId}/reject-design`,
+        `https://localhost:7015/api/Seller/orders/${orderId}/approve-or-reject-design`,
         {
-          method: "POST",
+          method: "PUT",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
+          body: JSON.stringify({ productionStatus: 5 }), // 5 = DESIGN_REDO (Reject)
         }
       );
 
-      if (!res.ok) throw new Error("Failed to reject design");
+      console.log("[v0] API Response status:", res.status);
+      console.log("[v0] API Response headers:", res.headers);
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("[v0] API Error response text:", errorText);
+
+        let errorData = {};
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          console.error("[v0] Failed to parse error response as JSON");
+        }
+
+        throw new Error(
+          errorData.message || `HTTP ${res.status}: Failed to reject design`
+        );
+      }
 
       setSuccessMessage("✅ Design rejected successfully!");
       setShowSuccessDialog(true);
@@ -873,7 +933,7 @@ export default function ManageOrder() {
         window.location.reload();
       }, 1500);
     } catch (err) {
-      console.error("❌ Reject design failed:", err);
+      console.error("[v0] Reject design failed:", err);
       setErrorMessage(`❌ Failed to reject: ${err.message}`);
       setShowErrorDialog(true);
     }
@@ -898,6 +958,63 @@ export default function ManageOrder() {
       // </CHANGE>
       default:
         return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
+
+  const handleAssignStaff = async () => {
+    if (selectedOrders.length === 0) {
+      setCannotAssignMessage(
+        "Please select at least one order to assign to staff."
+      );
+      setShowCannotAssignDialog(true);
+      return;
+    }
+
+    try {
+      const failedOrders = [];
+
+      for (const orderId of selectedOrders) {
+        try {
+          const res = await fetch(
+            `https://localhost:7015/api/Seller/orders/${orderId}/send-to-staff`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include", // Added credentials to send authentication token
+            }
+          );
+
+          if (!res.ok) {
+            const errorData = await res.json().catch(() => ({}));
+            console.error("[v0] Assign staff error:", errorData);
+            failedOrders.push(orderId);
+          }
+        } catch (err) {
+          console.error("[v0] Assign staff failed for order:", orderId, err);
+          failedOrders.push(orderId);
+        }
+      }
+
+      if (failedOrders.length === 0) {
+        setSuccessMessage(
+          `✅ Successfully assigned ${selectedOrders.length} order(s) to staff.`
+        );
+        setShowSuccessDialog(true);
+        setSelectedOrders([]);
+        setSelectAll(false);
+        fetchOrders();
+      } else {
+        setCannotAssignMessage(
+          `Failed to assign ${failedOrders.length} order(s) to staff. Please try again.`
+        );
+        setShowCannotAssignDialog(true);
+      }
+    } catch (err) {
+      console.error("[v0] Assign staff error:", err);
+      setCannotAssignMessage(
+        "An error occurred while assigning orders to staff."
+      );
+      setShowCannotAssignDialog(true);
     }
   };
 
@@ -1099,12 +1216,13 @@ export default function ManageOrder() {
               >
                 Assign Designer ({selectedOrders.length})
               </Button>
+
               <Button
                 variant="outline"
+                onClick={handleAssignStaff}
                 disabled={selectedOrders.length === 0}
-                className="bg-white"
               >
-                Assign to Staff ({selectedOrders.length})
+                Assign Staff ({selectedOrders.length})
               </Button>
             </div>
 
@@ -2408,5 +2526,4 @@ export default function ManageOrder() {
       </Dialog>
     </div>
   );
-  á;
 }
