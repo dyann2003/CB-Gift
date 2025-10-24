@@ -171,7 +171,7 @@ namespace CB_Gift.Services
             return results;
         }
 
-        public async Task<bool> UpdatePlanDetailStatusAsync(int planDetailId, int newStatus)
+        /*public async Task<bool> UpdatePlanDetailStatusAsync(int planDetailId, int newStatus)
         {
             var planDetail = await _context.PlanDetails.FindAsync(planDetailId);
 
@@ -192,6 +192,122 @@ namespace CB_Gift.Services
             await _context.SaveChangesAsync();
 
             return true;
+        }*/
+        // Trong Service class của bạn (ví dụ: PlanService)
+
+        public async Task<bool> UpdatePlanDetailStatusAsync(int planDetailId, int newStatus)
+        {
+            // Bắt đầu một Transaction để đảm bảo tính nhất quán của dữ liệu
+            using var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                var planDetail = await _context.PlanDetails.FindAsync(planDetailId);
+
+                if (planDetail == null)
+                {
+                    return false;
+                }
+
+                // Tải OrderDetail (không cần Include Order ở bước này)
+                var orderDetail = await _context.OrderDetails.FindAsync(planDetail.OrderDetailId);
+
+                if (orderDetail == null)
+                {
+                    return false;
+                }
+
+                // 1. Cập nhật ProductionStatus của OrderDetail hiện tại
+                var newProductionStatus = (ProductionStatus)newStatus;
+                orderDetail.ProductionStatus = newProductionStatus;
+
+                // 2. Tải Order cha
+                var order = await _context.Orders
+                    .Include(o => o.OrderDetails) // Phải Include tất cả OrderDetails để kiểm tra
+                    .FirstOrDefaultAsync(o => o.OrderId == orderDetail.OrderId);
+
+                if (order == null)
+                {
+                    return false;
+                }
+
+                // 3. LOGIC CẬP NHẬT ORDER CHA:
+                //    Chỉ cập nhật Order.StatusOrder khi TẤT CẢ OrderDetails đã đạt trạng thái đó.
+
+                // 3a. Tìm trạng thái ProductionStatus thấp nhất (bằng giá trị số int)
+                // Lấy tất cả OrderDetails của Order này (đã được Include)
+                var allOrderDetails = order.OrderDetails.ToList();
+
+                // Nếu không có OrderDetail nào, không làm gì
+                if (!allOrderDetails.Any())
+                {
+                    await transaction.CommitAsync();
+                    return true;
+                }
+
+                // ProductionStatus đã được lưu dưới dạng Enum.
+                // Chuyển sang int để so sánh và tìm giá trị nhỏ nhất (trạng thái kém tiến triển nhất).
+                var minProductionStatusValue = allOrderDetails
+                    .Min(od => (int)od.ProductionStatus.GetValueOrDefault((ProductionStatus)0)); // Default 0 (DRAFT)
+
+                var minProductionStatus = (ProductionStatus)minProductionStatusValue;
+
+                // 3b. Ánh xạ trạng thái thấp nhất này sang StatusOrder
+                var newOrderStatus = MapProductionStatusToOrderStatus(minProductionStatus);
+
+                // 3c. Cập nhật StatusOrder của Order cha
+                // Logic mới: Đặt StatusOrder của Order cha bằng trạng thái thấp nhất tìm được.
+                order.StatusOrder = newOrderStatus;
+
+                // 4. Lưu thay đổi và Commit Transaction
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // Ghi log lỗi ở đây
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        // Giữ nguyên hàm Mapping của bạn
+        private int MapProductionStatusToOrderStatus(ProductionStatus productionStatus)
+        {
+            // Ánh xạ ProductionStatus (OrderDetail) sang StatusOrder (Order)
+            return productionStatus switch
+            {
+                // Trạng thái chung:
+                ProductionStatus.DRAFT => 1,
+                ProductionStatus.CREATED => 2,
+                ProductionStatus.HOLD => 16,
+                ProductionStatus.CANCELLED => 17,
+
+                // Trạng thái Design:
+                ProductionStatus.NEED_DESIGN => 3,
+                ProductionStatus.DESIGNING => 4,
+                ProductionStatus.CHECK_DESIGN => 5,
+                ProductionStatus.DESIGN_REDO => 6,
+
+                // Trạng thái Chốt Đơn/Sản xuất:
+                // READY_PROD là trạng thái Sẵn sàng Sản xuất.
+                ProductionStatus.READY_PROD => 8,
+
+                // Trạng thái Sản xuất:
+                ProductionStatus.IN_PROD => 8,
+                ProductionStatus.PROD_REWORK => 15,
+                ProductionStatus.QC_FAIL => 12, // Lỗi Sản xuất (QC_FAIL)
+
+                // Trạng thái Hoàn thành/Giao hàng:
+                ProductionStatus.QC_DONE => 11, // Đã Kiểm tra Chất lượng
+                ProductionStatus.PACKING => 13,
+                ProductionStatus.FINISHED => 10, // Sản xuất xong
+
+                // Trạng thái không rõ hoặc mặc định
+                _ => 1
+            };
         }
     }
 }

@@ -138,7 +138,7 @@ namespace CB_Gift.Services
                 // 3. LOGIC UPSERT (UPDATE HOẶC INSERT) VÀO OrderDetailDesign
                 // Chúng ta tìm kiếm bản ghi nháp hiện tại (IsFinal = false)
                 var existingDesignRecord = await _context.OrderDetailDesigns
-                    .FirstOrDefaultAsync(odd => odd.OrderDetailId == orderDetailId && odd.IsFinal == false);
+                    .FirstOrDefaultAsync(odd => odd.OrderDetailId == orderDetailId);
 
                 if (existingDesignRecord != null)
                 {
