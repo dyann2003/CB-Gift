@@ -403,7 +403,7 @@ namespace CB_Gift.Services
             await _context.SaveChangesAsync();
             return true;
         }
-        public async Task<bool> SellerApproveOrderDesignAsync(
+        public async Task<bool> SellerApproveOrderDesignAsync(  // update status order
         int orderId,
         ProductionStatus action,
         string sellerId)
@@ -479,7 +479,108 @@ namespace CB_Gift.Services
 
             return true;
         }
+        public async Task<bool> SellerApproveOrderDetailDesignAsync(
+        int orderDetailId,
+        ProductionStatus action,
+        string sellerId)
+        {
+            // 1. Tải OrderDetail và Order cha
+            var orderDetail = await _context.OrderDetails
+                .Include(od => od.Order)
+                .FirstOrDefaultAsync(od => od.OrderDetailId == orderDetailId);
 
+            if (orderDetail == null)
+            {
+                return false;
+            }
+
+            var order = orderDetail.Order;
+
+            // 2. Kiểm tra Quyền
+            if (order.SellerUserId != sellerId)
+            {
+                throw new UnauthorizedAccessException($"Seller {sellerId} is not authorized to modify OrderDetail {orderDetailId}.");
+            }
+
+            // 3. Kiểm tra trạng thái hiện tại của OrderDetail
+            // Phải đang ở CHECK_DESIGN và cần thiết kế
+            if (orderDetail.ProductionStatus.GetValueOrDefault() != ProductionStatus.CHECK_DESIGN)
+            {
+                throw new InvalidOperationException($"OrderDetail {orderDetailId} is not in a modifiable state (Must be CHECK_DESIGN).");
+            }
+
+            // 4. Kiểm tra trạng thái đích hợp lệ
+            if (action != ProductionStatus.DESIGN_REDO && action != ProductionStatus.READY_PROD)
+            {
+                throw new InvalidOperationException($"Invalid action status {action}. Must be DESIGN_REDO or READY_PROD.");
+            }
+
+            // 5. Cập nhật ProductionStatus của OrderDetail duy nhất
+            orderDetail.ProductionStatus = action;
+
+            // 6. Lưu thay đổi
+            // LƯU Ý: Không có logic cập nhật Order cha tại đây theo yêu cầu.
+            await _context.SaveChangesAsync();
+
+            return true;
+        }
+        public async Task<bool> SendOrderToReadyProdAsync(int orderId, string sellerId)
+        {
+            // Sử dụng transaction để đảm bảo cả Order và OrderDetails được cập nhật đồng thời
+            using var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                var order = await _context.Orders
+                    // Include tất cả OrderDetails
+                    .Include(o => o.OrderDetails)
+                    .FirstOrDefaultAsync(o => o.OrderId == orderId);
+
+                if (order == null)
+                {
+                    await transaction.RollbackAsync();
+                    return false;
+                }
+
+                // 1. Kiểm tra Quyền
+                if (order.SellerUserId != sellerId)
+                {
+                    throw new UnauthorizedAccessException($"Seller {sellerId} is not authorized to modify Order {orderId}.");
+                }
+
+                // 2. Kiểm tra Trạng thái (Chỉ cho phép từ StatusOrder = 1)
+                // Giả định 1 là 'Mới tạo' (hoặc tương đương)
+                if (order.StatusOrder != 1)
+                {
+                    throw new InvalidOperationException($"Chỉ có thể chuyển đơn hàng ở trạng thái 'Mới tạo' (StatusOrder = 1). Trạng thái hiện tại: {order.StatusOrder}.");
+                }
+
+                // 3. Cập nhật Order cha
+                // Giả định 7 là Order Status cho CONFIRMED/READY_PROD
+                const int READY_PROD_ORDER_STATUS = 7;
+                order.StatusOrder = READY_PROD_ORDER_STATUS;
+
+                // 4. Cập nhật HÀNG LOẠT ProductionStatus của các OrderDetail
+                foreach (var detail in order.OrderDetails)
+                {
+                    detail.ProductionStatus = ProductionStatus.READY_PROD;
+                    // Nếu có trường liên quan đến việc chốt file thiết kế (như IsFinal), bạn cần xử lý tại đây.
+                    // Ví dụ: detail.LinkFileDesign = detail.LinkImg; // Giả định dùng ảnh gốc làm file thiết kế
+                }
+
+                // 5. Lưu thay đổi và Commit Transaction
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi chuyển đơn hàng ID {OrderId} sang READY_PROD.", orderId);
+                await transaction.RollbackAsync();
+                throw; // Ném lại lỗi để Controller xử lý
+            }
+        }
     }
 }
 

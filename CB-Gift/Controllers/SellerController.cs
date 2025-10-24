@@ -1,5 +1,6 @@
 ﻿using CB_Gift.DTOs;
 using CB_Gift.Models.Enums;
+using CB_Gift.Services;
 using CB_Gift.Services.IService;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -155,7 +156,7 @@ namespace CB_Gift.Controllers
                 return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn. Vui lòng thử lại sau." });
             }
         }
-        [HttpPut]
+        [HttpPut("orders/{orderId}/approve-or-reject-design")]
         public async Task<IActionResult> UpdateDesignStatus(
         int orderId,
         [FromBody] UpdateStatusRequest request)
@@ -214,6 +215,91 @@ namespace CB_Gift.Controllers
             catch (Exception)
             {
                 return StatusCode(500, "Internal server error during status update.");
+            }
+        }
+        [HttpPut("order/order-details/{orderDetailId}/design-status")]
+        public async Task<IActionResult> UpdateDesignOrderDetailStatus(
+        int orderDetailId,
+        [FromBody] UpdateStatusRequest request)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            // LẤY SELLER ID
+            var sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            if (string.IsNullOrEmpty(sellerId))
+            {
+                return Unauthorized("User is not authenticated or Seller ID missing.");
+            }
+
+            var action = request.ProductionStatus;
+
+            // Kiểm tra tính hợp lệ của Action (phải là DESIGN_REDO hoặc READY_PROD)
+            if (action != ProductionStatus.DESIGN_REDO && action != ProductionStatus.READY_PROD)
+            {
+                return BadRequest($"Invalid action. Must be {ProductionStatus.DESIGN_REDO} or {ProductionStatus.READY_PROD}.");
+            }
+
+            try
+            {
+                // GỌI SERVICE
+                bool success = await _orderService.SellerApproveOrderDetailDesignAsync(
+                    orderDetailId,
+                    action,
+                    sellerId
+                );
+
+                if (success)
+                {
+                    return Ok(new { message = $"OrderDetail {orderDetailId} design successfully updated to {action}." });
+                }
+                else
+                {
+                    return NotFound($"OrderDetail with ID {orderDetailId} not found.");
+                }
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Forbid(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, "Internal server error during status update.");
+            }
+        }
+        // POST: /api/seller/orders/{orderId}/send-to-staff
+        [HttpPost("orders/{orderId}/send-to-staff")]
+        public async Task<IActionResult> SendOrderToReadyProd(int orderId)
+        {
+            var sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(sellerId)) return Unauthorized();
+
+            try
+            {
+                // Gọi phương thức service mới để chuyển trạng thái từ StatusOrder=1 sang 7
+                var success = await _orderService.SendOrderToReadyProdAsync(orderId, sellerId);
+
+                if (!success)
+                {
+                    return NotFound(new { message = $"Không tìm thấy Đơn hàng ID {orderId} hoặc bạn không có quyền truy cập." });
+                }
+
+                return Ok(new { message = "Đơn hàng đã được chốt và chuyển thẳng sang trạng thái Sẵn sàng Sản xuất (READY_PROD)." });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn khi gửi đơn hàng." });
             }
         }
     }

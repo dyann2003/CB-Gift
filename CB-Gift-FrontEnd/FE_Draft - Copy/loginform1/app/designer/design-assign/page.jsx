@@ -42,6 +42,8 @@ export default function DesignAssignPage() {
   const [selectAll, setSelectAll] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [selectedMonth, setSelectedMonth] = useState("all-months")
+  const [selectedYear, setSelectedYear] = useState("all-years")
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [confirmAction, setConfirmAction] = useState(null)
   const [confirmMessage, setConfirmMessage] = useState("")
@@ -280,6 +282,19 @@ export default function DesignAssignPage() {
     fetchTasks()
   }, [])
 
+  const getAvailableMonthsYears = () => {
+    const monthYearSet = new Set()
+    assignedOrders.forEach((order) => {
+      const date = new Date(order.assignedAt)
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, "0")
+      monthYearSet.add(`${year}-${month}`)
+    })
+    return Array.from(monthYearSet).sort().reverse()
+  }
+
+  const availableMonthsYears = getAvailableMonthsYears()
+
   // --- LOGIC FILTER/COUNT/DISPLAY ---
   const filteredOrders = assignedOrders.filter((order) => {
     const matchesSearch =
@@ -287,10 +302,17 @@ export default function DesignAssignPage() {
       order.productName.toLowerCase().includes(searchTerm.toLowerCase())
 
     const orderStatusKey = order.ProductionStatus || "NEED_DESIGN"
-
     const matchesStatus = statusFilter === "all" || orderStatusKey === statusFilter
 
-    return matchesSearch && matchesStatus
+    let matchesDate = true
+    if (selectedMonth !== "all-months" && selectedYear !== "all-years") {
+      const date = new Date(order.assignedAt)
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, "0")
+      matchesDate = `${year}-${month}` === `${selectedYear}-${selectedMonth}`
+    }
+
+    return matchesSearch && matchesStatus && matchesDate
   })
 
   const totalPages = Math.ceil(filteredOrders.length / itemsPerPage)
@@ -299,12 +321,24 @@ export default function DesignAssignPage() {
   const paginatedOrders = filteredOrders.slice(startIndex, endIndex)
 
   const getFilterCounts = () => {
-    const counts = { all: assignedOrders.length }
+    const counts = { all: 0 }
     Object.keys(DESIGN_STATUSES).forEach((key) => {
       counts[key] = 0
     })
 
-    assignedOrders.forEach((order) => {
+    // Count only orders that match current date filters
+    const dateFilteredOrders = assignedOrders.filter((order) => {
+      if (selectedMonth !== "all-months" && selectedYear !== "all-years") {
+        const date = new Date(order.assignedAt)
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, "0")
+        return `${year}-${month}` === `${selectedYear}-${selectedMonth}`
+      }
+      return true
+    })
+
+    counts.all = dateFilteredOrders.length
+    dateFilteredOrders.forEach((order) => {
       const statusKey = order.ProductionStatus || "NEED_DESIGN"
       if (counts.hasOwnProperty(statusKey)) {
         counts[statusKey] += 1
@@ -336,7 +370,7 @@ export default function DesignAssignPage() {
 
   const getOrderStatus = (order) => {
     const statusKey = order.ProductionStatus || "NEED_DESIGN"
-    const statusInfo = DESIGN_STATUSES[statusKey] || { name: "UNKNOWN", color: "bg-gray-500" }
+    const statusInfo = DESIGN_STATUSES[statusKey] || { name: "DONE", color: "bg-green-500" }
     return (
       <Badge variant="default" className={statusInfo.color}>
         {statusInfo.name}
@@ -359,38 +393,139 @@ export default function DesignAssignPage() {
         </header>
 
         <main className="flex-1 overflow-y-auto p-6">
+          {loading ? (
+            <div className="text-center text-gray-500 mb-6">Loading stats...</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+              {/* Need Design */}
+              <div
+                className={`bg-white p-6 rounded-lg shadow cursor-pointer hover:ring-2 hover:ring-red-300 transition-all ${
+                  statusFilter === "NEED_DESIGN" ? "ring-2 ring-offset-2 ring-red-500" : ""
+                }`}
+                onClick={() => setStatusFilter("NEED_DESIGN")}
+              >
+                <h3 className="text-sm font-medium text-gray-500">Need Design</h3>
+                <p className="text-2xl font-bold text-gray-900 mt-2">{filterCounts["NEED_DESIGN"] || 0}</p>
+              </div>
+
+              {/* Designing */}
+              <div
+                className={`bg-white p-6 rounded-lg shadow cursor-pointer hover:ring-2 hover:ring-yellow-300 transition-all ${
+                  statusFilter === "DESIGNING" ? "ring-2 ring-offset-2 ring-yellow-500" : ""
+                }`}
+                onClick={() => setStatusFilter("DESIGNING")}
+              >
+                <h3 className="text-sm font-medium text-gray-500">Designing</h3>
+                <p className="text-2xl font-bold text-gray-900 mt-2">{filterCounts["DESIGNING"] || 0}</p>
+              </div>
+
+              {/* Need Check Design */}
+              <div
+                className={`bg-white p-6 rounded-lg shadow cursor-pointer hover:ring-2 hover:ring-blue-300 transition-all ${
+                  statusFilter === "CHECK_DESIGN" ? "ring-2 ring-offset-2 ring-blue-500" : ""
+                }`}
+                onClick={() => setStatusFilter("CHECK_DESIGN")}
+              >
+                <h3 className="text-sm font-medium text-gray-500">Need Check Design</h3>
+                <p className="text-2xl font-bold text-gray-900 mt-2">{filterCounts["CHECK_DESIGN"] || 0}</p>
+              </div>
+
+              {/* Design Error */}
+              <div
+                className={`bg-white p-6 rounded-lg shadow cursor-pointer hover:ring-2 hover:ring-purple-300 transition-all ${
+                  statusFilter === "DESIGN_REDO" ? "ring-2 ring-offset-2 ring-purple-500" : ""
+                }`}
+                onClick={() => setStatusFilter("DESIGN_REDO")}
+              >
+                <h3 className="text-sm font-medium text-gray-500">Design Error</h3>
+                <p className="text-2xl font-bold text-gray-900 mt-2">{filterCounts["DESIGN_REDO"] || 0}</p>
+              </div>
+
+              {/* Total */}
+              <div
+                className={`bg-white p-6 rounded-lg shadow cursor-pointer hover:ring-2 hover:ring-gray-300 transition-all ${
+                  statusFilter === "all" ? "ring-2 ring-offset-2 ring-gray-500" : ""
+                }`}
+                onClick={() => setStatusFilter("all")}
+              >
+                <h3 className="text-sm font-medium text-gray-500">Total Orders</h3>
+                <p className="text-2xl font-bold text-gray-900 mt-2">{filterCounts.all || 0}</p>
+              </div>
+            </div>
+          )}
+
           {/* Search and Filter Section */}
           <div className="bg-white p-4 rounded-lg shadow mb-6">
-            <div className="flex gap-4 items-center">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                  <Input
-                    placeholder="Search by Order ID, Product Name..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
+            <div className="flex flex-col gap-4">
+              {/* Search bar */}
+              <div className="flex gap-4 items-center">
+                <div className="flex-1">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                    <Input
+                      placeholder="Search by Order ID, Product Name..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
                 </div>
               </div>
-              <div className="w-48">
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Filter by status">
-                      {statusFilter === "all"
-                        ? `Tất cả Status (${filterCounts.all})`
-                        : `${DESIGN_STATUSES[statusFilter]?.name} (${filterCounts[statusFilter] || 0})`}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tất cả Status ({filterCounts.all})</SelectItem>
-                    {Object.entries(DESIGN_STATUSES).map(([key, value]) => (
-                      <SelectItem key={key} value={key}>
-                        {value.name} ({filterCounts[key] || 0})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+
+              {/* Month/year filter selects */}
+              <div className="flex gap-4 items-center">
+                <div className="flex-1">
+                  <Label className="text-sm font-medium text-gray-700 mb-2 block">Filter by Month/Year</Label>
+                  <div className="flex gap-2">
+                    <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                      <SelectTrigger className="w-32">
+                        <SelectValue placeholder="Month" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all-months">All Months</SelectItem>
+                        {Array.from({ length: 12 }, (_, i) => {
+                          const month = String(i + 1).padStart(2, "0")
+                          const monthName = new Date(2024, i).toLocaleString("en-US", { month: "long" })
+                          return (
+                            <SelectItem key={month} value={month}>
+                              {monthName}
+                            </SelectItem>
+                          )
+                        })}
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={selectedYear} onValueChange={setSelectedYear}>
+                      <SelectTrigger className="w-32">
+                        <SelectValue placeholder="Year" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all-years">All Years</SelectItem>
+                        {availableMonthsYears.map((monthYear) => {
+                          const year = monthYear.split("-")[0]
+                          return (
+                            <SelectItem key={year} value={year}>
+                              {year}
+                            </SelectItem>
+                          )
+                        })}
+                      </SelectContent>
+                    </Select>
+
+                    {(selectedMonth !== "all-months" || selectedYear !== "all-years") && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedMonth("all-months")
+                          setSelectedYear("all-years")
+                        }}
+                      >
+                        Clear Filter
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
