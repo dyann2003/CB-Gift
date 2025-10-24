@@ -31,7 +31,16 @@ namespace CB_Gift.Services
                 ProductionStatus.NEED_DESIGN,
                 ProductionStatus.DESIGNING,
                 ProductionStatus.CHECK_DESIGN,
-                ProductionStatus.DESIGN_REDO
+                ProductionStatus.DESIGN_REDO,
+                ProductionStatus.READY_PROD,
+                ProductionStatus.IN_PROD,
+                ProductionStatus.QC_DONE,
+                ProductionStatus.FINISHED,
+                ProductionStatus.QC_FAIL,
+                ProductionStatus.PROD_REWORK,
+                ProductionStatus.PACKING,
+                ProductionStatus.HOLD,
+                ProductionStatus.CANCELLED
             };
             // Định nghĩa các trạng thái OrderStatus liên quan đến thiết kế
             var designOrderStatuses = new[] { 3, 4, 5, 6 }; // StatusOrder là kiểu int
@@ -102,7 +111,7 @@ namespace CB_Gift.Services
                     throw new InvalidOperationException($"Cannot upload design file. Current status is {currentStatus}. Must be DESIGNING or DESIGN_REDO.");
                 }
 
-                // ********** Logic sau khi đã xác thực trạng thái **********
+                // ********** Logic xác định finalFileUrl **********
                 string finalFileUrl;
                 if (dto.DesignFile != null && dto.DesignFile.Length > 0)
                 {
@@ -117,8 +126,7 @@ namespace CB_Gift.Services
                 }
                 else if (!string.IsNullOrEmpty(dto.FileUrl))
                 {
-                    // TRƯỜNG HỢP 2: Sử dụng URL của file đã có sẵn trong kho ảnh
-                    // (Bạn có thể cần thêm logic xác thực URL này có thuộc về Designer không)
+                    // TRƯỜNG HỢP 2: Sử dụng URL của file đã có sẵn
                     finalFileUrl = dto.FileUrl;
                 }
                 else
@@ -127,24 +135,38 @@ namespace CB_Gift.Services
                     throw new ArgumentException("Phải cung cấp File mới hoặc URL File đã có.");
                 }
 
-                // 3. Tạo một record OrderDetailDesign mới
-                var newDesignRecord = new OrderDetailDesign
+                // 3. LOGIC UPSERT (UPDATE HOẶC INSERT) VÀO OrderDetailDesign
+                // Chúng ta tìm kiếm bản ghi nháp hiện tại (IsFinal = false)
+                var existingDesignRecord = await _context.OrderDetailDesigns
+                    .FirstOrDefaultAsync(odd => odd.OrderDetailId == orderDetailId && odd.IsFinal == false);
+
+                if (existingDesignRecord != null)
                 {
-                    OrderDetailId = orderDetailId,
-                    DesignerUserId = designerId,
-                    FileUrl = finalFileUrl,
-                    Note = dto.Note,
-                    IsFinal = false,
-                    CreatedAt = DateTime.UtcNow
-                };
-                _context.OrderDetailDesigns.Add(newDesignRecord);
+                    // TRƯỜNG HỢP 1: UPDATE bản nháp đã tồn tại
+                    existingDesignRecord.FileUrl = finalFileUrl;
+                    existingDesignRecord.Note = dto.Note;
+                    existingDesignRecord.CreatedAt = DateTime.UtcNow; // Cập nhật thời gian upload
+                }
+                else
+                {
+                    // TRƯỜNG HỢP 2: INSERT bản nháp mới
+                    var newDesignRecord = new OrderDetailDesign
+                    {
+                        OrderDetailId = orderDetailId,
+                        DesignerUserId = designerId,
+                        FileUrl = finalFileUrl,
+                        Note = dto.Note,
+                        IsFinal = false, // Bản ghi mới này là bản nháp
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    _context.OrderDetailDesigns.Add(newDesignRecord);
+                }
 
                 // 4. Cập nhật lại LinkFileDesign và ProductionStatus trong OrderDetail
                 orderDetail.LinkFileDesign = finalFileUrl;
 
                 // CẬP NHẬT TRẠNG THÁI ORDER DETAIL: DESIGNING/DESIGN_REDO -> CHECK_DESIGN
-                // Set giá trị Enum. EF Core Value Converter sẽ tự chuyển nó sang chuỗi (varchar) trong DB.
-                orderDetail.ProductionStatus = ProductionStatus.CHECK_DESIGN; 
+                orderDetail.ProductionStatus = ProductionStatus.CHECK_DESIGN;
 
                 // 5. Lưu tất cả thay đổi vào database
                 await _context.SaveChangesAsync();
@@ -155,7 +177,7 @@ namespace CB_Gift.Services
             }
             catch (Exception)
             {
-                // Khi xảy ra Exception trong quá trình Upload (bước 2), nó sẽ được bắt ở đây.
+                // Khi xảy ra Exception, Rollback transaction
                 await transaction.RollbackAsync();
                 throw;
             }

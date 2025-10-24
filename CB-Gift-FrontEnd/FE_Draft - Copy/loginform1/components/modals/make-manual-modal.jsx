@@ -662,7 +662,7 @@ export default function MakeManualModal({ isOpen, onClose }) {
               >
                 {/* Ảnh sản phẩm */}
                 <img
-                  src={p.image || "/placeholder.svg"}
+                  src={p.itemLink || "/placeholder.svg"}
                   alt={p.productName}
                   className="w-full h-32 object-cover rounded-md mb-3"
                 />
@@ -695,7 +695,7 @@ export default function MakeManualModal({ isOpen, onClose }) {
         <div className="bg-gray-50 p-4 rounded-lg mb-4">
           <div className="flex items-center gap-4">
             <img
-              src={currentProduct.image || "/placeholder.svg"}
+              src={currentProduct.itemLink || "/placeholder.svg"}
               alt={currentProduct.productName}
               className="w-16 h-16 object-cover rounded"
             />
@@ -1002,7 +1002,7 @@ export default function MakeManualModal({ isOpen, onClose }) {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <img
-                      src={item.product.image || "/placeholder.svg"}
+                      src={item.product.itemLink || "/placeholder.svg"}
                       alt={item.product.productName}
                       className="w-12 h-12 object-cover rounded"
                     />
