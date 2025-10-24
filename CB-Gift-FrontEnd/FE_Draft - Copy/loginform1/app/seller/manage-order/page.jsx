@@ -62,7 +62,6 @@ import {
   Eye,
   Download,
   QrCode,
-  Edit,
   Save,
   Clock,
   CheckCircle,
@@ -105,6 +104,9 @@ export default function ManageOrder() {
   const [isAssignPopupOpen, setIsAssignPopupOpen] = useState(false);
   const [designers, setDesigners] = useState([]);
   const [selectedDesignerId, setSelectedDesignerId] = useState("");
+  const [showDesignCheckDialog, setShowDesignCheckDialog] = useState(false);
+  const [designCheckAction, setDesignCheckAction] = useState(null); // 'approve' or 'reject'
+  const [designCheckOrderId, setDesignCheckOrderId] = useState(null);
 
   // 🧩 Thêm vào đầu file (trong component ManageOrder)
   const [successMessage, setSuccessMessage] = useState("");
@@ -206,77 +208,77 @@ export default function ManageOrder() {
       statusFilter: null,
     },
     {
-      title: "Draft (Nháp)",
+      title: "Draft",
       color: "bg-gray-50 border-gray-200",
       icon: FileEdit,
       iconColor: "text-gray-500",
       statusFilter: "Draft (Nháp)",
     },
     {
-      title: "Cần Design",
+      title: "Need Design",
       color: "bg-yellow-50 border-yellow-200",
       icon: Handshake,
       iconColor: "text-yellow-500",
       statusFilter: "Cần Design",
     },
     {
-      title: "Đang làm Design",
+      title: "Designing",
       color: "bg-purple-50 border-purple-200",
       icon: Clock,
       iconColor: "text-purple-500",
       statusFilter: "Đang làm Design",
     },
     {
-      title: "Cần Check Design",
+      title: "Need Check Design",
       color: "bg-green-50 border-green-200",
       icon: ListTodo,
       iconColor: "text-green-500",
       statusFilter: "Cần Check Design",
     },
     {
-      title: "Chốt Đơn (Khóa Seller)",
+      title: "Close Order (Lock Seller)",
       color: "bg-orange-50 border-orange-200",
       icon: CheckCircle,
       iconColor: "text-orange-500",
       statusFilter: "Chốt Đơn (Khóa Seller)",
     },
     {
-      title: "Thiết kế Lại (Design Lỗi)",
+      title: "Redesign (Design Error)",
       color: "bg-red-50 border-red-200",
       icon: AlertTriangle,
       iconColor: "text-red-500",
       statusFilter: "Thiết kế Lại (Design Lỗi)",
     },
     {
-      title: "Sẵn sàng Sản xuất",
+      title: "Production Ready",
       color: "bg-cyan-50 border-cyan-200",
       icon: Package,
       iconColor: "text-cyan-500",
       statusFilter: "Sẵn sàng Sản xuất",
     },
     {
-      title: "Sản xuất Xong",
+      title: "Production Done",
       color: "bg-teal-50 border-teal-200",
       icon: CheckCircle,
       iconColor: "text-teal-500",
       statusFilter: "Sản xuất Xong",
     },
     {
-      title: "Lỗi Sản xuất (Cần Rework)",
+      title: "Manufacturing Defect (Requires Rework)",
       color: "bg-red-50 border-red-200",
       icon: AlertTriangle,
       iconColor: "text-red-600",
       statusFilter: "Lỗi Sản xuất (Cần Rework)",
     },
     {
-      title: "Đã Kiểm tra Chất lượng",
+      title: "Quality Checked",
       color: "bg-emerald-50 border-emerald-200",
       icon: CheckCircle,
       iconColor: "text-emerald-500",
       statusFilter: "Đã Kiểm tra Chất lượng",
     },
     {
-      title: "Đã Ship",
+      title: "Shipped",
       color: "bg-blue-50 border-blue-200",
       icon: Package,
       iconColor: "text-blue-600",
@@ -290,7 +292,7 @@ export default function ManageOrder() {
       statusFilter: "Cancel",
     },
     {
-      title: "Hoàn Hàng",
+      title: "Return the product",
       color: "bg-amber-50 border-amber-200",
       icon: Package,
       iconColor: "text-amber-600",
@@ -417,12 +419,12 @@ export default function ManageOrder() {
 
     // Kiểm tra có order nào KHÔNG phải là Draft (Nháp)
     const nonDraftOrders = selectedOrdersData.filter(
-      (order) => order.status !== "Draft (Nháp)"
+      (order) => order.status !== "Draft"
     );
 
     if (nonDraftOrders.length > 0) {
       setCannotAssignMessage(
-        `Cannot assign ${nonDraftOrders.length} order(s) to designer. Only orders with "Draft (Nháp)" status can be assigned.`
+        `Cannot assign ${nonDraftOrders.length} order(s) to designer. Only orders with "Draft " status can be assigned.`
       );
       setShowCannotAssignDialog(true);
       return;
@@ -585,21 +587,29 @@ export default function ManageOrder() {
     )}`;
   }
 
-  function formatMySQLDate(dateStr) {
-    if (!dateStr) return "";
-    const date = new Date(dateStr);
-    const pad = (n) => n.toString().padStart(2, "0");
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
-      date.getDate()
-    )} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(
-      date.getSeconds()
-    )}`;
-  }
-
   const handleDelete = async (orderId) => {
     if (!orderId) return;
 
     try {
+      // 🔍 Tìm đơn hàng trong danh sách hiện tại
+      const orderToDelete = orders.find((o) => o.id === orderId);
+
+      if (!orderToDelete) {
+        setResultMessage("⚠️ Không tìm thấy đơn hàng để xóa.");
+        setShowResultDialog(true);
+        return;
+      }
+
+      // ❌ Nếu không phải trạng thái Draft (Nháp), chặn xóa
+      if (orderToDelete.status !== "Draft (Nháp)") {
+        setResultMessage(
+          `Can't delete the order have status "${orderToDelete.status}". Only can delete the order have status Draft".`
+        );
+        setShowResultDialog(true);
+        return;
+      }
+
+      // ✅ Gọi API xóa
       const response = await fetch(
         `https://localhost:7015/api/Order/${orderId}`,
         {
@@ -612,13 +622,13 @@ export default function ManageOrder() {
 
       if (response.ok) {
         setOrders((prev) => prev.filter((o) => o.id !== orderId));
-        setResultMessage(result.message || "✅ Xóa đơn hàng thành công.");
+        setResultMessage(result.message || "Delete Successfully");
       } else {
-        setResultMessage(result.message || "❌ Không thể xóa đơn hàng này.");
+        setResultMessage(result.message || "Can't delete this order");
       }
     } catch (error) {
       console.error("❌ Delete failed:", error);
-      setResultMessage("⚠️ Đã xảy ra lỗi khi xóa đơn hàng.");
+      setResultMessage("Have some error");
     } finally {
       setShowResultDialog(true);
     }
@@ -815,50 +825,76 @@ export default function ManageOrder() {
     }));
   };
 
+  const handleApproveDesign = async (orderId) => {
+    try {
+      const res = await fetch(
+        `https://localhost:7015/api/Seller/orders/${orderId}/approve-design`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+        }
+      );
+
+      if (!res.ok) throw new Error("Failed to approve design");
+
+      setSuccessMessage("✅ Design approved successfully!");
+      setShowSuccessDialog(true);
+      setIsDialogOpen(false);
+
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    } catch (err) {
+      console.error("❌ Approve design failed:", err);
+      setErrorMessage(`❌ Failed to approve: ${err.message}`);
+      setShowErrorDialog(true);
+    }
+  };
+
+  const handleRejectDesign = async (orderId) => {
+    try {
+      const res = await fetch(
+        `https://localhost:7015/api/Seller/orders/${orderId}/reject-design`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+        }
+      );
+
+      if (!res.ok) throw new Error("Failed to reject design");
+
+      setSuccessMessage("✅ Design rejected successfully!");
+      setShowSuccessDialog(true);
+      setIsDialogOpen(false);
+
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    } catch (err) {
+      console.error("❌ Reject design failed:", err);
+      setErrorMessage(`❌ Failed to reject: ${err.message}`);
+      setShowErrorDialog(true);
+    }
+  };
+
   const getStatusBadge = (status) => {
     switch (status) {
       case "Pending Design":
-        return (
-          <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white">
-            Pending Design
-          </Badge>
-        );
+        return <Badge variant="secondary">Pending Design</Badge>;
       case "In Progress":
-        return (
-          <Badge className="bg-blue-500 hover:bg-blue-600 text-white">
-            In Progress
-          </Badge>
-        );
+        return <Badge variant="secondary">In Progress</Badge>;
       case "Completed":
-        return (
-          <Badge className="bg-green-500 hover:bg-green-600 text-white">
-            Completed
-          </Badge>
-        );
+        return <Badge variant="secondary">Completed</Badge>;
       case "Assigned Designer":
-        return (
-          <Badge className="bg-purple-500 hover:bg-…-emerald-500 hover:bg-emerald-600 text-white">
-            Đã Kiểm tra Chất lượng
-          </Badge>
-        );
+        return <Badge variant="secondary">Đã Kiểm tra Chất lượng</Badge>;
       case "Đã Ship":
-        return (
-          <Badge className="bg-blue-600 hover:bg-blue-700 text-white">
-            Đã Ship
-          </Badge>
-        );
+        return <Badge variant="secondary">Đã Ship</Badge>;
       case "Cancel":
-        return (
-          <Badge className="bg-gray-600 hover:bg-gray-700 text-white">
-            Cancel
-          </Badge>
-        );
+        return <Badge variant="secondary">Cancel</Badge>;
       case "Hoàn Hàng":
-        return (
-          <Badge className="bg-amber-600 hover:bg-amber-700 text-white">
-            Hoàn Hàng
-          </Badge>
-        );
+        return <Badge variant="secondary">Hoàn Hàng</Badge>;
       // </CHANGE>
       default:
         return <Badge variant="secondary">{status}</Badge>;
@@ -942,7 +978,18 @@ export default function ManageOrder() {
                       <Input
                         placeholder="Order ID, Customer, Product..."
                         value={searchTerm}
-                        onChange={(e) => handleSearchChange(e.target.value)}
+                        onChange={(e) => {
+                          // Loại bỏ dấu cách
+                          const sanitizedValue = e.target.value.replace(
+                            /\s+/g,
+                            ""
+                          );
+                          setSearchTerm(sanitizedValue);
+                        }}
+                        onKeyDown={(e) => {
+                          // Ngăn không cho gõ phím Space
+                          if (e.key === " ") e.preventDefault();
+                        }}
                         className="pl-10 bg-white"
                       />
                     </div>
@@ -1047,18 +1094,17 @@ export default function ManageOrder() {
 
               <Button
                 variant="outline"
-                disabled={selectedOrders.length === 0}
-                onClick={handleAssignClick}
-                className="bg-white"
-              >
-                Assign to Designer ({selectedOrders.length})
-              </Button>
-              <Button
-                variant="outline"
                 onClick={handleOpenAssignPopup}
                 disabled={selectedOrders.length === 0}
               >
                 Assign Designer ({selectedOrders.length})
+              </Button>
+              <Button
+                variant="outline"
+                disabled={selectedOrders.length === 0}
+                className="bg-white"
+              >
+                Assign to Staff ({selectedOrders.length})
               </Button>
             </div>
 
@@ -1150,8 +1196,8 @@ export default function ManageOrder() {
                             Customer {renderSortIcon("customerName")}
                           </TableHead>
                           {/* <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
-                            Address
-                          </TableHead> */}
+                              Address
+                            </TableHead> */}
                           <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
                             Status
                           </TableHead>
@@ -1209,10 +1255,10 @@ export default function ManageOrder() {
                                 </div>
                               </TableCell>
                               {/* <TableCell className="text-gray-600 max-w-[200px]">
-                                <div className="truncate" title={order.address}>
-                                  {order.address || "N/A"}
-                                </div>
-                              </TableCell> */}
+                                  <div className="truncate" title={order.address}>
+                                    {order.address || "N/A"}
+                                  </div>
+                                </TableCell> */}
                               <TableCell className="whitespace-nowrap">
                                 {getStatusBadge(order.status)}
                               </TableCell>
@@ -1221,6 +1267,32 @@ export default function ManageOrder() {
                               </TableCell>
                               <TableCell className="whitespace-nowrap">
                                 <div className="flex items-center gap-2">
+                                  {order.status === "Cần Check Design" && (
+                                    <>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="bg-transparent hover:bg-green-50 text-green-600 hover:text-green-700"
+                                        onClick={() =>
+                                          handleApproveDesign(order.id)
+                                        }
+                                        title="Approve Design"
+                                      >
+                                        ✓
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="bg-transparent hover:bg-red-50 text-red-600 hover:text-red-700"
+                                        onClick={() =>
+                                          handleRejectDesign(order.id)
+                                        }
+                                        title="Reject Design"
+                                      >
+                                        ✕
+                                      </Button>
+                                    </>
+                                  )}
                                   <Dialog
                                     open={isDialogOpen}
                                     onOpenChange={setIsDialogOpen}
@@ -1235,9 +1307,9 @@ export default function ManageOrder() {
                                         className="bg-transparent hover:bg-gray-50"
                                       >
                                         <Eye className="h-4 w-4 mr-1" />
-                                        <span className="hidden xl:inline">
-                                          View
-                                        </span>
+                                        {/* <span className="hidden xl:inline">
+                                            View
+                                          </span> */}
                                       </Button>
                                     </DialogTrigger>
                                     <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
@@ -2060,6 +2132,40 @@ export default function ManageOrder() {
                                           </div>
                                         </div>
                                       )}
+                                      {editedOrder?.status ===
+                                        "Cần Check Design" &&
+                                        !isEditMode && (
+                                          <DialogFooter className="flex gap-2">
+                                            <Button
+                                              variant="outline"
+                                              onClick={() =>
+                                                setIsDialogOpen(false)
+                                              }
+                                            >
+                                              Close
+                                            </Button>
+                                            <Button
+                                              onClick={() =>
+                                                handleRejectDesign(
+                                                  editedOrder.id
+                                                )
+                                              }
+                                              className="bg-red-600 hover:bg-red-700"
+                                            >
+                                              ✕ Reject Design
+                                            </Button>
+                                            <Button
+                                              onClick={() =>
+                                                handleApproveDesign(
+                                                  editedOrder.id
+                                                )
+                                              }
+                                              className="bg-green-600 hover:bg-green-700"
+                                            >
+                                              ✓ Approve Design
+                                            </Button>
+                                          </DialogFooter>
+                                        )}
                                       {isEditMode && (
                                         <DialogFooter className="flex gap-2">
                                           <Button
@@ -2218,7 +2324,7 @@ export default function ManageOrder() {
           >
             <AlertDialogContent className="max-w-sm">
               <AlertDialogHeader>
-                <AlertDialogTitle>Kết quả thao tác</AlertDialogTitle>
+                <AlertDialogTitle>Result Action</AlertDialogTitle>
                 <AlertDialogDescription>{resultMessage}</AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -2302,4 +2408,5 @@ export default function ManageOrder() {
       </Dialog>
     </div>
   );
+  á;
 }
