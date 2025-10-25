@@ -268,7 +268,7 @@ export default function ManageOrder() {
       color: "bg-red-50 border-red-200",
       icon: AlertTriangle,
       iconColor: "text-red-600",
-      statusFilter: "Lỗi Sản xuất (Cần Rework)",
+      statusFilter: "Sản xuất Lại",
     },
     {
       title: "Quality Checked",

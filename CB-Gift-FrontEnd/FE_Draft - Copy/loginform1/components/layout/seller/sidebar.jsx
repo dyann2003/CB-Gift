@@ -9,6 +9,11 @@ export default function SellerSidebar({ currentPage, setCurrentPage }) {
   const menuItems = [
     { id: "dashboard", label: "Dashboard", path: "/seller/dashboard" },
     { id: "manage-order", label: "Manage Order", path: "/seller/manage-order" },
+    {
+      id: "order-overview",
+      label: "Order Overview",
+      path: "/seller/order-overview",
+    },
   ];
 
   const handleNavigation = (item) => {
