@@ -133,6 +133,7 @@ builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<ITagService, TagService>();
 builder.Services.AddScoped<IDesignerSellerService, DesignerSellerService>();
 builder.Services.AddScoped<IDesignerTaskService, DesignerTaskService>();
+builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 
 // --- Quartz ---
 builder.Services.AddQuartz(q =>
