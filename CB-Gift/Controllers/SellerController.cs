@@ -10,7 +10,7 @@ namespace CB_Gift.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = "Seller,Admin")]
+    [Authorize(Roles = "Seller")]
     public class SellerController : ControllerBase
     {
         private readonly IOrderService _orderService;

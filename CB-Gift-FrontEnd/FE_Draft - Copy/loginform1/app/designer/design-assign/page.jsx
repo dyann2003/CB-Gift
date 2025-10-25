@@ -141,90 +141,132 @@ export default function DesignAssignPage() {
   }
 
   // --- HÀM UPLOAD FILE HOẶC URL ĐÃ CHỌN ---
-  const handleUploadDesign = async () => {
+  // --- HÀM UPLOAD FILE HOẶC URL ĐÃ CHỌN (ĐÃ ĐƯỢC DỌN DẸP) ---
+const handleUploadDesign = async () => {
     // 1. Kiểm tra điều kiện đầu vào: Phải chọn file mới HOẶC file cũ
     if (!designFile && !selectedImageUrl) {
-      alert("Vui lòng chọn file mới hoặc file từ kho ảnh.")
-      return
+        alert("Vui lòng chọn file mới hoặc file từ kho ảnh.");
+        return;
     }
 
-    const orderDetailId = selectedOrder.id
-    const url = `https://localhost:7015/api/designer/tasks/${orderDetailId}/upload`
+    // LƯU Ý: ĐÃ XÓA LOGIC KIỂM TRA KÍCH THƯỚC/ĐỊNH DẠNG Ở ĐÂY
+    // VÌ NÓ ĐÃ ĐƯỢC THỰC HIỆN TRONG HÀM handleDesignFileChange
 
-    setLoading(true) // Bật loading
+    const orderDetailId = selectedOrder.id;
+    const url = `https://localhost:7015/api/designer/tasks/${orderDetailId}/upload`;
+
+    setLoading(true); // Bật loading
 
     try {
-      const formData = new FormData()
-      // Đảm bảo Note luôn là chuỗi (chuỗi rỗng nếu không nhập) để tránh lỗi Model Binding 400
-      const noteToSend = designNotes || ""
+        const formData = new FormData();
+        // Đảm bảo Note luôn là chuỗi (chuỗi rỗng nếu không nhập) để tránh lỗi Model Binding 400
+        const noteToSend = designNotes || "";
 
-      // 1. CHỌN NGUỒN FILE: Chỉ gửi một trong hai trường (DesignFile HOẶC FileUrl)
-      if (designFile) {
-        // Trường hợp 1: File mới (Backend sẽ nhận IFormFile)
-        formData.append("DesignFile", designFile)
-      } else if (selectedImageUrl) {
-        // Trường hợp 2: File cũ (Backend sẽ nhận string FileUrl)
-        formData.append("FileUrl", selectedImageUrl)
-      }
-
-      // 2. GỬI NOTE
-      formData.append("Note", noteToSend)
-
-      // --- 3. THỰC HIỆN UPLOAD/SUBMIT ---
-      const response = await fetch(url, {
-        method: "POST",
-        body: formData, // Tự động set Content-Type: multipart/form-data
-        credentials: "include",
-      })
-
-      // Khởi tạo biến để đọc response body
-      let errorDetails = response.statusText || `Status ${response.status}`
-      let errorData = null
-      const contentType = response.headers.get("content-type")
-
-      // Cố gắng đọc JSON (Problem Details) trước khi kiểm tra lỗi
-      if (contentType && contentType.includes("application/json")) {
-        errorData = await response.json()
-      }
-
-      if (!response.ok) {
-        // XỬ LÝ VÀ PHÂN TÍCH LỖI SERVER
-        if (errorData && errorData.errors) {
-          // Lỗi Model Binding (400 Bad Request)
-          const modelErrors = Object.values(errorData.errors).flat().join("; ")
-          errorDetails = errorData.title || "Model Binding Error"
-          errorDetails += ` [Chi tiết: ${modelErrors}]`
-        } else if (errorData) {
-          // Lỗi Server/Nghiệp vụ (403/500) có trả về message
-          errorDetails = errorData.message || errorDetails
-        } else {
-          // Lỗi không phải JSON (rất hiếm, ví dụ: Timeout)
-          errorDetails = await response.text()
+        // 1. CHỌN NGUỒN FILE: Chỉ gửi một trong hai trường (DesignFile HOẶC FileUrl)
+        if (designFile) {
+            // Trường hợp 1: File mới (Đã được kiểm tra hợp lệ)
+            formData.append("DesignFile", designFile);
+        } else if (selectedImageUrl) {
+            // Trường hợp 2: File cũ
+            formData.append("FileUrl", selectedImageUrl);
         }
 
-        // Ném lỗi để hiển thị Alert
-        throw new Error(errorDetails)
-      }
+        // 2. GỬI NOTE
+        formData.append("Note", noteToSend);
 
-      // --- 4. THÀNH CÔNG: Cập nhật trạng thái thành CHECK_DESIGN ---
-      handleUpdateStatusLocal(orderDetailId, "CHECK_DESIGN")
+        // --- 3. THỰC HIỆN UPLOAD/SUBMIT ---
+        const response = await fetch(url, {
+            method: "POST",
+            body: formData, // Tự động set Content-Type: multipart/form-data
+            credentials: "include",
+        });
 
-      // Reset state và đóng dialog
-      setDesignFile(null)
-      setDesignNotes("")
-      setSelectedImageUrl("")
-      setSelectedOrder(null)
-      alert("Upload file thiết kế thành công và đã gửi đi kiểm duyệt!")
+        // Khởi tạo biến để đọc response body
+        let errorDetails = response.statusText || `Status ${response.status}`;
+        let errorData = null;
+        const contentType = response.headers.get("content-type");
 
-      return true
+        // Cố gắng đọc JSON (Problem Details) trước khi kiểm tra lỗi
+        if (contentType && contentType.includes("application/json")) {
+            errorData = await response.json();
+        }
+
+        if (!response.ok) {
+            // XỬ LÝ VÀ PHÂN TÍCH LỖI SERVER
+            if (errorData && errorData.errors) {
+                // Lỗi Model Binding (400 Bad Request)
+                const modelErrors = Object.values(errorData.errors).flat().join("; ");
+                errorDetails = errorData.title || "Model Binding Error";
+                errorDetails += ` [Chi tiết: ${modelErrors}]`;
+            } else if (errorData) {
+                // Lỗi Server/Nghiệp vụ (403/500) có trả về message
+                errorDetails = errorData.message || errorDetails;
+            } else {
+                // Lỗi không phải JSON (rất hiếm, ví dụ: Timeout)
+                errorDetails = await response.text();
+            }
+
+            // Ném lỗi để hiển thị Alert
+            throw new Error(errorDetails);
+        }
+
+        // --- 4. THÀNH CÔNG: Cập nhật trạng thái thành CHECK_DESIGN ---
+        handleUpdateStatusLocal(orderDetailId, "CHECK_DESIGN");
+
+        // Reset state và đóng dialog
+        setDesignFile(null);
+        setDesignNotes("");
+        setSelectedImageUrl("");
+        setSelectedOrder(null);
+        alert("Upload file thiết kế thành công và đã gửi đi kiểm duyệt!");
+
+        return true;
     } catch (error) {
-      console.error("Lỗi khi upload file thiết kế:", error)
-      alert(`Lỗi khi upload file thiết kế: ${error.message}`)
-      return false
+        console.error("Lỗi khi upload file thiết kế:", error);
+        alert(`Lỗi khi upload file thiết kế: ${error.message}`);
+        return false;
     } finally {
-      setLoading(false) // Tắt loading
+        setLoading(false); // Tắt loading
     }
-  }
+};
+// định dạng size.
+const handleDesignFileChange = (event) => {
+    const file = event.target.files[0];
+    
+    // Đảm bảo xóa file cũ (nếu có) nếu người dùng không chọn gì hoặc chọn file lỗi
+    setDesignFile(null);
+
+    if (!file) {
+        // Nếu không chọn file, vẫn đảm bảo selectedImageUrl bị xóa
+        setSelectedImageUrl("");
+        return; 
+    }
+
+    // 1. ✅ KIỂM TRA ĐỊNH DẠNG (JPG, JPEG, PNG)
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png"];
+    if (!allowedTypes.includes(file.type)) {
+        alert("❌ Định dạng file không hợp lệ. Chỉ chấp nhận JPG, JPEG, và PNG.");
+        // Rất quan trọng: Xóa giá trị input để người dùng có thể chọn lại
+        event.target.value = "";
+        setSelectedImageUrl(""); // Reset file cũ
+        return;
+    }
+
+    // 2. ✅ KIỂM TRA DUNG LƯỢNG (Tối đa 5MB)
+    const maxSizeMB = 5;
+    const maxSizeBytes = maxSizeMB * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+        alert(`⚠️ File quá lớn. Dung lượng tối đa cho phép là ${maxSizeMB} MB.`);
+        // Rất quan trọng: Xóa giá trị input để người dùng có thể chọn lại
+        event.target.value = "";
+        setSelectedImageUrl(""); // Reset file cũ
+        return;
+    }
+
+    // Nếu hợp lệ: Cập nhật state designFile và xóa selectedImageUrl
+    setDesignFile(file);
+    setSelectedImageUrl(""); 
+};
 
   // Hàm Bắt đầu Redo (DESIGN_REDO -> DESIGNING)
   const handleStartRedo = async (orderId) => {
@@ -798,16 +840,13 @@ export default function DesignAssignPage() {
                                             <div className="flex items-start gap-3">
                                               <div className="flex-1">
                                                 <Label htmlFor="design-file">
-                                                  1. Upload File Mới (.zip, .ai, .psd...)
+                                                  1. Upload File Design
                                                 </Label>
                                                 <Input
                                                   id="design-file"
                                                   type="file"
-                                                  accept=".zip,.rar,.7z,.pdf,.ai,.psd,.jpg,.jpeg,.png"
-                                                  onChange={(e) => {
-                                                    setDesignFile(e.target.files[0])
-                                                    setSelectedImageUrl("")
-                                                  }}
+                                                  accept=".jpg,.jpeg,.png"
+                                                  onChange={handleDesignFileChange}
                                                   className="mt-1"
                                                 />
                                               </div>
