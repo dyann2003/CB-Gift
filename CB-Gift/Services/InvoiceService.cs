@@ -96,7 +96,7 @@ public class InvoiceService : IInvoiceService
                 // Sử dụng ngày của đơn hàng đầu tiên và cuối cùng nếu tạo theo OrderID
                 InvoicePeriodStart = request.StartDate ?? uninvoicedOrders.Min(o => o.OrderDate),
                 InvoicePeriodEnd = request.EndDate ?? uninvoicedOrders.Max(o => o.OrderDate),
-                DueDate = (request.EndDate ?? uninvoicedOrders.Max(o => o.OrderDate)).AddDays(15),
+                DueDate = (request.EndDate ?? uninvoicedOrders.Max(o => o.OrderDate)).AddDays(15), // DueDate cong 15 ngay.
                 Subtotal = subtotal,
                 TotalAmount = subtotal,
                 Status = "Issued",
@@ -228,19 +228,26 @@ public class InvoiceService : IInvoiceService
         try
         {
             var payload = JsonConvert.DeserializeObject<WebhookType>(log.RawPayload);
-          //  var payload = JsonConvert.DeserializeObject<PayOSWebhookPayload>(log.RawPayload);
-            // THAY ĐỔI 2: Truyền toàn bộ đối tượng payload vào hàm verify
-            WebhookData verifiedData = _payOS.verifyPaymentWebhookData(payload);
 
+            WebhookData verifiedData = _payOS.verifyPaymentWebhookData(payload);
             log.ProcessingStatus = "Verified";
 
-            if (verifiedData?.desc?.Equals("success", StringComparison.OrdinalIgnoreCase) == true)
+            // SỬA LỖI 1: Kiểm tra "success" 
+            if (verifiedData?.desc?.Equals("success", StringComparison.OrdinalIgnoreCase) == true || verifiedData?.desc?.Equals("Thành công", StringComparison.OrdinalIgnoreCase) == true)
             {
                 int invoiceId = (int)verifiedData.orderCode;
                 var invoice = await _context.Invoices.FindAsync(invoiceId);
 
-                if (invoice != null && invoice.Status != "Paid")
+                // SỬA LỖI 2: Xử lý trường hợp không tìm thấy hóa đơn
+                if (invoice == null)
                 {
+                    // Biến lỗi "im lặng" thành lỗi rõ ràng
+                    throw new Exception($"Webhook đã được xác thực nhưng không tìm thấy Invoice với ID: {invoiceId} trong database.");
+                }
+
+                if (invoice.Status != "Paid")
+                {
+                    // Logic cập nhật đúng
                     invoice.Status = "Paid";
                     invoice.AmountPaid = verifiedData.amount;
 
@@ -249,23 +256,37 @@ public class InvoiceService : IInvoiceService
                         InvoiceId = invoiceId,
                         Amount = verifiedData.amount,
                         PaymentMethod = "PayOS",
-                        TransactionId = verifiedData.reference // Lấy mã tham chiếu làm TransactionId
+                        TransactionId = verifiedData.reference
                     });
 
                     _context.InvoiceHistories.Add(new InvoiceHistory { InvoiceId = invoiceId, Action = "Payment received via PayOS Webhook" });
+
                     log.ProcessingStatus = "Processed";
                     log.RelatedInvoiceId = invoiceId;
                 }
+                else
+                {
+                    // Xử lý trường hợp webhook đến muộn hoặc bị gọi lại
+                    log.ProcessingStatus = "AlreadyProcessed";
+                    log.RelatedInvoiceId = invoiceId;
+                }
             }
+            else
+            {
+                // Ghi nhận trường hợp giao dịch không thành công
+                log.ProcessingStatus = "TransactionNotSuccessful";
+                log.ErrorMessage = $"Transaction description: {verifiedData?.desc}";
+                log.RelatedInvoiceId = (int?)verifiedData?.orderCode;
+            }
+
             await _context.SaveChangesAsync();
         }
         catch (Exception ex)
         {
             log.ProcessingStatus = "Failed";
-            log.ErrorMessage = ex.Message;
+            log.ErrorMessage = $"Message: {ex.Message} --- StackTrace: {ex.StackTrace}";
             await _context.SaveChangesAsync();
-            // Bạn có thể log lỗi chi tiết ở đây nếu cần
-            throw;
+            throw; // Ném lại lỗi để dễ dàng thấy trong log của server
         }
     }
 }
