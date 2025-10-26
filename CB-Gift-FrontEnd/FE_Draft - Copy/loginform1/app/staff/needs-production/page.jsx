@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import StaffSidebar from "@/components/layout/staff/sidebar";
 import StaffHeader from "@/components/layout/staff/header";
+import { Layers } from "lucide-react"; // Import thêm icon cho nút mới
 
 const FilterIcon = () => (
   <svg
@@ -102,6 +103,7 @@ export default function NeedsProductionPage() {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedDate, setSelectedDate] = useState("");
   const [updateTrigger, setUpdateTrigger] = useState(0);
+  const [isGrouping, setIsGrouping] = useState(false);
 
   useEffect(() => {
     const fetchProductionData = async () => {
@@ -131,6 +133,34 @@ export default function NeedsProductionPage() {
 
     fetchProductionData();
   }, [selectedCategory, selectedDate, updateTrigger]);
+  const handleGroupSubmit = async () => {
+        setIsGrouping(true); // Bắt đầu loading
+        try {
+            const response = await fetch(
+                "https://localhost:7015/api/plan/group-submitted", 
+                {
+                    method: "POST",
+                }
+            );
+
+            if (!response.ok) {
+                // Ném lỗi nếu server trả về lỗi (vd: 400, 500)
+                throw new Error(`API call failed with status: ${response.status}`);
+            }
+
+            // Nếu thành công
+            alert("Các đơn hàng đã được gom thành công!");
+            
+            // Kích hoạt useEffect để tải lại dữ liệu mới nhất
+            setUpdateTrigger((prev) => prev + 1); 
+
+        } catch (error) {
+            console.error("Failed to group submitted orders:", error);
+            alert(`Lỗi khi gom đơn: ${error.message}`);
+        } finally {
+            setIsGrouping(false); // Dừng loading dù thành công hay thất bại
+        }
+    };
 
   const handleUpdateStatus = async (planDetailId, newStatus) => {
     try {
@@ -173,19 +203,32 @@ export default function NeedsProductionPage() {
         <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
           <div className="max-w-7xl mx-auto">
             <div className="mb-8">
-              <div className="bg-white p-4 sm:p-6 rounded-lg border-2 border-blue-200 shadow-sm">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h1 className="text-lg sm:text-xl font-semibold text-blue-800">
-                      Needs Production
-                    </h1>
-                    <p className="text-sm sm:text-base text-blue-600 mt-1">
-                      Orders waiting to be produced
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
+  <div className="bg-white p-4 sm:p-6 rounded-lg border-2 border-blue-200 shadow-sm">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h1 className="text-lg sm:text-xl font-semibold text-blue-800">
+          Needs Production
+        </h1>
+        <p className="text-sm sm:text-base text-blue-600 mt-1">
+          Orders waiting to be produced
+        </p>
+      </div>
+
+      {/* 3. Thêm nút "Group Submit" vào đây */}
+      <div className="mt-4 sm:mt-0">
+        <button
+          onClick={handleGroupSubmit}
+          disabled={isGrouping}
+          className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+        >
+          <Layers className="h-5 w-5 mr-2" />
+          {isGrouping ? "Grouping..." : "Group Submitted Orders"}
+        </button>
+      </div>
+      
+    </div>
+  </div>
+</div>
 
             {/* Filters */}
             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-8 flex items-center flex-wrap gap-4">
@@ -298,96 +341,123 @@ export default function NeedsProductionPage() {
                                     Documents
                                   </th>
                                   <th className="p-3 text-left font-semibold text-gray-600">
+                                    Status
+                                  </th>
+                                  <th className="p-3 text-left font-semibold text-gray-600">
                                     Action
                                   </th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-200">
-                                {dateGroup.details.map((detail, index) => (
-                                  <tr
-                                    key={detail.planDetailId}
-                                    className="hover:bg-gray-50"
-                                  >
-                                    <td className="p-3 text-center text-gray-500">
-                                      {index + 1}
-                                    </td>
-                                    <td className="p-3">
-                                      <img
-                                        src={
-                                          detail.imageUrl ||
-                                          "https://placehold.co/100x100/e2e8f0/adb5bd?text=N/A" ||
-                                          "/placeholder.svg"
-                                        }
-                                        alt={detail.customerName}
-                                        className="w-16 h-16 object-cover rounded-md border"
-                                      />
-                                    </td>
-                                    <td className="p-3">
-                                      <div className="font-bold text-gray-800">
-                                        {detail.customerName}
-                                      </div>
-                                      <div className="text-xs text-gray-500">
-                                        {detail.orderCode}
-                                      </div>
-                                    </td>
-                                    <td className="p-3 text-center font-medium text-gray-700">
-                                      {detail.quantity}
-                                    </td>
-                                    <td className="p-3 text-gray-600 max-w-xs truncate">
-                                      {detail.noteOrEngravingContent || "N/A"}
-                                    </td>
-                                    <td className="p-3 text-center">
-                                      <a
-                                        href={detail.productionFileUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 hover:underline"
-                                      >
-                                        <DownloadIcon /> Download
-                                      </a>
-                                    </td>
-                                    <td className="p-3 text-center">
-                                      <a
-                                        href={detail.thankYouCardUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-2 text-green-600 hover:text-green-800 hover:underline"
-                                      >
-                                        <CardIcon /> Card
-                                      </a>
-                                    </td>
-                                    <td className="p-3 text-center">
-                                      <a
-                                        href="#"
-                                        className="inline-flex items-center gap-2 text-purple-600 hover:text-purple-800 hover:underline"
-                                      >
-                                        <LabelIcon /> Label
-                                      </a>
-                                    </td>
-                                    <td className="p-3 text-center">
-                                      <Link
-                                        href={`/staff/qr-code/${detail.orderDetailId}`}
-                                        className="inline-flex items-center gap-2 text-orange-600 hover:text-orange-800 hover:underline"
-                                      >
-                                        <QrCodeIcon /> QR
-                                      </Link>
-                                    </td>
-                                    <td className="p-3">
+                              {dateGroup.details.map((detail, index) => (
+                                <tr key={detail.planDetailId} className="hover:bg-gray-50">
+                                  <td className="p-3 text-center text-gray-500">{index + 1}</td>
+                                  <td className="p-3">
+                                    <img
+                                      src={detail.imageUrl || "https://placehold.co/100x100/e2e8f0/adb5bd?text=N/A"}
+                                      alt={detail.customerName}
+                                      className="w-16 h-16 object-cover rounded-md border"
+                                    />
+                                  </td>
+                                  <td className="p-3">
+                                    <div className="font-bold text-gray-800">{detail.customerName}</div>
+                                    <div className="text-xs text-gray-500">{detail.orderCode}</div>
+                                  </td>
+                                  <td className="p-3 text-center font-medium text-gray-700">{detail.quantity}</td>
+                                  <td className="p-3 text-gray-600 max-w-xs truncate">
+                                    {detail.noteOrEngravingContent || "N/A"}
+                                  </td>
+                                  <td className="p-3 text-center">
+                                    <a
+                                      href={detail.productionFileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 hover:underline disabled:opacity-50"
+                                    >
+                                      <DownloadIcon /> Download File
+                                    </a>
+                                  </td>
+                                  <td className="p-3 text-center">
+                                    <a
+                                      href={detail.thankYouCardUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-2 text-green-600 hover:text-green-800 hover:underline"
+                                    >
+                                      <CardIcon /> Download Card
+                                    </a>
+                                  </td>
+                                  <td className="p-3 text-center">
+                                    <a
+                                      href="#"
+                                      className="inline-flex items-center gap-2 text-purple-600 hover:text-purple-800 hover:underline"
+                                    >
+                                      <LabelIcon /> Print Label
+                                    </a>
+                                  </td>
+                                  <td className="p-3 text-center">
+                                    <Link
+                                      href={`/staff/qr-code/${detail.orderDetailId}`}
+                                      className="inline-flex items-center gap-2 text-orange-600 hover:text-orange-800 hover:underline"
+                                    >
+                                      <QrCodeIcon /> View QR
+                                    </Link>
+                                  </td>
+                                  <td className="p-3">
+                                    {detail.statusOrder === 6 && (
+                                      <span className="inline-flex items-center bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                                        <span className="w-2 h-2 me-1 bg-gray-500 rounded-full"></span>
+                                        Chờ sản xuất
+                                      </span>
+                                    )}
+  {detail.statusOrder === 11 && (
+                                      <span className="inline-flex items-center bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                                        <span className="w-2 h-2 me-1 bg-red-500 rounded-full"></span>
+                                        Sản xuất lỗi
+                                      </span>
+                                    )}
+ {detail.statusOrder === 7 && (
+                                      <span className="inline-flex items-center bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                                        <span className="w-2 h-2 me-1 bg-yellow-500 rounded-full"></span>
+                                        Đang sản xuất
+                                      </span>
+                                    )}
+    {detail.statusOrder === 8 && (
+                                      <span className="inline-flex items-center bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                                        <span className="w-2 h-2 me-1 bg-green-500 rounded-full"></span>
+                                        Đã hoàn thành
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="p-3">
+                                    {detail.statusOrder === 6 && (
                                       <button
-                                        onClick={() =>
-                                          handleUpdateStatus(
-                                            detail.planDetailId,
-                                            7
-                                          )
-                                        }
-                                        className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition text-sm"
+                                        onClick={() => handleUpdateStatus(detail.planDetailId, 7)}
+                                        className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition"
                                       >
-                                        Start Production
+                                        Bắt đầu sản xuất
                                       </button>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
+                                    )}
+   {detail.statusOrder === 11 && (
+                                      <button
+                                        onClick={() => handleUpdateStatus(detail.planDetailId, 7)}
+                                        className="bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition"
+                                      >
+                                        Sản xuất lại
+                                      </button>
+                                    )}
+ {detail.statusOrder === 7 && (
+                                      <button
+                                        onClick={() => handleUpdateStatus(detail.planDetailId, 8)}
+                                        className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition"
+                                      >
+                                        Hoàn thành
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
                             </table>
                           </div>
                         </div>
