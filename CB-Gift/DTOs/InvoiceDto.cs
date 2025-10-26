@@ -11,10 +11,12 @@ namespace CB_Gift.DTOs
     {
         [Required]
         public string SellerId { get; set; }
-        [Required]
-        public DateTime StartDate { get; set; }
-        [Required]
-        public DateTime EndDate { get; set; }
+
+        // THÊM MỚI: Danh sách ID các đơn hàng cần tạo hóa đơn (tùy chọn)
+        public List<int>? OrderIds { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+
         public string? Notes { get; set; }
     }
     // DTO để Seller yêu cầu tạo link thanh toán

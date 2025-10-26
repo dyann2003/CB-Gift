@@ -29,15 +29,62 @@ public class InvoiceService : IInvoiceService
         using var transaction = await _context.Database.BeginTransactionAsync();
         try
         {
-            var uninvoicedOrders = await _context.Orders
-                .Where(o => o.SellerUserId == request.SellerId &&
-                            o.OrderDate >= request.StartDate &&
-                            o.OrderDate <= request.EndDate &&
-                            !_context.InvoiceItems.Any(ii => ii.OrderId == o.OrderId))
-                .ToListAsync();
+            List<Order> uninvoicedOrders;
+
+            // KỊCH BẢN 1: TẠO HÓA ĐƠN THEO DANH SÁCH ORDER ID
+            if (request.OrderIds != null && request.OrderIds.Any())
+            {
+                // Bước 1: Lấy tất cả các đơn hàng được yêu cầu từ database
+                var requestedOrders = await _context.Orders
+                    .Where(o => request.OrderIds.Contains(o.OrderId))
+                    .ToListAsync();
+
+                // Bước 2: KIỂM TRA (VALIDATION)
+                // Kiểm tra xem có ID nào không tồn tại không
+                if (requestedOrders.Count != request.OrderIds.Distinct().Count())
+                {
+                    throw new KeyNotFoundException("Một hoặc nhiều OrderID không tồn tại trong hệ thống.");
+                }
+
+                // Kiểm tra xem có đơn hàng nào không thuộc về Seller được chỉ định không
+                if (requestedOrders.Any(o => o.SellerUserId != request.SellerId))
+                {
+                    throw new InvalidOperationException("Lỗi: Một hoặc nhiều đơn hàng không thuộc về Seller đã chọn.");
+                }
+
+                // Kiểm tra xem có đơn hàng nào đã được xuất hóa đơn trước đó chưa
+                var alreadyInvoicedIds = await _context.InvoiceItems
+                    .Where(ii => request.OrderIds.Contains(ii.OrderId))
+                    .Select(ii => ii.OrderId)
+                    .ToListAsync();
+
+                if (alreadyInvoicedIds.Any())
+                {
+                    throw new InvalidOperationException($"Các đơn hàng với ID: [{string.Join(", ", alreadyInvoicedIds)}] đã được xuất hóa đơn.");
+                }
+
+                uninvoicedOrders = requestedOrders;
+            }
+            // KỊCH BẢN 2: TẠO HÓA ĐƠN THEO NGÀY THÁNG (LOGIC CŨ)
+            else if (request.StartDate.HasValue && request.EndDate.HasValue)
+            {
+                uninvoicedOrders = await _context.Orders
+                    .Where(o => o.SellerUserId == request.SellerId &&
+                                o.OrderDate >= request.StartDate.Value &&
+                                o.OrderDate <= request.EndDate.Value &&
+                                !_context.InvoiceItems.Any(ii => ii.OrderId == o.OrderId))
+                    .ToListAsync();
+            }
+            else
+            {
+                // Nếu không cung cấp đủ thông tin
+                throw new ArgumentException("Phải cung cấp danh sách Order ID hoặc khoảng thời gian (StartDate và EndDate).");
+            }
+
+            // --- PHẦN LOGIC CHUNG (TỪ ĐÂY TRỞ XUỐNG KHÔNG THAY ĐỔI) ---
 
             if (!uninvoicedOrders.Any())
-                throw new InvalidOperationException("Không có đơn hàng mới để tạo hóa đơn.");
+                throw new InvalidOperationException("Không có đơn hàng mới hợp lệ để tạo hóa đơn.");
 
             var subtotal = uninvoicedOrders.Sum(o => o.TotalCost ?? 0);
 
@@ -46,17 +93,18 @@ public class InvoiceService : IInvoiceService
                 InvoiceNumber = $"INV-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString().Substring(0, 4).ToUpper()}",
                 SellerUserId = request.SellerId,
                 CreatedByStaffId = staffId,
-                InvoicePeriodStart = request.StartDate,
-                InvoicePeriodEnd = request.EndDate,
-                DueDate = request.EndDate.AddDays(15),
+                // Sử dụng ngày của đơn hàng đầu tiên và cuối cùng nếu tạo theo OrderID
+                InvoicePeriodStart = request.StartDate ?? uninvoicedOrders.Min(o => o.OrderDate),
+                InvoicePeriodEnd = request.EndDate ?? uninvoicedOrders.Max(o => o.OrderDate),
+                DueDate = (request.EndDate ?? uninvoicedOrders.Max(o => o.OrderDate)).AddDays(15),
                 Subtotal = subtotal,
-                TotalAmount = subtotal, // Giả sử không có thuế
+                TotalAmount = subtotal,
                 Status = "Issued",
                 Notes = request.Notes
             };
 
             _context.Invoices.Add(newInvoice);
-            await _context.SaveChangesAsync(); // Lưu để có InvoiceId
+            await _context.SaveChangesAsync();
 
             var invoiceItems = uninvoicedOrders.Select(order => new InvoiceItem
             {
