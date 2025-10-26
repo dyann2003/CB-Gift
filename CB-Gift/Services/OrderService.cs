@@ -592,6 +592,58 @@ namespace CB_Gift.Services
                 throw; // Ném lại lỗi để Controller xử lý
             }
         }
+
+        public async Task<ApproveOrderResult> ApproveOrderForShippingAsync(int orderId)
+        {
+            var order = await _context.Orders
+                                      .Include(o => o.OrderDetails)
+                                      .FirstOrDefaultAsync(o => o.OrderId == orderId);
+
+            if (order == null)
+            {
+                return new ApproveOrderResult { IsSuccess = false, OrderFound = false };
+            }
+
+            if (order.OrderDetails == null || !order.OrderDetails.Any())
+            {
+                return new ApproveOrderResult
+                {
+                    IsSuccess = false,
+                    CanApprove = false,
+                    ErrorMessage = "Order has no product details."
+                };
+            }
+
+
+            bool allDetailsQcDone = order.OrderDetails.All(d => d.ProductionStatus == ProductionStatus.QC_DONE);
+
+            if (!allDetailsQcDone)
+            {
+                return new ApproveOrderResult
+                {
+                    IsSuccess = false,
+                    CanApprove = false,
+                    ErrorMessage = "Not all products have passed QC (Status QC_DONE)."
+                };
+            }
+            //order.StatusOrder = (int)ProductionStatus.PACKING;
+            order.StatusOrder = 13;
+
+            try
+            {
+                _context.Orders.Update(order);
+                await _context.SaveChangesAsync();
+                return new ApproveOrderResult { IsSuccess = true };
+            }
+            catch (DbUpdateException ex)
+            {
+                return new ApproveOrderResult { IsSuccess = false, ErrorMessage = "Database error occurred while updating the order status." };
+            }
+            catch (Exception ex)
+            {
+                return new ApproveOrderResult { IsSuccess = false, ErrorMessage = "An unexpected error occurred." };
+            }
+        }
     }
 }
 

@@ -4,6 +4,53 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+
+// --- Helper function to map status ID to string ---
+const mapProductionStatusToString = (statusId) => {
+  switch (statusId) {
+    case 0: return "DRAFT";
+    case 1: return "CREATED";
+    case 2: return "NEED_DESIGN";
+    case 3: return "DESIGNING";
+    case 4: return "CHECK_DESIGN";
+    case 5: return "DESIGN_REDO";
+    case 6: return "READY_PROD";
+    case 7: return "IN_PROD";
+    case 8: return "FINISHED";
+    case 9: return "QC_DONE";
+    case 10: return "QC_FAIL";
+    case 11: return "PROD_REWORK";
+    case 12: return "PACKING";
+    case 13: return "HOLD";
+    case 14: return "CANCELLED";
+    default: return "UNKNOWN"; // Fallback for unexpected values
+  }
+};
+
+// --- Optional: Helper function for badge colors ---
+const getStatusBadgeVariant = (statusString) => {
+  switch (statusString) {
+    case "QC_FAIL":
+    case "DESIGN_REDO":
+    case "PROD_REWORK":
+    case "CANCELLED":
+    case "HOLD":
+      return "destructive";
+    case "QC_DONE":
+    case "FINISHED":
+    case "PACKING":
+      return "success"; // Use "default" or define "success" in your theme
+    case "CHECK_DESIGN":
+    case "IN_PROD":
+    case "DESIGNING":
+      return "secondary";
+    case "READY_PROD":
+      return "default";
+    default:
+      return "outline";
+  }
+};
 
 export default function OrderDetailPage() {
   const params = useParams()
@@ -118,22 +165,30 @@ export default function OrderDetailPage() {
   const product = orderDetail.productVariant?.product
   const productImageUrl = orderDetail.linkImg
     ? orderDetail.linkImg.startsWith("http")
-      ? orderDetail.linkImg
+      ? orderDetail.linkImgd
       : `https://localhost:7015/${orderDetail.linkImg}`
     : null
+
+  const statusString = mapProductionStatusToString(orderDetail.productionStatus);
+  const statusVariant = getStatusBadgeVariant(statusString);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+          <div className="flex-grow">
             <h1 className="text-3xl font-bold text-gray-900">Order Detail #{orderDetail.orderDetailId}</h1>
-            <p className="text-gray-600 mt-1">
+            <p className="text-gray-600 mt-1 text-sm sm:text-base"> 
               Order ID: {orderDetail.orderId} | Product: {product?.productName || "N/A"}
             </p>
+            <div className="mt-2">
+                <Badge variant={statusVariant} className="text-sm px-3 py-1">
+                    Status: {statusString}
+                </Badge>
+            </div>
           </div>
-          <Button onClick={() => router.back()} variant="outline" className="gap-2">
+          <Button onClick={() => router.back()} variant="outline" className="gap-2 flex-shrink-0"> {/* Prevent button shrinking */}
             ← Back
           </Button>
         </div>

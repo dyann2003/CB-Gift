@@ -74,6 +74,8 @@ namespace CB_Gift.DTOs
         public string Accessory { get; set; }
 
         public string Note { get; set; }
+
+        public ProductionStatus? Status { get; set; }
     }
     public class OrderCreateRequest
     {
