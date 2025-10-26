@@ -48,7 +48,7 @@ public class InvoiceService : IInvoiceService
                 CreatedByStaffId = staffId,
                 InvoicePeriodStart = request.StartDate,
                 InvoicePeriodEnd = request.EndDate,
-                DueDate = request.EndDate.AddDays(15),
+                DueDate = request.EndDate.AddDays(15), 
                 Subtotal = subtotal,
                 TotalAmount = subtotal, // Giả sử không có thuế
                 Status = "Issued",
