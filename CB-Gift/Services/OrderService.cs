@@ -627,7 +627,7 @@ namespace CB_Gift.Services
                 };
             }
             //order.StatusOrder = (int)ProductionStatus.PACKING;
-            order.StatusOrder = 13;
+            order.StatusOrder = 14; // chuyển trạng thái là đã ship
 
             try
             {

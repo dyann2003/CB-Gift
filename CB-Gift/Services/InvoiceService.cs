@@ -51,6 +51,13 @@ public class InvoiceService : IInvoiceService
                 {
                     throw new InvalidOperationException("Lỗi: Một hoặc nhiều đơn hàng không thuộc về Seller đã chọn.");
                 }
+                // Kiểm tra xem có đơn hàng nào chưa được thanh toán không
+               /* var unpaidOrders = requestedOrders.Where(o => o.PaymentStatus != "Paid").ToList();
+                if (unpaidOrders.Any())
+                {
+                    var unpaidOrderCodes = string.Join(", ", unpaidOrders.Select(o => o.OrderCode));
+                    throw new InvalidOperationException($"Không thể tạo hóa đơn. Các đơn hàng sau chưa được thanh toán: {unpaidOrderCodes}");
+                }*/
 
                 // Kiểm tra xem có đơn hàng nào đã được xuất hóa đơn trước đó chưa
                 var alreadyInvoicedIds = await _context.InvoiceItems
@@ -72,6 +79,7 @@ public class InvoiceService : IInvoiceService
                     .Where(o => o.SellerUserId == request.SellerId &&
                                 o.OrderDate >= request.StartDate.Value &&
                                 o.OrderDate <= request.EndDate.Value &&
+                                o.PaymentStatus == "Unpaid" &&
                                 !_context.InvoiceItems.Any(ii => ii.OrderId == o.OrderId))
                     .ToListAsync();
             }
@@ -236,7 +244,9 @@ public class InvoiceService : IInvoiceService
             if (verifiedData?.desc?.Equals("success", StringComparison.OrdinalIgnoreCase) == true || verifiedData?.desc?.Equals("Thành công", StringComparison.OrdinalIgnoreCase) == true)
             {
                 int invoiceId = (int)verifiedData.orderCode;
-                var invoice = await _context.Invoices.FindAsync(invoiceId);
+                var invoice = await _context.Invoices
+                              .Include(i=>i.Items)
+                              .FirstOrDefaultAsync(i=>i.InvoiceId==invoiceId);
 
                 // SỬA LỖI 2: Xử lý trường hợp không tìm thấy hóa đơn
                 if (invoice == null)
@@ -258,7 +268,16 @@ public class InvoiceService : IInvoiceService
                         PaymentMethod = "PayOS",
                         TransactionId = verifiedData.reference
                     });
+                    //  Cập nhật trạng thái cho tất cả các Order liên quan
+                    var orderIdsToUpdate = invoice.Items.Select(item => item.OrderId).ToList(); // select các OrderID có trong hóa đơn
+                    var ordersToUpdate = await _context.Orders
+                        .Where(o => orderIdsToUpdate.Contains(o.OrderId)) // dựa vào OrderID để lấy ra list Object [Order] để cập nhật
+                        .ToListAsync();
 
+                    foreach (var order in ordersToUpdate)
+                    {
+                        order.PaymentStatus = "Paid"; // cập nhật trạng thái Order thành Paid
+                    }
                     _context.InvoiceHistories.Add(new InvoiceHistory { InvoiceId = invoiceId, Action = "Payment received via PayOS Webhook" });
 
                     log.ProcessingStatus = "Processed";
