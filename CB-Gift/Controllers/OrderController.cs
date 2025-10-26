@@ -128,5 +128,38 @@ namespace CB_Gift.Controllers
                 return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn." });
             }
         }
+
+        [HttpPut("{orderId}/approve-shipping")]
+        public async Task<IActionResult> ApproveOrderForShipping([FromRoute] int orderId)
+        {
+            if (orderId <= 0)
+            {
+                return BadRequest("Invalid Order ID.");
+            }
+
+            try
+            {
+                var result = await _orderService.ApproveOrderForShippingAsync(orderId);
+
+                if (!result.IsSuccess)
+                {
+                    if (!result.OrderFound)
+                    {
+                        return NotFound($"Order with ID {orderId} not found.");
+                    }
+                    if (!result.CanApprove)
+                    {
+                        return BadRequest(result.ErrorMessage ?? "Order cannot be approved. Check product statuses.");
+                    }
+                    return BadRequest(result.ErrorMessage ?? "Failed to approve order.");
+                }
+
+                return Ok(new { message = $"Order {orderId} approved for shipping." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, "An unexpected error occurred while approving the order.");
+            }
+        }
     }
 }
