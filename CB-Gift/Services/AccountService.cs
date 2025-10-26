@@ -113,5 +113,22 @@ namespace CB_Gift.Services
 
             await _emailSender.SendAsync(email, subject, body);
         }
+        /// <summary>
+        /// Lấy danh sách tất cả người dùng có vai trò là "Seller".
+        /// </summary>
+        public async Task<IEnumerable<SellerDto>> GetAllSellersAsync()
+        {
+            // Lấy danh sách tất cả người dùng thuộc vai trò "Seller"
+            var sellers = await _userManager.GetUsersInRoleAsync("Seller");
+
+            // Sử dụng LINQ để biến đổi danh sách AppUser sang danh sách SellerDto
+            return sellers.Select(user => new SellerDto
+            {
+                SellerId = user.Id,
+                SellerName = user.FullName
+            }).ToList();
+        }
+
+
     }
 }

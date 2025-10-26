@@ -187,6 +187,23 @@ public class AuthController : ControllerBase
             user.FullName
         });
     }
+    /// <summary>
+    /// Lấy danh sách tất cả các Seller trong hệ thống.
+    /// </summary> api/auth/all-sellers
+    [Authorize(Roles = "Staff,Manager")]
+    [HttpGet("all-sellers")]
+    public async Task<IActionResult> GetAllSellers()
+    {
+        try
+        {
+            var sellers = await _accountService.GetAllSellersAsync();
+            return Ok(sellers);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn khi lấy danh sách seller.", error = ex.Message });
+        }
+    }
 
 
 }
