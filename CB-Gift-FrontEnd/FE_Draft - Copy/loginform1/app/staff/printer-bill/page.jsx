@@ -39,8 +39,6 @@ import {
   ArrowDown,
   Eye,
   Printer,
-  Download,
-  QrCode,
 } from "lucide-react";
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
@@ -63,6 +61,15 @@ export default function PrinterBillPage() {
   const [selectedSeller, setSelectedSeller] = useState("all");
   const [sellers, setSellers] = useState([]);
 
+  const [isPrinterBillDialogOpen, setIsPrinterBillDialogOpen] = useState(false);
+  const [isSuccessDialogOpen, setIsSuccessDialogOpen] = useState(false);
+  const [printerBillForm, setPrinterBillForm] = useState({
+    startDate: "",
+    endDate: "",
+    notes: "",
+  });
+  const [pendingPrintAction, setPendingPrintAction] = useState(null);
+
   // Fetch orders with "Đã Kiểm tra Chất lượng" status
   useEffect(() => {
     const fetchOrders = async () => {
@@ -79,7 +86,7 @@ export default function PrinterBillPage() {
 
         // Filter orders with status "Đã Kiểm tra Chất lượng"
         const filteredOrders = data.filter(
-          (order) => order.statusOderName === "Đã Kiểm tra Chất lượng"
+          (order) => order.statusOderName === "Đã Ship"
         );
         setOrders(filteredOrders);
 
@@ -227,8 +234,8 @@ export default function PrinterBillPage() {
       );
       return;
     }
-    console.log("[v0] Printing bill for order:", order.orderId);
-    alert(`✓ Printing bill for order: ${order.orderCode}`);
+    setPendingPrintAction({ type: "single", order });
+    setIsPrinterBillDialogOpen(true);
   };
 
   const handlePrintSelectedBills = () => {
@@ -249,8 +256,82 @@ export default function PrinterBillPage() {
       return;
     }
 
-    console.log("[v0] Printing bills for orders:", Array.from(selectedOrders));
-    alert(`✓ Printing bills for ${selectedOrders.size} selected orders`);
+    setPendingPrintAction({
+      type: "multiple",
+      orderIds: Array.from(selectedOrders),
+    });
+    setIsPrinterBillDialogOpen(true);
+  };
+
+  const [errorDialog, setErrorDialog] = useState({
+    open: false,
+    message: "",
+  });
+
+  const handlePrinterBillSubmit = async () => {
+    try {
+      const sellerId =
+        pendingPrintAction.type === "single"
+          ? pendingPrintAction.order.sellerId
+          : orders.find((o) => o.orderId === pendingPrintAction.orderIds[0])
+              ?.sellerId;
+
+      const payload = {
+        sellerId: sellerId,
+        orderIds:
+          pendingPrintAction.type === "single"
+            ? [pendingPrintAction.order.orderId]
+            : pendingPrintAction.orderIds,
+        notes: printerBillForm.notes || "Generated from Printer Bill page",
+      };
+
+      const response = await fetch("https://localhost:7015/api/invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+
+      // ❌ Nếu BE trả lỗi
+      if (!response.ok) {
+        const errorText = await response.text();
+
+        let shortMessage = "Tạo hóa đơn thất bại.";
+        if (
+          errorText.includes("Order already had invoice") ||
+          errorText.includes("đã được xuất hóa đơn")
+        ) {
+          shortMessage = "Đơn hàng này đã có hóa đơn rồi.";
+        }
+
+        setIsPrinterBillDialogOpen(false);
+        setErrorDialog({
+          open: true,
+          message: shortMessage,
+        });
+        return;
+      }
+
+      // ✅ Thành công
+      const data = await response.json();
+      console.log("✅ Invoice created:", data);
+
+      setIsPrinterBillDialogOpen(false);
+      setIsSuccessDialogOpen(true);
+    } catch (error) {
+      console.error("❌ Error creating invoice:", error);
+      setErrorDialog({
+        open: true,
+        message: "Lỗi hệ thống: " + error.message,
+      });
+    }
+  };
+
+  const handleSuccessDialogClose = () => {
+    setIsSuccessDialogOpen(false);
+    if (pendingPrintAction?.type === "multiple") {
+      setSelectedOrders(new Set());
+    }
   };
 
   const handleDownload = (file) => {
@@ -268,7 +349,7 @@ export default function PrinterBillPage() {
       iconColor: "text-blue-500",
     },
     {
-      title: "Quality Checked",
+      title: "Shipped",
       value: orders.length,
       color: "bg-emerald-50 border-emerald-200",
       icon: CheckCircle,
@@ -593,7 +674,7 @@ export default function PrinterBillPage() {
                               <TableCell>
                                 <span className="inline-flex items-center bg-emerald-100 text-emerald-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
                                   <span className="w-2 h-2 me-1 bg-emerald-500 rounded-full"></span>
-                                  Đã Kiểm tra Chất lượng
+                                  Shipped
                                 </span>
                               </TableCell>
                               <TableCell className="text-gray-900 font-medium">
@@ -665,6 +746,114 @@ export default function PrinterBillPage() {
           </div>
         </main>
       </div>
+
+      <Dialog
+        open={isPrinterBillDialogOpen}
+        onOpenChange={setIsPrinterBillDialogOpen}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Printer className="h-5 w-5" />
+              Print Bill Information
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Start Date <span className="text-red-500">*</span>
+              </label>
+              <Input
+                type="date"
+                value={printerBillForm.startDate}
+                onChange={(e) =>
+                  setPrinterBillForm({
+                    ...printerBillForm,
+                    startDate: e.target.value,
+                  })
+                }
+                className="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                End Date <span className="text-red-500">*</span>
+              </label>
+              <Input
+                type="date"
+                value={printerBillForm.endDate}
+                onChange={(e) =>
+                  setPrinterBillForm({
+                    ...printerBillForm,
+                    endDate: e.target.value,
+                  })
+                }
+                className="w-full"
+              />
+            </div> */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Notes
+              </label>
+              <textarea
+                value={printerBillForm.notes}
+                onChange={(e) =>
+                  setPrinterBillForm({
+                    ...printerBillForm,
+                    notes: e.target.value,
+                  })
+                }
+                placeholder="Add any additional notes..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsPrinterBillDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handlePrinterBillSubmit}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              OK
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isSuccessDialogOpen}
+        onOpenChange={handleSuccessDialogClose}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-500" />
+              Success
+            </DialogTitle>
+          </DialogHeader>
+          <div className="text-center py-4">
+            <p className="text-gray-700 font-medium">
+              {pendingPrintAction?.type === "single"
+                ? `Bill for order ${pendingPrintAction?.order?.orderCode} has been printed successfully!`
+                : `Bills for ${pendingPrintAction?.orderIds?.length} selected order(s) have been printed successfully!`}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={handleSuccessDialogClose}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              OK
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
@@ -876,156 +1065,6 @@ export default function PrinterBillPage() {
                             </div>
                           </div>
 
-                          {/* Product Files */}
-                          <div className="mt-4 pt-4 border-t border-gray-200">
-                            <h4 className="font-medium text-sm text-gray-700 mb-3">
-                              Order Files for this Product
-                            </h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              {/* Product Image */}
-                              {product.linkImg && (
-                                <div className="border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow bg-gray-50">
-                                  <label className="text-xs text-gray-500 font-medium">
-                                    Product Image
-                                  </label>
-                                  <div className="mt-2">
-                                    <img
-                                      src={
-                                        product.linkImg || "/placeholder.svg"
-                                      }
-                                      alt="Product Image"
-                                      className="w-full h-32 object-cover rounded border"
-                                      onError={(e) => {
-                                        e.target.style.display = "none";
-                                        e.target.nextElementSibling.style.display =
-                                          "flex";
-                                      }}
-                                    />
-                                    <div
-                                      className="w-full h-32 bg-gray-100 rounded border flex items-center justify-center"
-                                      style={{ display: "none" }}
-                                    >
-                                      <QrCode className="h-8 w-8 text-gray-400" />
-                                    </div>
-                                    <p className="text-xs mt-2 text-gray-600 truncate">
-                                      product-image-{index + 1}.jpg
-                                    </p>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="mt-2 w-full bg-transparent hover:bg-gray-50"
-                                      onClick={() =>
-                                        handleDownload({
-                                          name: `product-image-${
-                                            index + 1
-                                          }.jpg`,
-                                          url: product.linkImg,
-                                        })
-                                      }
-                                    >
-                                      <Download className="h-4 w-4 mr-2" />
-                                      Download
-                                    </Button>
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Design File */}
-                              {product.linkFileDesign && (
-                                <div className="border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow bg-gray-50">
-                                  <label className="text-xs text-gray-500 font-medium">
-                                    Design File
-                                  </label>
-                                  <div className="mt-2">
-                                    <img
-                                      src={
-                                        product.linkFileDesign ||
-                                        "/placeholder.svg"
-                                      }
-                                      alt="Design File"
-                                      className="w-full h-32 object-cover rounded border"
-                                      onError={(e) => {
-                                        e.target.style.display = "none";
-                                        e.target.nextElementSibling.style.display =
-                                          "flex";
-                                      }}
-                                    />
-                                    <div
-                                      className="w-full h-32 bg-gray-100 rounded border flex items-center justify-center"
-                                      style={{ display: "none" }}
-                                    >
-                                      <QrCode className="h-8 w-8 text-gray-400" />
-                                    </div>
-                                    <p className="text-xs mt-2 text-gray-600 truncate">
-                                      design-file-{index + 1}.ai
-                                    </p>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="mt-2 w-full bg-transparent hover:bg-gray-50"
-                                      onClick={() =>
-                                        handleDownload({
-                                          name: `design-file-${index + 1}.ai`,
-                                          url: product.linkFileDesign,
-                                        })
-                                      }
-                                    >
-                                      <Download className="h-4 w-4 mr-2" />
-                                      Download
-                                    </Button>
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Thanks Card */}
-                              {product.linkThanksCard && (
-                                <div className="border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow bg-gray-50">
-                                  <label className="text-xs text-gray-500 font-medium">
-                                    Thanks Card
-                                  </label>
-                                  <div className="mt-2">
-                                    <img
-                                      src={
-                                        product.linkThanksCard ||
-                                        "/placeholder.svg"
-                                      }
-                                      alt="Thanks Card"
-                                      className="w-full h-32 object-cover rounded border"
-                                      onError={(e) => {
-                                        e.target.style.display = "none";
-                                        e.target.nextElementSibling.style.display =
-                                          "flex";
-                                      }}
-                                    />
-                                    <div
-                                      className="w-full h-32 bg-gray-100 rounded border flex items-center justify-center"
-                                      style={{ display: "none" }}
-                                    >
-                                      <QrCode className="h-8 w-8 text-gray-400" />
-                                    </div>
-                                    <p className="text-xs mt-2 text-gray-600 truncate">
-                                      thanks-card-{index + 1}.png
-                                    </p>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="mt-2 w-full bg-transparent hover:bg-gray-50"
-                                      onClick={() =>
-                                        handleDownload({
-                                          name: `thanks-card-${index + 1}.png`,
-                                          url: product.linkThanksCard,
-                                        })
-                                      }
-                                    >
-                                      <Download className="h-4 w-4 mr-2" />
-                                      Download
-                                    </Button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
                           {/* Product Note */}
                           {product.note && (
                             <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
@@ -1060,6 +1099,30 @@ export default function PrinterBillPage() {
                 Print Bill
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={errorDialog.open}
+        onOpenChange={(v) => setErrorDialog({ ...errorDialog, open: v })}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              Error
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-3">
+            <p className="text-gray-700">{errorDialog.message}</p>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => setErrorDialog({ open: false, message: "" })}
+              className="w-full bg-red-600 hover:bg-red-700 text-white"
+            >
+              Đóng
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

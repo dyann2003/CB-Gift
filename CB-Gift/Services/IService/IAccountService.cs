@@ -7,5 +7,7 @@ namespace CB_Gift.Services.Email
     {
         Task<ServiceResult<RegisterResponseDto>> RegisterAsync(RegisterRequestDto request);
         Task SendResetPasswordEmailAsync(string email, string resetLink);
+        Task<IEnumerable<SellerDto>> GetAllSellersAsync();
+
     }
 }
