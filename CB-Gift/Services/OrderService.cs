@@ -22,12 +22,23 @@ namespace CB_Gift.Services
             _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
-        public async Task<List<Order>> GetAllOrders()
+        //public async Task<List<Order>> GetAllOrders()
+        //{
+        //    return await _context.Orders
+        //         .Include(o => o.OrderDetails)
+        //         .Include(o => o.StatusOrderNavigation)
+        //         .ToListAsync();
+        //}
+
+        public async Task<List<OrderWithDetailsDto>> GetAllOrders()
         {
             return await _context.Orders
-                 .Include(o => o.OrderDetails)
-                 .Include(o => o.StatusOrderNavigation)
-                 .ToListAsync();
+         .Include(o => o.EndCustomer)
+         .Include(o => o.StatusOrderNavigation)
+         .Include(o => o.OrderDetails)
+              .ThenInclude(od => od.ProductVariant)
+         .ProjectTo<OrderWithDetailsDto>(_mapper.ConfigurationProvider)
+         .ToListAsync();
         }
         public async Task<List<OrderDto>> GetOrdersForSellerAsync(string sellerUserId)
         {

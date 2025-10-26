@@ -14,6 +14,7 @@ export default function SellerSidebar({ currentPage, setCurrentPage }) {
       label: "Order Overview",
       path: "/seller/order-overview",
     },
+    { id: "receive-bill", label: "Receive Bill", path: "/seller/receive-bill" },
   ];
 
   const handleNavigation = (item) => {

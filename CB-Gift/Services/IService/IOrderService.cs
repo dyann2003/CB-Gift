@@ -7,7 +7,7 @@ namespace CB_Gift.Services.IService
 {
     public interface IOrderService
     {
-        Task<List<Order>> GetAllOrders();
+        Task<List<OrderWithDetailsDto>> GetAllOrders();
         // Get Order theo SellerId
         Task<List<OrderDto>> GetOrdersForSellerAsync(string sellerUserId);
         //Get Order and OrderDetail theo SellerId
