@@ -11,5 +11,6 @@ namespace CB_Gift.Services.IService
         Task ProcessPayOSWebhookAsync(int webhookLogId);
         Task<Invoice> GetInvoiceDetailsAsync(int invoiceId);
         Task<IEnumerable<Invoice>> GetInvoicesForSellerAsync(string sellerId);
+        Task<IEnumerable<Invoice>> GetAllInvoicesAsync();
     }
 }

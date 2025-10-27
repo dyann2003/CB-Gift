@@ -60,6 +60,7 @@ public class InvoiceService : IInvoiceService
                 }*/
 
                 // Kiểm tra xem có đơn hàng nào đã được xuất hóa đơn trước đó chưa
+                /*
                 var alreadyInvoicedIds = await _context.InvoiceItems
                     .Where(ii => request.OrderIds.Contains(ii.OrderId))
                     .Select(ii => ii.OrderId)
@@ -68,7 +69,7 @@ public class InvoiceService : IInvoiceService
                 if (alreadyInvoicedIds.Any())
                 {
                     throw new InvalidOperationException($"Các đơn hàng với ID: [{string.Join(", ", alreadyInvoicedIds)}] đã được xuất hóa đơn.");
-                }
+                }*/
 
                 uninvoicedOrders = requestedOrders;
             }
@@ -177,26 +178,27 @@ public class InvoiceService : IInvoiceService
     public async Task<Invoice> GetInvoiceDetailsAsync(int invoiceId)
     {
         var invoice = await _context.Invoices
-            // Tải kèm thông tin người bán (Seller) và người tạo (Staff) để lấy tên
             .Include(i => i.SellerUser)
             .Include(i => i.CreatedByStaff)
-
-            // Tải kèm danh sách các mục trong hóa đơn (InvoiceItems)
-            .Include(i => i.Items)
-                // Với mỗi mục, tải kèm thông tin của đơn hàng (Order) tương ứng
-                .ThenInclude(item => item.Order)
-
-            // Tải kèm danh sách các lần thanh toán đã thực hiện
             .Include(i => i.Payments)
-
-            // Tải kèm lịch sử thay đổi của hóa đơn
             .Include(i => i.History)
+            .Include(i => i.Items)
+                // Từ Items, tải Order
+                .ThenInclude(item => item.Order)
+                    // Từ Order, tải StatusOrderNavigation
+                    .ThenInclude(order => order.StatusOrderNavigation)
+            .Include(i => i.Items)
+                // Từ Items, tải Order
+                .ThenInclude(item => item.Order)
+                    // Từ Order, tải danh sách OrderDetails của nó
+                    .ThenInclude(order => order.OrderDetails)
+                    .ThenInclude(detail => detail.ProductVariant)
+                        .ThenInclude(variant => variant.Product)
 
-            // Dùng AsNoTracking để tăng hiệu suất cho các truy vấn chỉ đọc
-            .AsNoTracking()
+            .AsNoTracking() // Bạn có thể thử giữ lại dòng này với cấu trúc Include mới
             .FirstOrDefaultAsync(i => i.InvoiceId == invoiceId);
 
-        return invoice; // Sẽ trả về null nếu không tìm thấy hóa đơn
+        return invoice;
     }
 
     /// <summary>
@@ -208,6 +210,17 @@ public class InvoiceService : IInvoiceService
         var invoices = await _context.Invoices
             .Where(i => i.SellerUserId == sellerId)
             .OrderByDescending(i => i.CreatedAt) // Sắp xếp để hóa đơn mới nhất lên đầu
+            .AsNoTracking()
+            .ToListAsync();
+
+        return invoices;
+    }
+    public async Task<IEnumerable<Invoice>> GetAllInvoicesAsync()
+    {
+        // Truy vấn đơn giản, không có logic Skip/Take
+        var invoices = await _context.Invoices
+            .Include(i => i.SellerUser) // Tải kèm thông tin Seller để hiển thị tên
+            .OrderByDescending(i => i.CreatedAt) // Sắp xếp hóa đơn mới nhất lên đầu
             .AsNoTracking()
             .ToListAsync();
 

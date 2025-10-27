@@ -5,6 +5,7 @@ import StaffSidebar from "@/components/layout/staff/sidebar";
 import StaffHeader from "@/components/layout/staff/header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import InvoiceDetailsModal from "@/components/modals/InvoiceDetailsModal";
 import {
   Table,
   TableBody,
@@ -39,6 +40,11 @@ import {
   ArrowDown,
   Eye,
   Printer,
+  Badge,
+  Label,
+  List, // <--- THÊM DÒNG NÀY
+  ChevronDown, // <--- THÊM DÒNG NÀY
+  ChevronUp, // <--- THÊM DÒNG NÀY
 } from "lucide-react";
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
@@ -60,7 +66,12 @@ export default function PrinterBillPage() {
   const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
   const [selectedSeller, setSelectedSeller] = useState("all");
   const [sellers, setSellers] = useState([]);
-
+  const [invoices, setInvoices] = useState([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [invoicesError, setInvoicesError] = useState(null);
+  const [showInvoices, setShowInvoices] = useState(false); // State để bật/tắt bảng hóa đơn
+  const [isInvoiceDetailsOpen, setIsInvoiceDetailsOpen] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [isPrinterBillDialogOpen, setIsPrinterBillDialogOpen] = useState(false);
   const [isSuccessDialogOpen, setIsSuccessDialogOpen] = useState(false);
   const [printerBillForm, setPrinterBillForm] = useState({
@@ -333,7 +344,53 @@ export default function PrinterBillPage() {
       setSelectedOrders(new Set());
     }
   };
+const fetchInvoices = async () => {
+    setInvoicesLoading(true);
+    setInvoicesError(null);
+    try {
+      const response = await fetch("https://localhost:7015/api/invoices/all", {
+        credentials: "include", // Quan trọng để xác thực
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      setInvoices(data);
+    } catch (e) {
+      console.error("Failed to fetch invoices:", e);
+      setInvoicesError("Could not load invoice data.");
+    } finally {
+      setInvoicesLoading(false);
+    }
+  };
+  
+  const handleToggleInvoices = () => {
+    const nextShowState = !showInvoices;
+    setShowInvoices(nextShowState);
+    // Chỉ gọi API lần đầu tiên khi người dùng nhấn nút
+    if (nextShowState && invoices.length === 0) {
+      fetchInvoices();
+    }
+  };
+  const handleViewInvoiceDetails = async (invoiceId) => {
+    // Hiển thị modal với dữ liệu cơ bản trước
+    const basicInvoice = invoices.find(inv => inv.invoiceId === invoiceId);
+    setSelectedInvoice(basicInvoice);
+    setIsInvoiceDetailsOpen(true);
 
+    // Gọi API để lấy dữ liệu chi tiết đầy đủ
+    try {
+        const response = await fetch(`https://localhost:7015/api/invoices/${invoiceId}`, {
+            credentials: 'include'
+        });
+        if (!response.ok) throw new Error("Failed to fetch details");
+        const detailedInvoice = await response.json();
+        setSelectedInvoice(detailedInvoice); // Cập nhật state với dữ liệu chi tiết
+    } catch (error) {
+        console.error("Error fetching invoice details:", error);
+        // Có thể hiển thị thông báo lỗi ở đây
+    }
+  };
   const handleDownload = (file) => {
     if (file.url && file.url !== "#") {
       window.open(file.url, "_blank");
@@ -360,7 +417,7 @@ export default function PrinterBillPage() {
   return (
     <div className="flex h-screen overflow-hidden">
       <StaffSidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
-      <div className="flex-1 flex flex-col overflow-hidden">
+     <div className="flex-1 flex flex-col overflow-hidden">
         <StaffHeader />
         <main className="flex-1 overflow-y-auto bg-gray-50 p-4 sm:p-6">
           <div className="space-y-6">
@@ -376,32 +433,104 @@ export default function PrinterBillPage() {
                   </p>
                 </div>
                 <div className="mt-3 sm:mt-0">
-                  <div className="flex items-center gap-2 text-sm text-blue-700">
-                    <Package className="h-4 w-4" />
-                    <span>{filteredOrders.length} orders</span>
-                  </div>
+                  <Button onClick={handleToggleInvoices} variant="outline">
+                    <List className="h-4 w-4 mr-2" />
+                    {showInvoices ? "Hide Invoices" : "View All Invoices"}
+                    {showInvoices ? <ChevronUp className="h-4 w-4 ml-2" /> : <ChevronDown className="h-4 w-4 ml-2" />}
+                  </Button>
                 </div>
               </div>
             </div>
+
+            {/* Bảng Hóa đơn (hiển thị có điều kiện) */}
+            {showInvoices && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                <h2 className="p-4 text-lg font-semibold text-gray-800 border-b">
+                  All Invoices
+                </h2>
+                {invoicesLoading ? (
+                  <div className="p-12 text-center text-gray-500">Loading invoices...</div>
+                ) : invoicesError ? (
+                  <div className="p-12 text-center text-red-500">{invoicesError}</div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Invoice #</TableHead>
+                        <TableHead>Seller</TableHead>
+                        <TableHead>Date Created</TableHead>
+                        <TableHead>Due Date</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Notes</TableHead>
+                        <TableHead>Total Amount</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+  {invoices.map((invoice) => (
+    <TableRow key={invoice.invoiceId}>
+      <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
+      <TableCell>
+        <div>
+          <div className="font-medium text-gray-800">{invoice.sellerUser?.fullName || "N/A"}</div>
+          <div className="text-xs text-gray-500">{invoice.sellerUser?.email || "No email"}</div>
+        </div>
+      </TableCell>
+      <TableCell>{new Date(invoice.createdAt).toLocaleDateString()}</TableCell>
+      <TableCell className="text-red-600 font-medium">
+        {new Date(invoice.dueDate).toLocaleDateString()}
+      </TableCell>
+      <TableCell>
+        {invoice.status ? (
+          <span // <-- Thay thế <Badge> bằng <span>
+            className={`
+              inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full
+              ${
+                invoice.status.trim().toLowerCase() === 'paid' ? 'bg-green-100 text-green-800' :
+                invoice.status.trim().toLowerCase() === 'issued' ? 'bg-yellow-100 text-yellow-800' :
+                'bg-gray-100 text-gray-800'
+              }
+            `}
+          >
+            {invoice.status}
+          </span>
+        ) : (
+          <span className="inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-800">
+            Unknown
+          </span>
+        )}
+      </TableCell>
+      <TableCell className="max-w-xs truncate" title={invoice.notes}>
+        {invoice.notes || "N/A"}
+      </TableCell>
+      <TableCell className="font-semibold">${invoice.totalAmount.toFixed(2)}</TableCell>
+      <TableCell>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => handleViewInvoiceDetails(invoice.invoiceId)}>
+          <Eye className="h-4 w-4" />
+        </Button>
+      </TableCell>
+    </TableRow>
+  ))}
+</TableBody>
+                  </Table>
+                )}
+              </div>
+            )}
 
             {/* Stats Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-2 gap-2 sm:gap-3">
               {stats.map((stat, index) => {
                 const IconComponent = stat.icon;
                 return (
-                  <div
-                    key={index}
-                    className={`p-3 rounded-lg border-2 ${stat.color} hover:shadow-lg transition-all`}
-                  >
+                  <div key={index} className={`p-3 rounded-lg border-2 ${stat.color} hover:shadow-lg transition-all`}>
                     <div className="flex flex-col items-center text-center gap-2">
                       <IconComponent className={`h-5 w-5 ${stat.iconColor}`} />
                       <div>
-                        <p className="text-lg font-bold text-gray-900">
-                          {stat.value}
-                        </p>
-                        <h3 className="text-[10px] sm:text-xs font-medium text-gray-600 uppercase tracking-wide">
-                          {stat.title}
-                        </h3>
+                        <p className="text-lg font-bold text-gray-900">{stat.value}</p>
+                        <h3 className="text-[10px] sm:text-xs font-medium text-gray-600 uppercase tracking-wide">{stat.title}</h3>
                       </div>
                     </div>
                   </div>
@@ -414,9 +543,7 @@ export default function PrinterBillPage() {
               <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-end justify-between">
                 <div className="flex flex-col sm:flex-row gap-4 flex-1 w-full">
                   <div className="flex-1 max-w-xs">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Search Orders
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Search Orders</label>
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                       <Input
@@ -426,18 +553,13 @@ export default function PrinterBillPage() {
                           setSearchTerm(e.target.value.replace(/\s+/g, ""));
                           setPage(1);
                         }}
-                        onKeyDown={(e) => {
-                          if (e.key === " ") e.preventDefault();
-                        }}
+                        onKeyDown={(e) => { if (e.key === " ") e.preventDefault(); }}
                         className="pl-10 bg-white"
                       />
                     </div>
                   </div>
-
                   <div className="flex-1 max-w-xs">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Filter by Seller
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Seller</label>
                     <select
                       value={selectedSeller}
                       onChange={(e) => {
@@ -447,31 +569,18 @@ export default function PrinterBillPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="all">All Sellers</option>
-                      {sellers.map((seller) => (
-                        <option key={seller} value={seller}>
-                          {seller}
-                        </option>
-                      ))}
+                      {sellers.map((seller) => (<option key={seller} value={seller}>{seller}</option>))}
                     </select>
                   </div>
-
                   <div className="flex-1 max-w-xs">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Filter by Date
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Date</label>
                     <Popover>
                       <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className="w-full justify-start text-left font-normal bg-white"
-                        >
+                        <Button variant="outline" className="w-full justify-start text-left font-normal bg-white">
                           <CalendarIcon className="mr-2 h-4 w-4" />
                           {dateRange.from ? (
                             dateRange.to ? (
-                              <>
-                                {format(dateRange.from, "MMM dd, yyyy")} -{" "}
-                                {format(dateRange.to, "MMM dd, yyyy")}
-                              </>
+                              <>{format(dateRange.from, "MMM dd, yyyy")} - {format(dateRange.to, "MMM dd, yyyy")}</>
                             ) : (
                               format(dateRange.from, "MMM dd, yyyy")
                             )
@@ -490,14 +599,7 @@ export default function PrinterBillPage() {
                         />
                         {(dateRange.from || dateRange.to) && (
                           <div className="p-3 border-t">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="w-full bg-transparent"
-                              onClick={() =>
-                                handleDateSelect({ from: null, to: null })
-                              }
-                            >
+                            <Button variant="outline" size="sm" className="w-full bg-transparent" onClick={() => handleDateSelect({ from: null, to: null })}>
                               Clear Filter
                             </Button>
                           </div>
@@ -506,7 +608,6 @@ export default function PrinterBillPage() {
                     </Popover>
                   </div>
                 </div>
-
                 <div className="flex flex-wrap gap-2 w-full lg:w-auto">
                   <Button variant="outline" onClick={handleExport}>
                     <FileDown className="h-4 w-4 mr-2" />
@@ -516,21 +617,17 @@ export default function PrinterBillPage() {
                 </div>
               </div>
             </div>
-
+            
+            {/* Thanh Actions khi chọn nhiều Order */}
             {paginatedOrders.length > 0 && (
               <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <Checkbox
-                    checked={
-                      selectedOrders.size === paginatedOrders.length &&
-                      paginatedOrders.length > 0
-                    }
+                    checked={selectedOrders.size === paginatedOrders.length && paginatedOrders.length > 0}
                     onCheckedChange={handleSelectAll}
                   />
                   <span className="text-sm font-medium text-gray-700">
-                    {selectedOrders.size > 0
-                      ? `${selectedOrders.size} selected`
-                      : "Select All"}
+                    {selectedOrders.size > 0 ? `${selectedOrders.size} selected` : "Select All"}
                   </span>
                 </div>
                 <Button
@@ -544,7 +641,7 @@ export default function PrinterBillPage() {
               </div>
             )}
 
-            {/* Orders Table */}
+            {/* Bảng Orders */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200">
               {loading ? (
                 <div className="flex items-center justify-center p-12">
@@ -557,15 +654,9 @@ export default function PrinterBillPage() {
                 <div className="flex items-center justify-center p-12">
                   <div className="text-center">
                     <AlertTriangle className="h-12 w-12 text-red-500 mx-auto" />
-                    <p className="mt-4 text-red-600 font-medium">
-                      Error loading orders
-                    </p>
+                    <p className="mt-4 text-red-600 font-medium">Error loading orders</p>
                     <p className="mt-2 text-gray-600 text-sm">{error}</p>
-                    <Button
-                      onClick={() => window.location.reload()}
-                      className="mt-4"
-                      variant="outline"
-                    >
+                    <Button onClick={() => window.location.reload()} className="mt-4" variant="outline">
                       Retry
                     </Button>
                   </div>
@@ -578,96 +669,48 @@ export default function PrinterBillPage() {
                         <TableRow className="bg-gray-50">
                           <TableHead className="w-12 font-medium text-gray-600 uppercase text-xs tracking-wide">
                             <Checkbox
-                              checked={
-                                selectedOrders.size ===
-                                  paginatedOrders.length &&
-                                paginatedOrders.length > 0
-                              }
+                              checked={selectedOrders.size === paginatedOrders.length && paginatedOrders.length > 0}
                               onCheckedChange={handleSelectAll}
                             />
                           </TableHead>
-                          <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
-                            Order ID
-                          </TableHead>
-                          <TableHead
-                            className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap cursor-pointer hover:bg-gray-100"
-                            onClick={() => handleSort("orderDate")}
-                          >
+                          <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">Order ID</TableHead>
+                          <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap cursor-pointer hover:bg-gray-100" onClick={() => handleSort("orderDate")}>
                             Order Date {renderSortIcon("orderDate")}
                           </TableHead>
-                          <TableHead
-                            className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap cursor-pointer hover:bg-gray-100"
-                            onClick={() => handleSort("customerName")}
-                          >
+                          <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap cursor-pointer hover:bg-gray-100" onClick={() => handleSort("customerName")}>
                             Customer {renderSortIcon("customerName")}
                           </TableHead>
-                          <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
-                            Seller Name
-                          </TableHead>
-                          <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
-                            Payment Status
-                          </TableHead>
-                          <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
-                            Status
-                          </TableHead>
-                          <TableHead
-                            className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap cursor-pointer hover:bg-gray-100"
-                            onClick={() => handleSort("totalCost")}
-                          >
+                          <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">Seller Name</TableHead>
+                          <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">Payment Status</TableHead>
+                          <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">Status</TableHead>
+                          <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap cursor-pointer hover:bg-gray-100" onClick={() => handleSort("totalCost")}>
                             Amount {renderSortIcon("totalCost")}
                           </TableHead>
-                          <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
-                            Actions
-                          </TableHead>
+                          <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {paginatedOrders.length === 0 ? (
                           <TableRow>
-                            <TableCell
-                              colSpan={10}
-                              className="text-center py-8 text-gray-500"
-                            >
+                            <TableCell colSpan={10} className="text-center py-8 text-gray-500">
                               No orders found
                             </TableCell>
                           </TableRow>
                         ) : (
                           paginatedOrders.map((order) => (
-                            <TableRow
-                              key={order.orderId}
-                              className="hover:bg-gray-50 transition-colors"
-                            >
+                            <TableRow key={order.orderId} className="hover:bg-gray-50 transition-colors">
                               <TableCell>
                                 <Checkbox
                                   checked={selectedOrders.has(order.orderId)}
-                                  onCheckedChange={() =>
-                                    handleSelectOrder(order.orderId)
-                                  }
+                                  onCheckedChange={() => handleSelectOrder(order.orderId)}
                                 />
                               </TableCell>
-                              <TableCell className="font-medium text-gray-900">
-                                {order.orderCode}
-                              </TableCell>
-                              <TableCell className="text-gray-600">
-                                {format(
-                                  new Date(order.orderDate),
-                                  "MMM dd, yyyy"
-                                )}
-                              </TableCell>
-                              <TableCell className="text-gray-600">
-                                {order.customerName}
-                              </TableCell>
-                              <TableCell className="text-gray-600">
-                                {order.sellerName || "N/A"}
-                              </TableCell>
+                              <TableCell className="font-medium text-gray-900">{order.orderCode}</TableCell>
+                              <TableCell className="text-gray-600">{format(new Date(order.orderDate), "MMM dd, yyyy")}</TableCell>
+                              <TableCell className="text-gray-600">{order.customerName}</TableCell>
+                              <TableCell className="text-gray-600">{order.sellerName || "N/A"}</TableCell>
                               <TableCell>
-                                <span
-                                  className={`inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full ${
-                                    order.paymentStatus === "Paid"
-                                      ? "bg-green-100 text-green-800"
-                                      : "bg-yellow-100 text-yellow-800"
-                                  }`}
-                                >
+                                <span className={`inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full ${order.paymentStatus === "Paid" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`}>
                                   {order.paymentStatus || "N/A"}
                                 </span>
                               </TableCell>
@@ -677,28 +720,14 @@ export default function PrinterBillPage() {
                                   Shipped
                                 </span>
                               </TableCell>
-                              <TableCell className="text-gray-900 font-medium">
-                                ${order.totalCost}
-                              </TableCell>
+                              <TableCell className="text-gray-900 font-medium">${order.totalCost}</TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleViewDetails(order)}
-                                    className="bg-transparent hover:bg-gray-50"
-                                    title="View Details"
-                                  >
+                                  <Button variant="outline" size="sm" onClick={() => handleViewDetails(order)} className="bg-transparent hover:bg-gray-50" title="View Details">
                                     <Eye className="h-4 w-4" />
                                   </Button>
                                   {order.paymentStatus !== "Paid" && (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handlePrintBill(order)}
-                                      className="bg-transparent hover:bg-blue-50 text-blue-600"
-                                      title="Print Bill"
-                                    >
+                                    <Button variant="outline" size="sm" onClick={() => handlePrintBill(order)} className="bg-transparent hover:bg-blue-50 text-blue-600" title="Print Bill">
                                       <Printer className="h-4 w-4" />
                                     </Button>
                                   )}
@@ -715,26 +744,13 @@ export default function PrinterBillPage() {
                   {totalPages > 1 && (
                     <div className="flex items-center justify-between p-4 border-t border-gray-200">
                       <div className="text-sm text-gray-600">
-                        Page {page} of {totalPages} ({sortedOrders.length} total
-                        orders)
+                        Page {page} of {totalPages} ({sortedOrders.length} total orders)
                       </div>
                       <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setPage(Math.max(1, page - 1))}
-                          disabled={page === 1}
-                        >
+                        <Button variant="outline" size="sm" onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}>
                           Previous
                         </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setPage(Math.min(totalPages, page + 1))
-                          }
-                          disabled={page === totalPages}
-                        >
+                        <Button variant="outline" size="sm" onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages}>
                           Next
                         </Button>
                       </div>
@@ -745,6 +761,11 @@ export default function PrinterBillPage() {
             </div>
           </div>
         </main>
+        <InvoiceDetailsModal
+        isOpen={isInvoiceDetailsOpen}
+        onClose={() => setIsInvoiceDetailsOpen(false)}
+        invoice={selectedInvoice}
+      />
       </div>
 
       <Dialog
