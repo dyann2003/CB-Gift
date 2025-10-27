@@ -83,14 +83,32 @@ namespace CB_Gift.Controllers
                 return NotFound(new { message = "Không tìm thấy hóa đơn." });
             }
 
-            // Kiểm tra quyền truy cập: Chỉ Admin/Staff hoặc chủ sở hữu của hóa đơn mới được xem
+            // Kiểm tra quyền truy cập
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (!User.IsInRole("Admin") && !User.IsInRole("Staff") && invoice.SellerUserId != currentUserId)
+            if (!User.IsInRole("Manager") && !User.IsInRole("Staff") && invoice.SellerUserId != currentUserId)
             {
                 return Forbid(); // Trả về 403 Forbidden nếu không có quyền
             }
 
             return Ok(invoice);
+        }
+        /// <summary>
+        /// [Staff/Admin] Lấy TẤT CẢ hóa đơn trong hệ thống (không phân trang).
+        /// </summary>
+        // GET: /api/invoices/all
+        [HttpGet("all")]
+        [Authorize(Roles = "Staff, Admin, Manager")]
+        public async Task<IActionResult> GetAllInvoices()
+        {
+            try
+            {
+                var invoices = await _invoiceService.GetAllInvoicesAsync();
+                return Ok(invoices);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn.", error = ex.Message });
+            }
         }
     }
 }
