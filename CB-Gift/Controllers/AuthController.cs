@@ -120,53 +120,39 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
     {
-        var user = await _users.FindByEmailAsync(dto.Email);
-        if (user == null || !(await _users.IsEmailConfirmedAsync(user)))
+        // Tất cả logic đã được chuyển vào service
+        var result = await _accountService.SendPasswordResetOtpAsync(dto);
+
+        if (!result.Success)
         {
-            return BadRequest(new { message = "User not found or email not confirmed" });
+            // Trả về BadRequest nếu có lỗi cụ thể (ví dụ: user bị khóa)
+            return BadRequest(new { message = result.Message });
         }
 
-        var token = await _users.GeneratePasswordResetTokenAsync(user);
-        if (!user.IsActive)
-            return Unauthorized(new { message = "User is inactive" });
-
-        // Link reset (frontend nhận link này để cho user nhập password mới)
-        var resetLink = $"{_config["App:ClientUrl"]}/reset-password?email={Uri.EscapeDataString(dto.Email)}&token={Uri.EscapeDataString(token)}";
-
-        await _accountService.SendResetPasswordEmailAsync(dto.Email, resetLink);
-
-        return Ok(new
-        {
-            message = "Password reset link has been sent to your email.",
-            token = token,
-            resetLink = resetLink
-        });
+        // Luôn trả về OK để bảo mật, ngay cả khi email không tồn tại
+        return Ok(new { message = "If your email is registered, you will receive an OTP." });
     }
 
     // POST: /api/auth/reset-password
     [HttpPost("reset-password")]
     [AllowAnonymous]
-    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
+    // Sử dụng DTO mới
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordWithOtpDto dto)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
-        var user = await _users.FindByEmailAsync(dto.Email);
-        if (user == null) return BadRequest(new { message = "User not found" });
 
-        // Decode token để chắc chắn
-        var decodedToken = Uri.UnescapeDataString(dto.Token);
+        // Tất cả logic đã được chuyển vào service
+        var result = await _accountService.ResetPasswordWithOtpAsync(dto);
 
-        var result = await _users.ResetPasswordAsync(user, decodedToken, dto.NewPassword);
-
-        if (!result.Succeeded)
+        if (!result.Success)
         {
             return BadRequest(new
             {
-                message = "Reset password failed",
-                errors = result.Errors.Select(e => e.Description)
+                message = result.Message,
             });
         }
 
-        return Ok(new { message = "Password has been reset successfully." });
+        return Ok(new { message = result.Message });
     }
 
     // GET: /api/auth/profile
