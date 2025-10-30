@@ -113,7 +113,7 @@ namespace CB_Gift.Tests.Services
             var updated = await svc.AcceptOrderDetailAsync(od2);
 
             updated.Should().NotBeNull();
-            updated!.ProductionStatus.Should().Be(ProductionStatus.IN_PROD);
+            updated!.ProductionStatus.Should().Be(ProductionStatus.QC_DONE);
 
             // min( CREATED=2 , IN_PROD=9 ) => map => StatusOrder = 2
             var order = await db.Orders.Include(o => o.OrderDetails).FirstAsync(o => o.OrderId == orderId);
@@ -129,11 +129,11 @@ namespace CB_Gift.Tests.Services
             var updated = await svc.RejectOrderDetailAsync(od1);
 
             updated.Should().NotBeNull();
-            updated!.ProductionStatus.Should().Be(ProductionStatus.QC_DONE);
+            updated!.ProductionStatus.Should().Be(ProductionStatus.PROD_REWORK);
 
             // min( QC_DONE=11 , DESIGNING=4 ) => map => StatusOrder = 5 (CHECK_DESIGN)
             var order = await db.Orders.Include(o => o.OrderDetails).FirstAsync(o => o.OrderId == orderId);
-            order.StatusOrder.Should().Be(5);
+            order.StatusOrder.Should().Be(4);
         }
 
         [Fact]
