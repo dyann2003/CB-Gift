@@ -31,6 +31,7 @@ namespace CB_Gift.Data
         public virtual DbSet<Payment> Payments { get; set; }
         public virtual DbSet<InvoiceHistory> InvoiceHistories { get; set; }
         public virtual DbSet<WebhookLog> WebhookLogs { get; set; }
+        public virtual DbSet<Notification> Notifications { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
