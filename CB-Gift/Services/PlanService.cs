@@ -3,6 +3,7 @@ using CB_Gift.Models;
 using CB_Gift.Models.Enums;
 using CB_Gift.Services.IService;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using static CB_Gift.DTOs.StaffViewDtos;
 
 namespace CB_Gift.Services
@@ -197,81 +198,53 @@ namespace CB_Gift.Services
 
         public async Task<bool> UpdatePlanDetailStatusAsync(int planDetailId, int newStatus)
         {
-            // Bắt đầu một Transaction để đảm bảo tính nhất quán của dữ liệu
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            IDbContextTransaction? transaction = null;
+
+            // Chỉ mở transaction khi provider là relational (SQL Server/SQLite/…)
+            if (_context.Database.IsRelational())
+            {
+                transaction = await _context.Database.BeginTransactionAsync();
+            }
 
             try
             {
                 var planDetail = await _context.PlanDetails.FindAsync(planDetailId);
+                if (planDetail == null) return false;
 
-                if (planDetail == null)
-                {
-                    return false;
-                }
-
-                // Tải OrderDetail (không cần Include Order ở bước này)
                 var orderDetail = await _context.OrderDetails.FindAsync(planDetail.OrderDetailId);
+                if (orderDetail == null) return false;
 
-                if (orderDetail == null)
-                {
-                    return false;
-                }
+                orderDetail.ProductionStatus = (ProductionStatus)newStatus;
 
-                // 1. Cập nhật ProductionStatus của OrderDetail hiện tại
-                var newProductionStatus = (ProductionStatus)newStatus;
-                orderDetail.ProductionStatus = newProductionStatus;
-
-                // 2. Tải Order cha
                 var order = await _context.Orders
-                    .Include(o => o.OrderDetails) // Phải Include tất cả OrderDetails để kiểm tra
+                    .Include(o => o.OrderDetails)
                     .FirstOrDefaultAsync(o => o.OrderId == orderDetail.OrderId);
+                if (order == null) return false;
 
-                if (order == null)
-                {
-                    return false;
-                }
-
-                // 3. LOGIC CẬP NHẬT ORDER CHA:
-                //    Chỉ cập nhật Order.StatusOrder khi TẤT CẢ OrderDetails đã đạt trạng thái đó.
-
-                // 3a. Tìm trạng thái ProductionStatus thấp nhất (bằng giá trị số int)
-                // Lấy tất cả OrderDetails của Order này (đã được Include)
                 var allOrderDetails = order.OrderDetails.ToList();
-
-                // Nếu không có OrderDetail nào, không làm gì
                 if (!allOrderDetails.Any())
                 {
-                    await transaction.CommitAsync();
+                    if (transaction != null) await transaction.CommitAsync();
                     return true;
                 }
 
-                // ProductionStatus đã được lưu dưới dạng Enum.
-                // Chuyển sang int để so sánh và tìm giá trị nhỏ nhất (trạng thái kém tiến triển nhất).
                 var minProductionStatusValue = allOrderDetails
-                    .Min(od => (int)od.ProductionStatus.GetValueOrDefault((ProductionStatus)0)); // Default 0 (DRAFT)
-
+                    .Min(od => (int)od.ProductionStatus.GetValueOrDefault((ProductionStatus)0));
                 var minProductionStatus = (ProductionStatus)minProductionStatusValue;
 
-                // 3b. Ánh xạ trạng thái thấp nhất này sang StatusOrder
-                var newOrderStatus = MapProductionStatusToOrderStatus(minProductionStatus);
+                order.StatusOrder = MapProductionStatusToOrderStatus(minProductionStatus);
 
-                // 3c. Cập nhật StatusOrder của Order cha
-                // Logic mới: Đặt StatusOrder của Order cha bằng trạng thái thấp nhất tìm được.
-                order.StatusOrder = newOrderStatus;
-
-                // 4. Lưu thay đổi và Commit Transaction
                 await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
-
+                if (transaction != null) await transaction.CommitAsync();
                 return true;
             }
-            catch (Exception ex)
+            catch
             {
-                // Ghi log lỗi ở đây
-                await transaction.RollbackAsync();
+                if (transaction != null) await transaction.RollbackAsync();
                 throw;
             }
         }
+
 
         // Giữ nguyên hàm Mapping của bạn
         private int MapProductionStatusToOrderStatus(ProductionStatus productionStatus)
