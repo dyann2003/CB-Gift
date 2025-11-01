@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.SignalR;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 namespace CB_Gift.Hubs 
@@ -16,8 +17,16 @@ namespace CB_Gift.Hubs
         // Phương thức này được gọi khi một client mới kết nối
         public override async Task OnConnectedAsync()
         {
-            // Gửi thông báo đến client vừa kết nối
-            await Clients.Caller.SendAsync("ReceiveMessage", "Hệ thống", "Chào mừng bạn đã kết nối!");
+            // Lấy UserId từ token xác thực của người dùng đang kết nối
+            var userId = Context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (!string.IsNullOrEmpty(userId))
+            {
+                // Thêm kết nối này vào group của riêng user đó
+                // Ví dụ group name: "user_xxxx-yyyy-zzzz"
+                await Groups.AddToGroupAsync(Context.ConnectionId, $"user_{userId}");
+            }
+
             await base.OnConnectedAsync();
         }
 
