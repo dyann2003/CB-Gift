@@ -8,6 +8,7 @@ using CB_Gift.Services.IService;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Moq;
 using System;
@@ -21,13 +22,17 @@ namespace CB_Gift.Tests.Services
 {
     public class DesignerTaskServiceTests
     {
-        private static CBGiftDbContext CreateDbContext(string dbName)
+        private CBGiftDbContext CreateDbContext(string dbName)
         {
             var options = new DbContextOptionsBuilder<CBGiftDbContext>()
                 .UseInMemoryDatabase(dbName)
-                .EnableSensitiveDataLogging()
+
+                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
                 .Options;
-            return new CBGiftDbContext(options);
+
+            var db = new CBGiftDbContext(options);
+            db.Database.EnsureCreated();
+            return db;
         }
 
         // Overload tiện dụng: cho phép gọi CreateService(db) không cần out
