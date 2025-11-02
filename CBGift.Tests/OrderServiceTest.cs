@@ -1,15 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using CB_Gift.Data;
 using CB_Gift.DTOs;
+using CB_Gift.Hubs;
 using CB_Gift.Models;
 using CB_Gift.Models.Enums;
 using CB_Gift.Services;
+using CB_Gift.Services.IService;
 using CB_Gift.Tests.Utils;
 using FluentAssertions;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -22,6 +26,13 @@ namespace CB_Gift.Tests.Services
         private readonly CBGiftDbContext _db;
         private readonly Mock<IMapper> _mapper;
         private readonly ILogger<OrderService> _logger;
+
+        // NEW: mocks cho notification & SignalR
+        private readonly Mock<INotificationService> _notifyMock;
+        private readonly Mock<IHubContext<NotificationHub>> _hubContextMock;
+        private readonly Mock<IHubClients> _hubClientsMock;
+        private readonly Mock<IClientProxy> _clientProxyMock;
+
         private readonly OrderService _svc;
 
         public OrderServiceTests()
@@ -29,7 +40,40 @@ namespace CB_Gift.Tests.Services
             _db = InMemoryDbFactory.CreateContext();
             _mapper = new Mock<IMapper>(MockBehavior.Strict);
             _logger = Mock.Of<ILogger<OrderService>>();
-            _svc = new OrderService(_db, _mapper.Object, _logger);
+
+            // ---- Mock Notification service
+            _notifyMock = new Mock<INotificationService>(MockBehavior.Strict);
+            _notifyMock
+                .Setup(n => n.CreateAndSendNotificationAsync(
+                    It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+                .Returns(Task.CompletedTask);
+
+            // ---- Mock SignalR HubContext
+            _clientProxyMock = new Mock<IClientProxy>(MockBehavior.Strict);
+            _clientProxyMock
+                .Setup(cp => cp.SendCoreAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<object[]>(),
+                    It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
+
+            _hubClientsMock = new Mock<IHubClients>(MockBehavior.Strict);
+            _hubClientsMock
+                .Setup(h => h.Group(It.IsAny<string>()))
+                .Returns(_clientProxyMock.Object);
+
+            _hubContextMock = new Mock<IHubContext<NotificationHub>>(MockBehavior.Strict);
+            _hubContextMock
+                .SetupGet(h => h.Clients)
+                .Returns(_hubClientsMock.Object);
+
+            _svc = new OrderService(
+                _db,
+                _mapper.Object,
+                _logger,
+                _notifyMock.Object,
+                _hubContextMock.Object
+            );
 
             Seed(_db);
         }
@@ -77,12 +121,13 @@ namespace CB_Gift.Tests.Services
         //public async Task GetOrdersForSellerAsync_FiltersAndSorts()
         //{
         //    var list = await _svc.GetOrdersForSellerAsync("sellerA");
-
+        //
         //    list.Should().NotBeNull();
         //    list.Should().HaveCount(1);
         //    list.Select(x => x.OrderId).Should().Contain(100);
         //    list[0].CustomerName.Should().Be("John");
         //}
+
 
         [Fact]
         public async Task CreateCustomerAsync_Creates_And_Returns()
@@ -167,7 +212,7 @@ namespace CB_Gift.Tests.Services
             await _svc.AddOrderDetailAsync(100, req, "sellerA");
 
             var order = await _db.Orders.FindAsync(100);
-            order!.TotalCost.Should().Be(47); // theo giải thích trong comment test trước
+            order!.TotalCost.Should().Be(47); // itemBase(34) + baseShip(3) + (qty-1)*maxExtra(10)
         }
 
         [Fact]
@@ -245,7 +290,7 @@ namespace CB_Gift.Tests.Services
         //{
         //    var ok = await _svc.SendOrderToReadyProdAsync(101, "sellerB");
         //    ok.Should().BeTrue();
-
+        //
         //    var updated = await _db.Orders.Include(o => o.OrderDetails).FirstAsync(o => o.OrderId == 101);
         //    updated.StatusOrder.Should().Be(7);
         //    updated.OrderDetails.Should().OnlyContain(d => d.ProductionStatus == ProductionStatus.READY_PROD);
@@ -270,8 +315,6 @@ namespace CB_Gift.Tests.Services
             res.IsSuccess.Should().BeFalse();
             res.CanApprove.Should().BeFalse();
             res.ErrorMessage.Should().MatchRegex("(?i)no product details");
-
-
         }
 
         [Fact]
