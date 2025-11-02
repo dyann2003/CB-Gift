@@ -77,6 +77,7 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  ChevronDown,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -108,7 +109,8 @@ export default function ManageOrder() {
   const [designCheckAction, setDesignCheckAction] = useState(null); // 'approve' or 'reject'
   const [designCheckOrderId, setDesignCheckOrderId] = useState(null);
 
-  // 🧩 Thêm vào đầu file (trong component ManageOrder)
+  const [expandedOrderId, setExpandedOrderId] = useState(null);
+
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
@@ -357,6 +359,9 @@ export default function ManageOrder() {
     } else if (sortColumn === "totalAmount") {
       aValue = Number.parseFloat(a.totalAmount.replace("$", ""));
       bValue = Number.parseFloat(b.totalAmount.replace("$", ""));
+    } else if (sortColumn === "orderId") {
+      aValue = a.orderId.toLowerCase();
+      bValue = b.orderId.toLowerCase();
     }
 
     if (sortDirection === "asc") {
@@ -1019,7 +1024,9 @@ export default function ManageOrder() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-blue-50">
+      {" "}
+      {/* changed from bg-slate-50 to bg-blue-50 */}
       <SellerSidebar
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}
@@ -1029,18 +1036,20 @@ export default function ManageOrder() {
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">
           <div className="space-y-6">
             {/* Welcome Header */}
-            <div className="bg-white p-4 sm:p-6 rounded-lg border-2 border-blue-200 shadow-sm">
+            <div className="bg-blue-50 p-4 sm:p-6 rounded-lg border-2 border-blue-200 shadow-sm">
+              {" "}
+              {/* unified to blue-50 and blue-200 */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h1 className="text-lg sm:text-xl font-semibold text-blue-800">
+                  <h1 className="text-lg sm:text-xl font-semibold text-slate-900">
                     Welcome back, Seller!
                   </h1>
-                  <p className="text-sm sm:text-base text-blue-600 mt-1">
+                  <p className="text-sm sm:text-base text-slate-600 mt-1">
                     Manage your customer orders
                   </p>
                 </div>
                 <div className="mt-3 sm:mt-0">
-                  <div className="flex items-center gap-2 text-sm text-blue-700">
+                  <div className="flex items-center gap-2 text-sm text-slate-700">
                     <Package className="h-4 w-4" />
                     <span>{filteredOrders.length} orders</span>
                   </div>
@@ -1059,22 +1068,24 @@ export default function ManageOrder() {
                     className={`p-3 rounded-lg border-2 ${
                       stat.color
                     } hover:shadow-lg transition-all cursor-pointer ${
-                      isActive ? "ring-2 ring-blue-400 shadow-lg scale-105" : ""
+                      isActive
+                        ? "ring-2 ring-indigo-500 shadow-lg scale-105"
+                        : ""
                     }`}
                   >
                     <div className="flex flex-col items-center text-center gap-2">
                       <IconComponent className={`h-5 w-5 ${stat.iconColor}`} />
                       <div>
-                        <p className="text-lg font-bold text-gray-900">
+                        <p className="text-lg font-bold text-slate-900">
                           {stat.value}
                         </p>
-                        <h3 className="text-[10px] sm:text-xs font-medium text-gray-600 uppercase tracking-wide">
+                        <h3 className="text-[10px] sm:text-xs font-medium text-slate-600 uppercase tracking-wide">
                           {stat.title}
                         </h3>
                       </div>
                     </div>
                     {isActive && (
-                      <div className="mt-1 text-[10px] font-medium text-blue-600 text-center">
+                      <div className="mt-1 text-[10px] font-medium text-indigo-600 text-center">
                         ✓ Active
                       </div>
                     )}
@@ -1083,44 +1094,38 @@ export default function ManageOrder() {
               })}
             </div>
 
-            <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="bg-blue-50 p-4 sm:p-6 rounded-lg shadow-sm border border-blue-100">
+              {" "}
+              {/* changed to bg-blue-50 */}
               <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-end justify-between">
                 <div className="flex flex-col sm:flex-row gap-4 flex-1 w-full">
                   <div className="flex-1 max-w-xs">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
                       Search Orders
                     </label>
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
                       <Input
                         placeholder="Order ID, Customer, Product..."
                         value={searchTerm}
                         onChange={(e) => {
-                          // Loại bỏ dấu cách
-                          const sanitizedValue = e.target.value.replace(
-                            /\s+/g,
-                            ""
-                          );
-                          setSearchTerm(sanitizedValue);
+                          setSearchTerm(e.target.value);
+                          setPage(1);
                         }}
-                        onKeyDown={(e) => {
-                          // Ngăn không cho gõ phím Space
-                          if (e.key === " ") e.preventDefault();
-                        }}
-                        className="pl-10 bg-white"
+                        className="pl-10 bg-white border-blue-100 focus:border-blue-300"
                       />
                     </div>
                   </div>
 
                   <div className="flex-1 max-w-xs">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
                       Filter by Date
                     </label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className="w-full justify-start text-left font-normal bg-white"
+                          className="w-full justify-start text-left font-normal bg-white border-blue-100 hover:border-blue-300 hover:bg-blue-50"
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
                           {dateRange.from ? (
@@ -1150,7 +1155,7 @@ export default function ManageOrder() {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="w-full bg-transparent"
+                              className="w-full bg-transparent border-blue-100 hover:bg-blue-50"
                               onClick={() =>
                                 handleDateSelect({ from: null, to: null })
                               }
@@ -1165,7 +1170,11 @@ export default function ManageOrder() {
                 </div>
 
                 <div className="flex flex-wrap gap-2 w-full lg:w-auto">
-                  <Button variant="outline" onClick={handleExport}>
+                  <Button
+                    variant="outline"
+                    onClick={handleExport}
+                    className="border-blue-100 hover:bg-blue-50 bg-transparent"
+                  >
                     <FileDown className="h-4 w-4 mr-2" />
                     <span className="hidden sm:inline">Export file</span>
                     <span className="sm:hidden">Export</span>
@@ -1175,6 +1184,7 @@ export default function ManageOrder() {
                     onClick={() =>
                       document.getElementById("file-input").click()
                     }
+                    className="border-blue-100 hover:bg-blue-50"
                   >
                     <Upload className="h-4 w-4 mr-2" />
                     <span className="hidden sm:inline">Import file</span>
@@ -1190,6 +1200,7 @@ export default function ManageOrder() {
                   <Button
                     variant="outline"
                     onClick={() => setShowMakeManualModal(true)}
+                    className="border-blue-100 hover:bg-blue-50"
                   >
                     <FileText className="h-4 w-4 mr-2" />
                     <span className="hidden sm:inline">Make manual</span>
@@ -1204,13 +1215,13 @@ export default function ManageOrder() {
               <Button
                 variant="outline"
                 onClick={handleSelectAll}
-                className="bg-white"
+                className="bg-white border-blue-100 hover:bg-blue-50"
               >
                 {selectAll ? "Deselect All" : "Select All"}
               </Button>
 
               <Button
-                variant="outline"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white"
                 onClick={handleOpenAssignPopup}
                 disabled={selectedOrders.length === 0}
               >
@@ -1218,7 +1229,7 @@ export default function ManageOrder() {
               </Button>
 
               <Button
-                variant="outline"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
                 onClick={handleAssignStaff}
                 disabled={selectedOrders.length === 0}
               >
@@ -1240,7 +1251,7 @@ export default function ManageOrder() {
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>No</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleAssignToDesigner}>
+                  <AlertDialogAction className="bg-indigo-600 hover:bg-indigo-700">
                     Yes
                   </AlertDialogAction>
                 </AlertDialogFooter>
@@ -1259,17 +1270,21 @@ export default function ManageOrder() {
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogAction>OK</AlertDialogAction>
+                  <AlertDialogAction className="bg-indigo-600 hover:bg-indigo-700">
+                    OK
+                  </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
 
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="bg-blue-50 rounded-lg shadow-sm border border-blue-100">
+              {" "}
+              {/* unified bg color */}
               {loading ? (
                 <div className="flex items-center justify-center p-12">
                   <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Loading orders...</p>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+                    <p className="mt-4 text-slate-600">Loading orders...</p>
                   </div>
                 </div>
               ) : error ? (
@@ -1279,7 +1294,7 @@ export default function ManageOrder() {
                     <p className="mt-4 text-red-600 font-medium">
                       Error loading orders
                     </p>
-                    <p className="mt-2 text-gray-600 text-sm">{error}</p>
+                    <p className="mt-2 text-slate-600 text-sm">{error}</p>
                     <Button
                       onClick={() => window.location.reload()}
                       className="mt-4"
@@ -1294,38 +1309,43 @@ export default function ManageOrder() {
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
-                        <TableRow className="bg-gray-50">
-                          <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
-                            Select
-                          </TableHead>
-                          <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
-                            Order ID
+                        <TableRow className="bg-blue-100 hover:bg-blue-100">
+                          {" "}
+                          {/* updated header bg */}
+                          <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
+                            <Checkbox
+                              checked={selectAll}
+                              onCheckedChange={handleSelectAll}
+                            />
                           </TableHead>
                           <TableHead
-                            className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap cursor-pointer hover:bg-gray-100"
+                            className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap cursor-pointer hover:bg-blue-200 transition-colors"
+                            onClick={() => handleSort("orderId")}
+                          >
+                            Order ID {renderSortIcon("orderId")}
+                          </TableHead>
+                          <TableHead
+                            className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap cursor-pointer hover:bg-blue-200 transition-colors"
                             onClick={() => handleSort("orderDate")}
                           >
                             Order Date {renderSortIcon("orderDate")}
                           </TableHead>
                           <TableHead
-                            className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap cursor-pointer hover:bg-gray-100"
+                            className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap cursor-pointer hover:bg-blue-200 transition-colors"
                             onClick={() => handleSort("customerName")}
                           >
                             Customer {renderSortIcon("customerName")}
                           </TableHead>
-                          {/* <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
-                              Address
-                            </TableHead> */}
-                          <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
+                          <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
                             Status
                           </TableHead>
                           <TableHead
-                            className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap cursor-pointer hover:bg-gray-100"
+                            className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap cursor-pointer hover:bg-blue-200 transition-colors"
                             onClick={() => handleSort("totalAmount")}
                           >
                             Amount {renderSortIcon("totalAmount")}
                           </TableHead>
-                          <TableHead className="font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap">
+                          <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
                             Actions
                           </TableHead>
                         </TableRow>
@@ -1335,1097 +1355,1181 @@ export default function ManageOrder() {
                           <TableRow>
                             <TableCell
                               colSpan={8}
-                              className="text-center py-8 text-gray-500"
+                              className="text-center py-8 text-slate-500"
                             >
                               No orders found
                             </TableCell>
                           </TableRow>
                         ) : (
                           paginatedOrders.map((order) => (
-                            <TableRow
-                              key={order.id}
-                              className="hover:bg-gray-50 transition-colors"
-                            >
-                              <TableCell>
-                                <Checkbox
-                                  checked={selectedOrders.includes(order.id)}
-                                  onCheckedChange={() =>
-                                    handleOrderSelect(order.id)
-                                  }
-                                />
-                              </TableCell>
-                              <TableCell className="font-medium text-gray-900 whitespace-nowrap">
-                                {order.orderId}
-                              </TableCell>
-                              <TableCell className="text-gray-600 whitespace-nowrap">
-                                {order.orderDate}
-                              </TableCell>
-                              <TableCell className="min-w-[200px]">
-                                <div>
-                                  <div className="font-medium text-gray-900">
-                                    {order.customerName}
-                                  </div>
-                                  {order.email && (
-                                    <div className="text-sm text-gray-500">
-                                      {order.email}
+                            <>
+                              <TableRow
+                                key={order.id}
+                                className="hover:bg-blue-50 transition-colors"
+                              >
+                                {" "}
+                                {/* updated hover color */}
+                                <TableCell>
+                                  <Checkbox
+                                    checked={selectedOrders.includes(order.id)}
+                                    onCheckedChange={() =>
+                                      handleOrderSelect(order.id)
+                                    }
+                                  />
+                                </TableCell>
+                                <TableCell className="font-medium text-slate-900 whitespace-nowrap">
+                                  {order.orderId}
+                                </TableCell>
+                                <TableCell className="text-slate-600 whitespace-nowrap">
+                                  {order.orderDate}
+                                </TableCell>
+                                <TableCell className="min-w-[200px]">
+                                  <div>
+                                    <div className="font-medium text-slate-900">
+                                      {order.customerName}
                                     </div>
-                                  )}
-                                </div>
-                              </TableCell>
-                              {/* <TableCell className="text-gray-600 max-w-[200px]">
-                                  <div className="truncate" title={order.address}>
-                                    {order.address || "N/A"}
+                                    {order.email && (
+                                      <div className="text-sm text-slate-500">
+                                        {order.email}
+                                      </div>
+                                    )}
                                   </div>
-                                </TableCell> */}
-                              <TableCell className="whitespace-nowrap">
-                                {getStatusBadge(order.status)}
-                              </TableCell>
-                              <TableCell className="font-medium text-gray-900 whitespace-nowrap">
-                                {order.totalAmount}
-                              </TableCell>
-                              <TableCell className="whitespace-nowrap">
-                                <div className="flex items-center gap-2">
-                                  {order.status === "Cần Check Design" && (
-                                    <>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="bg-transparent hover:bg-green-50 text-green-600 hover:text-green-700"
-                                        onClick={() =>
-                                          handleApproveDesign(order.id)
-                                        }
-                                        title="Approve Design"
-                                      >
-                                        ✓
-                                      </Button>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="bg-transparent hover:bg-red-50 text-red-600 hover:text-red-700"
-                                        onClick={() =>
-                                          handleRejectDesign(order.id)
-                                        }
-                                        title="Reject Design"
-                                      >
-                                        ✕
-                                      </Button>
-                                    </>
-                                  )}
-                                  <Dialog
-                                    open={isDialogOpen}
-                                    onOpenChange={setIsDialogOpen}
-                                  >
-                                    {" "}
-                                    {/* Use isDialogOpen here */}
-                                    <DialogTrigger asChild>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleViewDetails(order)}
-                                        className="bg-transparent hover:bg-gray-50"
-                                      >
-                                        <Eye className="h-4 w-4 mr-1" />
-                                        {/* <span className="hidden xl:inline">
-                                            View
-                                          </span> */}
-                                      </Button>
-                                    </DialogTrigger>
-                                    <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-                                      <DialogHeader>
-                                        <DialogTitle className="flex items-center justify-between">
-                                          <div className="flex items-center gap-2">
-                                            <Package className="h-5 w-5" />
-                                            Order Details -{" "}
-                                            {editedOrder?.orderId}
-                                          </div>
-                                        </DialogTitle>
-                                      </DialogHeader>
-                                      {editedOrder && (
-                                        <div className="space-y-6">
-                                          <div className="bg-gray-50 p-4 rounded-lg">
-                                            <h3 className="font-semibold text-lg mb-3 text-gray-900">
-                                              Customer Information
-                                            </h3>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                              <div>
-                                                <Label className="text-sm text-gray-500 font-medium">
-                                                  Name *
-                                                </Label>
-                                                {isEditMode ? (
-                                                  <Input
-                                                    value={
-                                                      editedOrder.customerInfo
-                                                        .name
-                                                    }
-                                                    onChange={(e) =>
-                                                      handleCustomerInfoChange(
-                                                        "name",
-                                                        e.target.value
-                                                      )
-                                                    }
-                                                    className="mt-1"
-                                                  />
-                                                ) : (
-                                                  <p className="font-medium text-gray-900 mt-1">
-                                                    {editedOrder.customerInfo
-                                                      .name || "N/A"}
-                                                  </p>
-                                                )}
-                                              </div>
-                                              <div>
-                                                <Label className="text-sm text-gray-500 font-medium">
-                                                  Phone *
-                                                </Label>
-                                                {isEditMode ? (
-                                                  <Input
-                                                    value={
-                                                      editedOrder.customerInfo
-                                                        .phone
-                                                    }
-                                                    onChange={(e) =>
-                                                      handleCustomerInfoChange(
-                                                        "phone",
-                                                        e.target.value
-                                                      )
-                                                    }
-                                                    className="mt-1"
-                                                  />
-                                                ) : (
-                                                  <p className="font-medium text-gray-900 mt-1">
-                                                    {editedOrder.customerInfo
-                                                      .phone || "N/A"}
-                                                  </p>
-                                                )}
-                                              </div>
-                                              <div>
-                                                <Label className="text-sm text-gray-500 font-medium">
-                                                  Email *
-                                                </Label>
-                                                {isEditMode ? (
-                                                  <Input
-                                                    value={
-                                                      editedOrder.customerInfo
-                                                        .email
-                                                    }
-                                                    onChange={(e) =>
-                                                      handleCustomerInfoChange(
-                                                        "email",
-                                                        e.target.value
-                                                      )
-                                                    }
-                                                    className="mt-1"
-                                                  />
-                                                ) : (
-                                                  <p className="font-medium text-gray-900 mt-1">
-                                                    {editedOrder.customerInfo
-                                                      .email || "N/A"}
-                                                  </p>
-                                                )}
-                                              </div>
-                                              <div>
-                                                <Label className="text-sm text-gray-500 font-medium">
-                                                  Address *
-                                                </Label>
-                                                {isEditMode ? (
-                                                  <Input
-                                                    value={
-                                                      editedOrder.customerInfo
-                                                        .address
-                                                    }
-                                                    onChange={(e) =>
-                                                      handleCustomerInfoChange(
-                                                        "address",
-                                                        e.target.value
-                                                      )
-                                                    }
-                                                    className="mt-1"
-                                                  />
-                                                ) : (
-                                                  <p className="font-medium text-gray-900 mt-1">
-                                                    {editedOrder.customerInfo
-                                                      .address || "N/A"}
-                                                  </p>
-                                                )}
-                                              </div>
-                                              <div>
-                                                <Label className="text-sm text-gray-500 font-medium">
-                                                  Address Line 2
-                                                </Label>
-                                                {isEditMode ? (
-                                                  <Input
-                                                    value={
-                                                      editedOrder.customerInfo
-                                                        .address1 || ""
-                                                    }
-                                                    onChange={(e) =>
-                                                      handleCustomerInfoChange(
-                                                        "address1",
-                                                        e.target.value
-                                                      )
-                                                    }
-                                                    className="mt-1"
-                                                  />
-                                                ) : (
-                                                  <p className="font-medium text-gray-900 mt-1">
-                                                    {editedOrder.customerInfo
-                                                      .address1 || "N/A"}
-                                                  </p>
-                                                )}
-                                              </div>
-                                              <div>
-                                                <Label className="text-sm text-gray-500 font-medium">
-                                                  Zipcode *
-                                                </Label>
-                                                {isEditMode ? (
-                                                  <Input
-                                                    value={
-                                                      editedOrder.customerInfo
-                                                        .zipcode
-                                                    }
-                                                    onChange={(e) =>
-                                                      handleCustomerInfoChange(
-                                                        "zipcode",
-                                                        e.target.value
-                                                      )
-                                                    }
-                                                    className="mt-1"
-                                                  />
-                                                ) : (
-                                                  <p className="font-medium text-gray-900 mt-1">
-                                                    {editedOrder.customerInfo
-                                                      .zipcode || "N/A"}
-                                                  </p>
-                                                )}
-                                              </div>
-                                              <div>
-                                                <Label className="text-sm text-gray-500 font-medium">
-                                                  Ship City *
-                                                </Label>
-                                                {isEditMode ? (
-                                                  <Input
-                                                    value={
-                                                      editedOrder.customerInfo
-                                                        .city
-                                                    }
-                                                    onChange={(e) =>
-                                                      handleCustomerInfoChange(
-                                                        "city",
-                                                        e.target.value
-                                                      )
-                                                    }
-                                                    className="mt-1"
-                                                  />
-                                                ) : (
-                                                  <p className="font-medium text-gray-900 mt-1">
-                                                    {editedOrder.customerInfo
-                                                      .city || "N/A"}
-                                                  </p>
-                                                )}
-                                              </div>
-                                              <div>
-                                                <Label className="text-sm text-gray-500 font-medium">
-                                                  Ship State *
-                                                </Label>
-                                                {isEditMode ? (
-                                                  <Input
-                                                    value={
-                                                      editedOrder.customerInfo
-                                                        .state
-                                                    }
-                                                    onChange={(e) =>
-                                                      handleCustomerInfoChange(
-                                                        "state",
-                                                        e.target.value
-                                                      )
-                                                    }
-                                                    className="mt-1"
-                                                  />
-                                                ) : (
-                                                  <p className="font-medium text-gray-900 mt-1">
-                                                    {editedOrder.customerInfo
-                                                      .state || "N/A"}
-                                                  </p>
-                                                )}
-                                              </div>
-                                              <div>
-                                                <Label className="text-sm text-gray-500 font-medium">
-                                                  Ship Country *
-                                                </Label>
-                                                {isEditMode ? (
-                                                  <Input
-                                                    value={
-                                                      editedOrder.customerInfo
-                                                        .country
-                                                    }
-                                                    onChange={(e) =>
-                                                      handleCustomerInfoChange(
-                                                        "country",
-                                                        e.target.value
-                                                      )
-                                                    }
-                                                    className="mt-1"
-                                                  />
-                                                ) : (
-                                                  <p className="font-medium text-gray-900 mt-1">
-                                                    {editedOrder.customerInfo
-                                                      .country || "N/A"}
-                                                  </p>
-                                                )}
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap">
+                                  {getStatusBadge(order.status)}
+                                </TableCell>
+                                <TableCell className="font-medium text-slate-900 whitespace-nowrap">
+                                  {order.totalAmount}
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap">
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className={`bg-transparent hover:bg-blue-100 border-blue-200 transition-colors ${
+                                        expandedOrderId === order.id
+                                          ? "bg-blue-100"
+                                          : ""
+                                      }`}
+                                      onClick={() =>
+                                        setExpandedOrderId(
+                                          expandedOrderId === order.id
+                                            ? null
+                                            : order.id
+                                        )
+                                      }
+                                      title="Expand Details"
+                                    >
+                                      <ChevronDown
+                                        className={`h-4 w-4 transition-transform ${
+                                          expandedOrderId === order.id
+                                            ? "rotate-180"
+                                            : ""
+                                        }`}
+                                      />
+                                    </Button>
+
+                                    {order.status === "Cần Check Design" && (
+                                      <>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="bg-transparent hover:bg-green-50 text-green-600 hover:text-green-700 border-green-200"
+                                          onClick={() =>
+                                            handleApproveDesign(order.id)
+                                          }
+                                          title="Approve Design"
+                                        >
+                                          ✓
+                                        </Button>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="bg-transparent hover:bg-red-50 text-red-600 hover:text-red-700 border-red-200"
+                                          onClick={() =>
+                                            handleRejectDesign(order.id)
+                                          }
+                                          title="Reject Design"
+                                        >
+                                          ✕
+                                        </Button>
+                                      </>
+                                    )}
+                                    <Dialog
+                                      open={isDialogOpen}
+                                      onOpenChange={setIsDialogOpen}
+                                    >
+                                      <DialogTrigger asChild>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="bg-transparent hover:bg-blue-100 border-blue-200"
+                                          onClick={() =>
+                                            handleViewDetails(order)
+                                          }
+                                          title="View Details"
+                                        >
+                                          <Eye className="h-4 w-4 mr-1" />
+                                        </Button>
+                                      </DialogTrigger>
+                                      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+                                        <DialogHeader>
+                                          <DialogTitle className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                              <Package className="h-5 w-5" />
+                                              Order Details -{" "}
+                                              {editedOrder?.orderId}
+                                            </div>
+                                          </DialogTitle>
+                                        </DialogHeader>
+                                        {editedOrder && (
+                                          <div className="space-y-6">
+                                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                              <h3 className="font-semibold text-lg mb-3 text-slate-900">
+                                                Customer Information
+                                              </h3>
+                                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                <div>
+                                                  <Label className="text-sm text-slate-500 font-medium">
+                                                    Name *
+                                                  </Label>
+                                                  {isEditMode ? (
+                                                    <Input
+                                                      value={
+                                                        editedOrder.customerInfo
+                                                          .name
+                                                      }
+                                                      onChange={(e) =>
+                                                        handleCustomerInfoChange(
+                                                          "name",
+                                                          e.target.value
+                                                        )
+                                                      }
+                                                      className="mt-1 border-blue-100 focus:border-blue-300"
+                                                    />
+                                                  ) : (
+                                                    <p className="font-medium text-slate-900 mt-1">
+                                                      {editedOrder.customerInfo
+                                                        .name || "N/A"}
+                                                    </p>
+                                                  )}
+                                                </div>
+                                                <div>
+                                                  <Label className="text-sm text-slate-500 font-medium">
+                                                    Phone *
+                                                  </Label>
+                                                  {isEditMode ? (
+                                                    <Input
+                                                      value={
+                                                        editedOrder.customerInfo
+                                                          .phone
+                                                      }
+                                                      onChange={(e) =>
+                                                        handleCustomerInfoChange(
+                                                          "phone",
+                                                          e.target.value
+                                                        )
+                                                      }
+                                                      className="mt-1 border-blue-100 focus:border-blue-300"
+                                                    />
+                                                  ) : (
+                                                    <p className="font-medium text-slate-900 mt-1">
+                                                      {editedOrder.customerInfo
+                                                        .phone || "N/A"}
+                                                    </p>
+                                                  )}
+                                                </div>
+                                                <div>
+                                                  <Label className="text-sm text-slate-500 font-medium">
+                                                    Email *
+                                                  </Label>
+                                                  {isEditMode ? (
+                                                    <Input
+                                                      value={
+                                                        editedOrder.customerInfo
+                                                          .email
+                                                      }
+                                                      onChange={(e) =>
+                                                        handleCustomerInfoChange(
+                                                          "email",
+                                                          e.target.value
+                                                        )
+                                                      }
+                                                      className="mt-1 border-blue-100 focus:border-blue-300"
+                                                    />
+                                                  ) : (
+                                                    <p className="font-medium text-slate-900 mt-1">
+                                                      {editedOrder.customerInfo
+                                                        .email || "N/A"}
+                                                    </p>
+                                                  )}
+                                                </div>
+                                                <div>
+                                                  <Label className="text-sm text-slate-500 font-medium">
+                                                    Address *
+                                                  </Label>
+                                                  {isEditMode ? (
+                                                    <Input
+                                                      value={
+                                                        editedOrder.customerInfo
+                                                          .address
+                                                      }
+                                                      onChange={(e) =>
+                                                        handleCustomerInfoChange(
+                                                          "address",
+                                                          e.target.value
+                                                        )
+                                                      }
+                                                      className="mt-1 border-blue-100 focus:border-blue-300"
+                                                    />
+                                                  ) : (
+                                                    <p className="font-medium text-slate-900 mt-1">
+                                                      {editedOrder.customerInfo
+                                                        .address || "N/A"}
+                                                    </p>
+                                                  )}
+                                                </div>
+                                                <div>
+                                                  <Label className="text-sm text-slate-500 font-medium">
+                                                    Address Line 2
+                                                  </Label>
+                                                  {isEditMode ? (
+                                                    <Input
+                                                      value={
+                                                        editedOrder.customerInfo
+                                                          .address1 || ""
+                                                      }
+                                                      onChange={(e) =>
+                                                        handleCustomerInfoChange(
+                                                          "address1",
+                                                          e.target.value
+                                                        )
+                                                      }
+                                                      className="mt-1 border-blue-100 focus:border-blue-300"
+                                                    />
+                                                  ) : (
+                                                    <p className="font-medium text-slate-900 mt-1">
+                                                      {editedOrder.customerInfo
+                                                        .address1 || "N/A"}
+                                                    </p>
+                                                  )}
+                                                </div>
+                                                <div>
+                                                  <Label className="text-sm text-slate-500 font-medium">
+                                                    Zipcode *
+                                                  </Label>
+                                                  {isEditMode ? (
+                                                    <Input
+                                                      value={
+                                                        editedOrder.customerInfo
+                                                          .zipcode
+                                                      }
+                                                      onChange={(e) =>
+                                                        handleCustomerInfoChange(
+                                                          "zipcode",
+                                                          e.target.value
+                                                        )
+                                                      }
+                                                      className="mt-1 border-blue-100 focus:border-blue-300"
+                                                    />
+                                                  ) : (
+                                                    <p className="font-medium text-slate-900 mt-1">
+                                                      {editedOrder.customerInfo
+                                                        .zipcode || "N/A"}
+                                                    </p>
+                                                  )}
+                                                </div>
+                                                <div>
+                                                  <Label className="text-sm text-slate-500 font-medium">
+                                                    Ship City *
+                                                  </Label>
+                                                  {isEditMode ? (
+                                                    <Input
+                                                      value={
+                                                        editedOrder.customerInfo
+                                                          .city
+                                                      }
+                                                      onChange={(e) =>
+                                                        handleCustomerInfoChange(
+                                                          "city",
+                                                          e.target.value
+                                                        )
+                                                      }
+                                                      className="mt-1 border-blue-100 focus:border-blue-300"
+                                                    />
+                                                  ) : (
+                                                    <p className="font-medium text-slate-900 mt-1">
+                                                      {editedOrder.customerInfo
+                                                        .city || "N/A"}
+                                                    </p>
+                                                  )}
+                                                </div>
+                                                <div>
+                                                  <Label className="text-sm text-slate-500 font-medium">
+                                                    Ship State *
+                                                  </Label>
+                                                  {isEditMode ? (
+                                                    <Input
+                                                      value={
+                                                        editedOrder.customerInfo
+                                                          .state
+                                                      }
+                                                      onChange={(e) =>
+                                                        handleCustomerInfoChange(
+                                                          "state",
+                                                          e.target.value
+                                                        )
+                                                      }
+                                                      className="mt-1 border-blue-100 focus:border-blue-300"
+                                                    />
+                                                  ) : (
+                                                    <p className="font-medium text-slate-900 mt-1">
+                                                      {editedOrder.customerInfo
+                                                        .state || "N/A"}
+                                                    </p>
+                                                  )}
+                                                </div>
+                                                <div>
+                                                  <Label className="text-sm text-slate-500 font-medium">
+                                                    Ship Country *
+                                                  </Label>
+                                                  {isEditMode ? (
+                                                    <Input
+                                                      value={
+                                                        editedOrder.customerInfo
+                                                          .country
+                                                      }
+                                                      onChange={(e) =>
+                                                        handleCustomerInfoChange(
+                                                          "country",
+                                                          e.target.value
+                                                        )
+                                                      }
+                                                      className="mt-1 border-blue-100 focus:border-blue-300"
+                                                    />
+                                                  ) : (
+                                                    <p className="font-medium text-slate-900 mt-1">
+                                                      {editedOrder.customerInfo
+                                                        .country || "N/A"}
+                                                    </p>
+                                                  )}
+                                                </div>
                                               </div>
                                             </div>
-                                          </div>
 
-                                          <div>
-                                            <h3 className="font-semibold text-lg mb-3 text-gray-900">
-                                              Product Details
-                                            </h3>
-                                            <div className="space-y-4">
-                                              {editedOrder.products.map(
-                                                (product, index) => (
-                                                  <div
-                                                    key={index}
-                                                    className="border border-gray-200 rounded-lg p-4 bg-white"
-                                                  >
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                                                      <div>
-                                                        <Label className="text-sm text-gray-500 font-medium">
-                                                          Product Name
-                                                        </Label>
-                                                        {isEditMode ? (
-                                                          <Input
-                                                            value={product.name}
-                                                            onChange={(e) =>
-                                                              handleProductChange(
-                                                                index,
-                                                                "name",
-                                                                e.target.value
-                                                              )
-                                                            }
-                                                            className="mt-1"
-                                                          />
-                                                        ) : (
-                                                          <p className="font-medium text-gray-900 mt-1">
-                                                            {product.name}
-                                                          </p>
-                                                        )}
-                                                      </div>
-                                                      <div>
-                                                        <Label className="text-sm text-gray-500 font-medium">
-                                                          Size/Variant
-                                                        </Label>
-                                                        {isEditMode ? (
-                                                          <Input
-                                                            value={product.size}
-                                                            onChange={(e) =>
-                                                              handleProductChange(
-                                                                index,
-                                                                "size",
-                                                                e.target.value
-                                                              )
-                                                            }
-                                                            className="mt-1"
-                                                          />
-                                                        ) : (
-                                                          <p className="font-medium text-gray-900 mt-1">
-                                                            {product.size ||
-                                                              "N/A"}
-                                                          </p>
-                                                        )}
-                                                      </div>
-                                                      <div>
-                                                        <Label className="text-sm text-gray-500 font-medium">
-                                                          Quantity
-                                                        </Label>
-                                                        {isEditMode ? (
-                                                          <Input
-                                                            type="number"
-                                                            value={
-                                                              product.quantity
-                                                            }
-                                                            onChange={(e) =>
-                                                              handleProductChange(
-                                                                index,
-                                                                "quantity",
-                                                                Number.parseInt(
+                                            <div>
+                                              <h3 className="font-semibold text-lg mb-3 text-slate-900">
+                                                Product Details
+                                              </h3>
+                                              <div className="space-y-4">
+                                                {editedOrder.products.map(
+                                                  (product, index) => (
+                                                    <div
+                                                      key={index}
+                                                      className="border border-blue-100 rounded-lg p-4 bg-white hover:shadow-md transition-shadow"
+                                                    >
+                                                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                                                        <div>
+                                                          <Label className="text-sm text-slate-500 font-medium">
+                                                            Product Name
+                                                          </Label>
+                                                          {isEditMode ? (
+                                                            <Input
+                                                              value={
+                                                                product.name
+                                                              }
+                                                              onChange={(e) =>
+                                                                handleProductChange(
+                                                                  index,
+                                                                  "name",
                                                                   e.target.value
                                                                 )
-                                                              )
-                                                            }
-                                                            className="mt-1"
-                                                          />
-                                                        ) : (
-                                                          <p className="font-medium text-gray-900 mt-1">
-                                                            {product.quantity}
+                                                              }
+                                                              className="mt-1 border-blue-100 focus:border-blue-300"
+                                                            />
+                                                          ) : (
+                                                            <p className="font-medium text-slate-900 mt-1">
+                                                              {product.name}
+                                                            </p>
+                                                          )}
+                                                        </div>
+                                                        <div>
+                                                          <Label className="text-sm text-slate-500 font-medium">
+                                                            Size/Variant
+                                                          </Label>
+                                                          {isEditMode ? (
+                                                            <Input
+                                                              value={
+                                                                product.size
+                                                              }
+                                                              onChange={(e) =>
+                                                                handleProductChange(
+                                                                  index,
+                                                                  "size",
+                                                                  e.target.value
+                                                                )
+                                                              }
+                                                              className="mt-1 border-blue-100 focus:border-blue-300"
+                                                            />
+                                                          ) : (
+                                                            <p className="font-medium text-slate-900 mt-1">
+                                                              {product.size ||
+                                                                "N/A"}
+                                                            </p>
+                                                          )}
+                                                        </div>
+                                                        <div>
+                                                          <Label className="text-sm text-slate-500 font-medium">
+                                                            Quantity
+                                                          </Label>
+                                                          {isEditMode ? (
+                                                            <Input
+                                                              type="number"
+                                                              value={
+                                                                product.quantity
+                                                              }
+                                                              onChange={(e) =>
+                                                                handleProductChange(
+                                                                  index,
+                                                                  "quantity",
+                                                                  Number.parseInt(
+                                                                    e.target
+                                                                      .value
+                                                                  )
+                                                                )
+                                                              }
+                                                              className="mt-1 border-blue-100 focus:border-blue-300"
+                                                            />
+                                                          ) : (
+                                                            <p className="font-medium text-slate-900 mt-1">
+                                                              {product.quantity}
+                                                            </p>
+                                                          )}
+                                                        </div>
+                                                        <div>
+                                                          <Label className="text-sm text-slate-500 font-medium">
+                                                            Unit Price
+                                                          </Label>
+                                                          <p className="font-medium text-slate-900 mt-1">
+                                                            $
+                                                            {product.price?.toFixed(
+                                                              2
+                                                            ) || "0.00"}
                                                           </p>
-                                                        )}
-                                                      </div>
-                                                      <div>
-                                                        <Label className="text-sm text-gray-500 font-medium">
-                                                          Unit Price
-                                                        </Label>
-                                                        <p className="font-medium text-gray-900 mt-1">
-                                                          $
-                                                          {product.price?.toFixed(
-                                                            2
-                                                          ) || "0.00"}
-                                                        </p>
-                                                      </div>
-                                                      <div>
-                                                        <Label className="text-sm text-gray-500 font-medium">
-                                                          Total Price
-                                                        </Label>
-                                                        <p className="font-bold text-blue-600 mt-1">
-                                                          $
-                                                          {(
-                                                            (product.price ||
-                                                              0) *
-                                                            (product.quantity ||
-                                                              1)
-                                                          ).toFixed(2)}
-                                                        </p>
-                                                      </div>
-                                                      <div>
-                                                        <Label className="text-sm text-gray-500 font-medium">
-                                                          Accessory
-                                                        </Label>
-                                                        {isEditMode ? (
-                                                          <Input
-                                                            value={
-                                                              product.accessory
+                                                        </div>
+                                                        <div>
+                                                          <Label className="text-sm text-slate-500 font-medium">
+                                                            Total Price
+                                                          </Label>
+                                                          <p className="font-bold text-indigo-600 mt-1">
+                                                            $
+                                                            {(
+                                                              (product.price ||
+                                                                0) *
+                                                              (product.quantity ||
+                                                                1)
+                                                            ).toFixed(2)}
+                                                          </p>
+                                                        </div>
+                                                        <div>
+                                                          <Label className="text-sm text-slate-500 font-medium">
+                                                            Accessory
+                                                          </Label>
+                                                          {isEditMode ? (
+                                                            <Input
+                                                              value={
+                                                                product.accessory
+                                                              }
+                                                              onChange={(e) =>
+                                                                handleProductChange(
+                                                                  index,
+                                                                  "accessory",
+                                                                  e.target.value
+                                                                )
+                                                              }
+                                                              className="mt-1 border-blue-100 focus:border-blue-300"
+                                                            />
+                                                          ) : (
+                                                            <p className="font-medium text-slate-900 mt-1">
+                                                              {product.accessory ||
+                                                                "None"}
+                                                            </p>
+                                                          )}
+                                                        </div>
+                                                        <div className="flex items-center space-x-2 lg:col-span-2">
+                                                          <Checkbox
+                                                            id={`activeTTS-${index}`}
+                                                            checked={
+                                                              product.activeTTS ||
+                                                              false
                                                             }
-                                                            onChange={(e) =>
+                                                            disabled={
+                                                              !isEditMode
+                                                            }
+                                                            onCheckedChange={(
+                                                              checked
+                                                            ) =>
                                                               handleProductChange(
                                                                 index,
-                                                                "accessory",
-                                                                e.target.value
+                                                                "activeTTS",
+                                                                checked
                                                               )
                                                             }
-                                                            className="mt-1"
                                                           />
-                                                        ) : (
-                                                          <p className="font-medium text-gray-900 mt-1">
-                                                            {product.accessory ||
-                                                              "None"}
-                                                          </p>
-                                                        )}
-                                                      </div>
-                                                      <div className="flex items-center space-x-2 lg:col-span-2">
-                                                        <Checkbox
-                                                          id={`activeTTS-${index}`}
-                                                          checked={
-                                                            product.activeTTS ||
-                                                            false
-                                                          }
-                                                          disabled={!isEditMode}
-                                                          onCheckedChange={(
-                                                            checked
-                                                          ) =>
-                                                            handleProductChange(
-                                                              index,
-                                                              "activeTTS",
-                                                              checked
-                                                            )
-                                                          }
-                                                        />
-                                                        <Label
-                                                          htmlFor={`activeTTS-${index}`}
-                                                          className="text-sm"
-                                                        >
-                                                          Active TTS (+$1.00)
-                                                        </Label>
-                                                      </div>
-                                                    </div>
-
-                                                    <div className="mt-4 pt-4 border-t border-gray-200">
-                                                      <h4 className="font-medium text-sm text-gray-700 mb-3">
-                                                        Order Files for this
-                                                        Product
-                                                      </h4>
-                                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                        {/* Design File */}
-                                                        <div className="border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow bg-gray-50">
-                                                          <Label className="text-xs text-gray-500 font-medium">
-                                                            Design File
+                                                          <Label
+                                                            htmlFor={`activeTTS-${index}`}
+                                                            className="text-sm"
+                                                          >
+                                                            Active TTS (+$1.00)
                                                           </Label>
-                                                          <div className="mt-2">
-                                                            {product.linkFileDesign &&
-                                                            product.linkFileDesign !==
-                                                              "#" ? (
-                                                              <>
-                                                                <img
-                                                                  src={
-                                                                    product.linkFileDesign ||
-                                                                    "/placeholder.svg"
-                                                                  }
-                                                                  alt="Design File"
-                                                                  className="w-full h-32 object-cover rounded border"
-                                                                  onError={(
-                                                                    e
-                                                                  ) => {
-                                                                    console.log(
-                                                                      "[v0] Design file image failed to load:",
-                                                                      e.target
-                                                                        .src
-                                                                    );
-                                                                    e.target.style.display =
-                                                                      "none";
-                                                                    e.target.nextElementSibling.style.display =
-                                                                      "flex";
-                                                                  }}
-                                                                />
-                                                                <div
-                                                                  className="w-full h-32 bg-gray-100 rounded border flex items-center justify-center"
-                                                                  style={{
-                                                                    display:
-                                                                      "none",
-                                                                  }}
-                                                                >
-                                                                  <QrCode className="h-8 w-8 text-gray-400" />
-                                                                </div>
-                                                              </>
-                                                            ) : (
-                                                              <div className="w-full h-32 bg-gray-100 rounded border flex items-center justify-center">
-                                                                <QrCode className="h-8 w-8 text-gray-400" />
-                                                              </div>
-                                                            )}
-                                                            <p className="text-xs mt-2 text-gray-600 truncate">
-                                                              design-file-
-                                                              {index + 1}.psd
-                                                            </p>
-                                                            {product.linkFileDesign &&
+                                                        </div>
+                                                      </div>
+
+                                                      <div className="mt-4 pt-4 border-t border-blue-100">
+                                                        <h4 className="font-medium text-sm text-slate-700 mb-3">
+                                                          Order Files for this
+                                                          Product
+                                                        </h4>
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                          {/* Design File */}
+                                                          <div className="border border-blue-100 rounded-lg p-3 hover:shadow-md transition-shadow bg-blue-50">
+                                                            <Label className="text-xs text-slate-500 font-medium">
+                                                              Design File
+                                                            </Label>
+                                                            <div className="mt-2">
+                                                              {product.linkFileDesign &&
                                                               product.linkFileDesign !==
-                                                                "#" && (
-                                                                <a
-                                                                  href={
-                                                                    product.linkFileDesign
-                                                                  }
-                                                                  target="_blank"
-                                                                  rel="noopener noreferrer"
-                                                                  className="text-xs text-blue-600 hover:underline block mt-1 truncate"
-                                                                >
-                                                                  View file
-                                                                </a>
-                                                              )}
-                                                            <Button
-                                                              variant="outline"
-                                                              size="sm"
-                                                              className="mt-2 w-full bg-transparent hover:bg-gray-50"
-                                                              onClick={() =>
-                                                                handleDownload({
-                                                                  name: `design-file-${
-                                                                    index + 1
-                                                                  }.psd`,
-                                                                  url: product.linkFileDesign,
-                                                                })
-                                                              }
-                                                              disabled={
-                                                                !product.linkFileDesign ||
-                                                                product.linkFileDesign ===
-                                                                  "#"
-                                                              }
-                                                            >
-                                                              <Download className="h-4 w-4 mr-2" />
-                                                              Download
-                                                            </Button>
-                                                          </div>
-                                                        </div>
-
-                                                        {/* Thanks Card */}
-                                                        <div className="border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow bg-gray-50">
-                                                          <Label className="text-xs text-gray-500 font-medium">
-                                                            Thanks Card
-                                                          </Label>
-                                                          <div className="mt-2">
-                                                            {product.linkThanksCard &&
-                                                            product.linkThanksCard !==
-                                                              "#" ? (
-                                                              <>
-                                                                <img
-                                                                  src={
-                                                                    product.linkThanksCard ||
-                                                                    "/placeholder.svg"
-                                                                  }
-                                                                  alt="Thanks Card"
-                                                                  className="w-full h-32 object-cover rounded border"
-                                                                  onError={(
-                                                                    e
-                                                                  ) => {
-                                                                    console.log(
-                                                                      "[v0] Thanks card image failed to load:",
-                                                                      e.target
-                                                                        .src
-                                                                    );
-                                                                    e.target.style.display =
-                                                                      "none";
-                                                                    e.target.nextElementSibling.style.display =
-                                                                      "flex";
-                                                                  }}
-                                                                />
-                                                                <div
-                                                                  className="w-full h-32 bg-gray-100 rounded border flex items-center justify-center"
-                                                                  style={{
-                                                                    display:
-                                                                      "none",
-                                                                  }}
-                                                                >
-                                                                  <QrCode className="h-8 w-8 text-gray-400" />
+                                                                "#" ? (
+                                                                <>
+                                                                  <img
+                                                                    src={
+                                                                      product.linkFileDesign ||
+                                                                      "/placeholder.svg" ||
+                                                                      "/placeholder.svg"
+                                                                    }
+                                                                    alt="Design File"
+                                                                    className="w-full h-32 object-cover rounded border border-blue-200"
+                                                                    onError={(
+                                                                      e
+                                                                    ) => {
+                                                                      console.log(
+                                                                        "[v0] Design file image failed to load:",
+                                                                        e.target
+                                                                          .src
+                                                                      );
+                                                                      e.target.style.display =
+                                                                        "none";
+                                                                      e.target.nextElementSibling.style.display =
+                                                                        "flex";
+                                                                    }}
+                                                                  />
+                                                                  <div
+                                                                    className="w-full h-32 bg-blue-100 rounded border border-blue-200 flex items-center justify-center"
+                                                                    style={{
+                                                                      display:
+                                                                        "none",
+                                                                    }}
+                                                                  >
+                                                                    <QrCode className="h-8 w-8 text-indigo-400" />
+                                                                  </div>
+                                                                </>
+                                                              ) : (
+                                                                <div className="w-full h-32 bg-blue-100 rounded border border-blue-200 flex items-center justify-center">
+                                                                  <QrCode className="h-8 w-8 text-indigo-400" />
                                                                 </div>
-                                                              </>
-                                                            ) : (
-                                                              <div className="w-full h-32 bg-gray-100 rounded border flex items-center justify-center">
-                                                                <QrCode className="h-8 w-8 text-gray-400" />
-                                                              </div>
-                                                            )}
-                                                            <p className="text-xs mt-2 text-gray-600 truncate">
-                                                              thanks-card-
-                                                              {index + 1}.jpg
-                                                            </p>
-                                                            {product.linkThanksCard &&
+                                                              )}
+                                                              <p className="text-xs mt-2 text-slate-600 truncate">
+                                                                design-file-
+                                                                {index + 1}.psd
+                                                              </p>
+                                                              {product.linkFileDesign &&
+                                                                product.linkFileDesign !==
+                                                                  "#" && (
+                                                                  <a
+                                                                    href={
+                                                                      product.linkFileDesign
+                                                                    }
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="text-xs text-indigo-600 hover:underline block mt-1 truncate"
+                                                                  >
+                                                                    View file
+                                                                  </a>
+                                                                )}
+                                                              <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="mt-2 w-full bg-transparent hover:bg-blue-100 border-blue-200"
+                                                                onClick={() =>
+                                                                  handleDownload(
+                                                                    {
+                                                                      name: `design-file-${
+                                                                        index +
+                                                                        1
+                                                                      }.psd`,
+                                                                      url: product.linkFileDesign,
+                                                                    }
+                                                                  )
+                                                                }
+                                                                disabled={
+                                                                  !product.linkFileDesign ||
+                                                                  product.linkFileDesign ===
+                                                                    "#"
+                                                                }
+                                                              >
+                                                                <Download className="h-4 w-4 mr-2" />
+                                                                Download
+                                                              </Button>
+                                                            </div>
+                                                          </div>
+
+                                                          {/* Thanks Card */}
+                                                          <div className="border border-blue-100 rounded-lg p-3 hover:shadow-md transition-shadow bg-blue-50">
+                                                            <Label className="text-xs text-slate-500 font-medium">
+                                                              Thanks Card
+                                                            </Label>
+                                                            <div className="mt-2">
+                                                              {product.linkThanksCard &&
                                                               product.linkThanksCard !==
-                                                                "#" && (
-                                                                <a
-                                                                  href={
-                                                                    product.linkThanksCard
-                                                                  }
-                                                                  target="_blank"
-                                                                  rel="noopener noreferrer"
-                                                                  className="text-xs text-blue-600 hover:underline block mt-1 truncate"
-                                                                >
-                                                                  View file
-                                                                </a>
-                                                              )}
-                                                            <Button
-                                                              variant="outline"
-                                                              size="sm"
-                                                              className="mt-2 w-full bg-transparent hover:bg-gray-50"
-                                                              onClick={() =>
-                                                                handleDownload({
-                                                                  name: `thanks-card-${
-                                                                    index + 1
-                                                                  }.jpg`,
-                                                                  url: product.linkThanksCard,
-                                                                })
-                                                              }
-                                                              disabled={
-                                                                !product.linkThanksCard ||
-                                                                product.linkThanksCard ===
-                                                                  "#"
-                                                              }
-                                                            >
-                                                              <Download className="h-4 w-4 mr-2" />
-                                                              Download
-                                                            </Button>
-                                                          </div>
-                                                        </div>
-                                                        {/* Product Image */}
-                                                        <div className="border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow bg-gray-50">
-                                                          <Label className="text-xs text-gray-500 font-medium">
-                                                            Product Image
-                                                          </Label>
-                                                          <div className="mt-2">
-                                                            {product.linkImg &&
-                                                            product.linkImg !==
-                                                              "#" ? (
-                                                              <>
-                                                                <img
-                                                                  src={
-                                                                    product.linkImg ||
-                                                                    "/placeholder.svg"
-                                                                  }
-                                                                  alt="Product Image"
-                                                                  className="w-full h-32 object-cover rounded border"
-                                                                  onError={(
-                                                                    e
-                                                                  ) => {
-                                                                    console.log(
-                                                                      "[v0] Product image failed to load:",
-                                                                      e.target
-                                                                        .src
-                                                                    );
-                                                                    e.target.style.display =
-                                                                      "none";
-                                                                    e.target.nextElementSibling.style.display =
-                                                                      "flex";
-                                                                  }}
-                                                                />
-                                                                <div
-                                                                  className="w-full h-32 bg-gray-100 rounded border flex items-center justify-center"
-                                                                  style={{
-                                                                    display:
-                                                                      "none",
-                                                                  }}
-                                                                >
-                                                                  <QrCode className="h-8 w-8 text-gray-400" />
+                                                                "#" ? (
+                                                                <>
+                                                                  <img
+                                                                    src={
+                                                                      product.linkThanksCard ||
+                                                                      "/placeholder.svg" ||
+                                                                      "/placeholder.svg"
+                                                                    }
+                                                                    alt="Thanks Card"
+                                                                    className="w-full h-32 object-cover rounded border border-blue-200"
+                                                                    onError={(
+                                                                      e
+                                                                    ) => {
+                                                                      console.log(
+                                                                        "[v0] Thanks card image failed to load:",
+                                                                        e.target
+                                                                          .src
+                                                                      );
+                                                                      e.target.style.display =
+                                                                        "none";
+                                                                      e.target.nextElementSibling.style.display =
+                                                                        "flex";
+                                                                    }}
+                                                                  />
+                                                                  <div
+                                                                    className="w-full h-32 bg-blue-100 rounded border border-blue-200 flex items-center justify-center"
+                                                                    style={{
+                                                                      display:
+                                                                        "none",
+                                                                    }}
+                                                                  >
+                                                                    <QrCode className="h-8 w-8 text-indigo-400" />
+                                                                  </div>
+                                                                </>
+                                                              ) : (
+                                                                <div className="w-full h-32 bg-blue-100 rounded border border-blue-200 flex items-center justify-center">
+                                                                  <QrCode className="h-8 w-8 text-indigo-400" />
                                                                 </div>
-                                                              </>
-                                                            ) : (
-                                                              <div className="w-full h-32 bg-gray-100 rounded border flex items-center justify-center">
-                                                                <QrCode className="h-8 w-8 text-gray-400" />
-                                                              </div>
-                                                            )}
-
-                                                            <p className="text-xs mt-2 text-gray-600 truncate">
-                                                              product-image-
-                                                              {index + 1}.jpg
-                                                            </p>
-
-                                                            {product.linkImg &&
+                                                              )}
+                                                              <p className="text-xs mt-2 text-slate-600 truncate">
+                                                                thanks-card-
+                                                                {index + 1}.jpg
+                                                              </p>
+                                                              {product.linkThanksCard &&
+                                                                product.linkThanksCard !==
+                                                                  "#" && (
+                                                                  <a
+                                                                    href={
+                                                                      product.linkThanksCard
+                                                                    }
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="text-xs text-indigo-600 hover:underline block mt-1 truncate"
+                                                                  >
+                                                                    View file
+                                                                  </a>
+                                                                )}
+                                                              <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="mt-2 w-full bg-transparent hover:bg-blue-100 border-blue-200"
+                                                                onClick={() =>
+                                                                  handleDownload(
+                                                                    {
+                                                                      name: `thanks-card-${
+                                                                        index +
+                                                                        1
+                                                                      }.jpg`,
+                                                                      url: product.linkThanksCard,
+                                                                    }
+                                                                  )
+                                                                }
+                                                                disabled={
+                                                                  !product.linkThanksCard ||
+                                                                  product.linkThanksCard ===
+                                                                    "#"
+                                                                }
+                                                              >
+                                                                <Download className="h-4 w-4 mr-2" />
+                                                                Download
+                                                              </Button>
+                                                            </div>
+                                                          </div>
+                                                          {/* Product Image */}
+                                                          <div className="border border-blue-100 rounded-lg p-3 hover:shadow-md transition-shadow bg-blue-50">
+                                                            <Label className="text-xs text-slate-500 font-medium">
+                                                              Product Image
+                                                            </Label>
+                                                            <div className="mt-2">
+                                                              {product.linkImg &&
                                                               product.linkImg !==
-                                                                "#" && (
-                                                                <a
-                                                                  href={
-                                                                    product.linkImg
-                                                                  }
-                                                                  target="_blank"
-                                                                  rel="noopener noreferrer"
-                                                                  className="text-xs text-blue-600 hover:underline block mt-1 truncate"
-                                                                >
-                                                                  View file
-                                                                </a>
+                                                                "#" ? (
+                                                                <>
+                                                                  <img
+                                                                    src={
+                                                                      product.linkImg ||
+                                                                      "/placeholder.svg" ||
+                                                                      "/placeholder.svg"
+                                                                    }
+                                                                    alt="Product Image"
+                                                                    className="w-full h-32 object-cover rounded border border-blue-200"
+                                                                    onError={(
+                                                                      e
+                                                                    ) => {
+                                                                      console.log(
+                                                                        "[v0] Product image failed to load:",
+                                                                        e.target
+                                                                          .src
+                                                                      );
+                                                                      e.target.style.display =
+                                                                        "none";
+                                                                      e.target.nextElementSibling.style.display =
+                                                                        "flex";
+                                                                    }}
+                                                                  />
+                                                                  <div className="w-full h-32 bg-blue-100 rounded border border-blue-200 flex items-center justify-center">
+                                                                    <QrCode className="h-8 w-8 text-indigo-400" />
+                                                                  </div>
+                                                                </>
+                                                              ) : (
+                                                                <div className="w-full h-32 bg-blue-100 rounded border border-blue-200 flex items-center justify-center">
+                                                                  <QrCode className="h-8 w-8 text-indigo-400" />
+                                                                </div>
                                                               )}
 
-                                                            <Button
-                                                              variant="outline"
-                                                              size="sm"
-                                                              className="mt-2 w-full bg-transparent hover:bg-gray-50"
-                                                              onClick={() =>
-                                                                handleDownload({
-                                                                  name: `product-image-${
-                                                                    index + 1
-                                                                  }.jpg`,
-                                                                  url: product.linkImg,
-                                                                })
-                                                              }
-                                                              disabled={
-                                                                !product.linkImg ||
-                                                                product.linkImg ===
-                                                                  "#"
-                                                              }
-                                                            >
-                                                              <Download className="h-4 w-4 mr-2" />
-                                                              Download
-                                                            </Button>
+                                                              <p className="text-xs mt-2 text-slate-600 truncate">
+                                                                product-image-
+                                                                {index + 1}.jpg
+                                                              </p>
+
+                                                              {product.linkImg &&
+                                                                product.linkImg !==
+                                                                  "#" && (
+                                                                  <a
+                                                                    href={
+                                                                      product.linkImg
+                                                                    }
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="text-xs text-indigo-600 hover:underline block mt-1 truncate"
+                                                                  >
+                                                                    View file
+                                                                  </a>
+                                                                )}
+
+                                                              <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="mt-2 w-full bg-transparent hover:bg-blue-100 border-blue-200"
+                                                                onClick={() =>
+                                                                  handleDownload(
+                                                                    {
+                                                                      name: `product-image-${
+                                                                        index +
+                                                                        1
+                                                                      }.jpg`,
+                                                                      url: product.linkImg,
+                                                                    }
+                                                                  )
+                                                                }
+                                                                disabled={
+                                                                  !product.linkImg ||
+                                                                  product.linkImg ===
+                                                                    "#"
+                                                                }
+                                                              >
+                                                                <Download className="h-4 w-4 mr-2" />
+                                                                Download
+                                                              </Button>
+                                                            </div>
                                                           </div>
                                                         </div>
                                                       </div>
                                                     </div>
-                                                    {/* </CHANGE> */}
-                                                  </div>
-                                                )
+                                                  )
+                                                )}
+                                              </div>
+                                              {editedOrder.orderNotes && (
+                                                <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                                                  <Label className="text-sm text-amber-800 font-medium">
+                                                    Order Notes
+                                                  </Label>
+                                                  {isEditMode ? (
+                                                    <Textarea
+                                                      value={
+                                                        editedOrder.orderNotes
+                                                      }
+                                                      onChange={(e) =>
+                                                        handleFieldChange(
+                                                          "orderNotes",
+                                                          e.target.value
+                                                        )
+                                                      }
+                                                      className="mt-1 bg-white border-amber-200 focus:border-amber-300"
+                                                      rows={3}
+                                                    />
+                                                  ) : (
+                                                    <p className="text-amber-800 mt-1">
+                                                      {editedOrder.orderNotes}
+                                                    </p>
+                                                  )}
+                                                </div>
                                               )}
                                             </div>
-                                            {editedOrder.orderNotes && (
-                                              <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                                <Label className="text-sm text-yellow-700 font-medium">
-                                                  Order Notes
-                                                </Label>
-                                                {isEditMode ? (
-                                                  <Textarea
-                                                    value={
-                                                      editedOrder.orderNotes
-                                                    }
-                                                    onChange={(e) =>
-                                                      handleFieldChange(
-                                                        "orderNotes",
-                                                        e.target.value
-                                                      )
-                                                    }
-                                                    className="mt-1 bg-white"
-                                                    rows={3}
-                                                  />
-                                                ) : (
-                                                  <p className="text-yellow-800 mt-1">
-                                                    {editedOrder.orderNotes}
+
+                                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                              <h3 className="font-semibold text-lg mb-3 text-slate-900">
+                                                Order Status & Timeline
+                                              </h3>
+                                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                <div>
+                                                  <Label className="text-sm text-slate-500 font-medium">
+                                                    Current Status
+                                                  </Label>
+                                                  {isEditMode ? (
+                                                    <Select
+                                                      value={editedOrder.status}
+                                                      onValueChange={(value) =>
+                                                        handleFieldChange(
+                                                          "status",
+                                                          value
+                                                        )
+                                                      }
+                                                    >
+                                                      <SelectTrigger className="mt-1 bg-white border-blue-100 focus:border-blue-300">
+                                                        <SelectValue />
+                                                      </SelectTrigger>
+                                                      <SelectContent>
+                                                        <SelectItem value="Draft">
+                                                          Draft
+                                                        </SelectItem>
+                                                        <SelectItem value="Pending Design">
+                                                          Pending Design
+                                                        </SelectItem>
+                                                        <SelectItem value="Assigned Designer">
+                                                          Assigned Designer
+                                                        </SelectItem>
+                                                        <SelectItem value="Designing">
+                                                          Designing
+                                                        </SelectItem>
+                                                        <SelectItem value="Check File Design">
+                                                          Check File Design
+                                                        </SelectItem>
+                                                        <SelectItem value="Seller Approved Design">
+                                                          Seller Approved Design
+                                                        </SelectItem>
+                                                        <SelectItem value="Seller Reject Design">
+                                                          Seller Reject Design
+                                                        </SelectItem>
+                                                        <SelectItem value="In Progress">
+                                                          In Progress
+                                                        </SelectItem>
+                                                        <SelectItem value="Completed">
+                                                          Completed
+                                                        </SelectItem>
+                                                      </SelectContent>
+                                                    </Select>
+                                                  ) : (
+                                                    <div className="mt-1">
+                                                      {getStatusBadge(
+                                                        editedOrder.status
+                                                      )}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                                <div>
+                                                  <Label className="text-sm text-slate-500 font-medium">
+                                                    Order Date
+                                                  </Label>
+                                                  <p className="font-medium text-slate-900 mt-1">
+                                                    {editedOrder.orderDate}
                                                   </p>
-                                                )}
+                                                </div>
+                                                <div>
+                                                  <Label className="text-sm text-slate-500 font-medium">
+                                                    Created Time
+                                                  </Label>
+                                                  <p className="font-medium text-slate-900 mt-1">
+                                                    {editedOrder.timeCreated ||
+                                                      "N/A"}
+                                                  </p>
+                                                </div>
+                                                <div>
+                                                  <Label className="text-sm text-slate-500 font-medium">
+                                                    Order ID
+                                                  </Label>
+                                                  <p className="font-medium text-slate-900 mt-1">
+                                                    {editedOrder.orderId}
+                                                  </p>
+                                                </div>
+                                                <div>
+                                                  <Label className="text-sm text-slate-500 font-medium">
+                                                    Total Amount
+                                                  </Label>
+                                                  <p className="font-bold text-indigo-600 text-lg mt-1">
+                                                    {editedOrder.totalAmount}
+                                                  </p>
+                                                </div>
                                               </div>
-                                            )}
-                                          </div>
+                                            </div>
 
-                                          <div className="bg-gray-50 p-4 rounded-lg">
-                                            <h3 className="font-semibold text-lg mb-3 text-gray-900">
-                                              Order Status & Timeline
-                                            </h3>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                              <div>
-                                                <Label className="text-sm text-gray-500 font-medium">
-                                                  Current Status
-                                                </Label>
-                                                {isEditMode ? (
-                                                  <Select
-                                                    value={editedOrder.status}
-                                                    onValueChange={(value) =>
-                                                      handleFieldChange(
-                                                        "status",
-                                                        value
-                                                      )
-                                                    }
-                                                  >
-                                                    <SelectTrigger className="mt-1 bg-white">
-                                                      <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                      <SelectItem value="Draft">
-                                                        Draft
-                                                      </SelectItem>
-                                                      <SelectItem value="Pending Design">
-                                                        Pending Design
-                                                      </SelectItem>
-                                                      <SelectItem value="Assigned Designer">
-                                                        Assigned Designer
-                                                      </SelectItem>
-                                                      <SelectItem value="Designing">
-                                                        Designing
-                                                      </SelectItem>
-                                                      <SelectItem value="Check File Design">
-                                                        Check File Design
-                                                      </SelectItem>
-                                                      <SelectItem value="Seller Approved Design">
-                                                        Seller Approved Design
-                                                      </SelectItem>
-                                                      <SelectItem value="Seller Reject Design">
-                                                        Seller Reject Design
-                                                      </SelectItem>
-                                                      <SelectItem value="In Progress">
-                                                        In Progress
-                                                      </SelectItem>
-                                                      <SelectItem value="Completed">
-                                                        Completed
-                                                      </SelectItem>
-                                                    </SelectContent>
-                                                  </Select>
-                                                ) : (
-                                                  <div className="mt-1">
-                                                    {getStatusBadge(
-                                                      editedOrder.status
-                                                    )}
-                                                  </div>
-                                                )}
-                                              </div>
-                                              <div>
-                                                <Label className="text-sm text-gray-500 font-medium">
-                                                  Order Date
-                                                </Label>
-                                                <p className="font-medium text-gray-900 mt-1">
-                                                  {editedOrder.orderDate}
-                                                </p>
-                                              </div>
-                                              <div>
-                                                <Label className="text-sm text-gray-500 font-medium">
-                                                  Created Time
-                                                </Label>
-                                                <p className="font-medium text-gray-900 mt-1">
-                                                  {editedOrder.timeCreated ||
-                                                    "N/A"}
-                                                </p>
-                                              </div>
-                                              <div>
-                                                <Label className="text-sm text-gray-500 font-medium">
-                                                  Order ID
-                                                </Label>
-                                                <p className="font-medium text-gray-900 mt-1">
-                                                  {editedOrder.orderId}
-                                                </p>
-                                              </div>
-                                              <div>
-                                                <Label className="text-sm text-gray-500 font-medium">
-                                                  Total Amount
-                                                </Label>
-                                                <p className="font-bold text-green-600 text-lg mt-1">
-                                                  {editedOrder.totalAmount}
-                                                </p>
+                                            {/* QR Code Section */}
+                                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                              <h4 className="font-medium mb-2 text-slate-900">
+                                                QR Code for Order{" "}
+                                                {editedOrder.orderId}
+                                              </h4>
+                                              <div className="w-32 h-32 bg-white border-2 border-blue-300 rounded flex items-center justify-center">
+                                                <QrCode className="h-16 w-16 text-indigo-400" />
                                               </div>
                                             </div>
                                           </div>
-
-                                          {/* QR Code Section */}
-                                          <div className="bg-gray-50 p-4 rounded-lg">
-                                            <h4 className="font-medium mb-2 text-gray-900">
-                                              QR Code for Order{" "}
-                                              {editedOrder.orderId}
-                                            </h4>
-                                            <div className="w-32 h-32 bg-white border-2 border-gray-300 rounded flex items-center justify-center">
-                                              <QrCode className="h-16 w-16 text-gray-400" />
-                                            </div>
-                                          </div>
-                                        </div>
-                                      )}
-                                      {editedOrder?.status ===
-                                        "Cần Check Design" &&
-                                        !isEditMode && (
+                                        )}
+                                        {editedOrder?.status ===
+                                          "Cần Check Design" &&
+                                          !isEditMode && (
+                                            <DialogFooter className="flex gap-2">
+                                              <Button
+                                                variant="outline"
+                                                onClick={() =>
+                                                  setIsDialogOpen(false)
+                                                }
+                                              >
+                                                Close
+                                              </Button>
+                                              <Button
+                                                onClick={() =>
+                                                  handleRejectDesign(
+                                                    editedOrder.id
+                                                  )
+                                                }
+                                                className="bg-red-600 hover:bg-red-700"
+                                              >
+                                                ✕ Reject Design
+                                              </Button>
+                                              <Button
+                                                onClick={() =>
+                                                  handleApproveDesign(
+                                                    editedOrder.id
+                                                  )
+                                                }
+                                                className="bg-green-600 hover:bg-green-700"
+                                              >
+                                                ✓ Approve Design
+                                              </Button>
+                                            </DialogFooter>
+                                          )}
+                                        {isEditMode && (
                                           <DialogFooter className="flex gap-2">
                                             <Button
                                               variant="outline"
-                                              onClick={() =>
-                                                setIsDialogOpen(false)
-                                              }
+                                              onClick={handleCancelEdit}
                                             >
-                                              Close
+                                              Cancel
                                             </Button>
                                             <Button
-                                              onClick={() =>
-                                                handleRejectDesign(
-                                                  editedOrder.id
-                                                )
-                                              }
-                                              className="bg-red-600 hover:bg-red-700"
+                                              onClick={handleSaveUpdate}
+                                              className="bg-indigo-600 hover:bg-indigo-700"
                                             >
-                                              ✕ Reject Design
-                                            </Button>
-                                            <Button
-                                              onClick={() =>
-                                                handleApproveDesign(
-                                                  editedOrder.id
-                                                )
-                                              }
-                                              className="bg-green-600 hover:bg-green-700"
-                                            >
-                                              ✓ Approve Design
+                                              <Save className="h-4 w-4 mr-2" />
+                                              Save Changes
                                             </Button>
                                           </DialogFooter>
                                         )}
-                                      {isEditMode && (
-                                        <DialogFooter className="flex gap-2">
-                                          <Button
-                                            variant="outline"
-                                            onClick={handleCancelEdit}
-                                          >
-                                            Cancel
-                                          </Button>
-                                          <Button
-                                            onClick={handleSaveUpdate}
-                                            className="bg-blue-600 hover:bg-blue-700"
-                                          >
-                                            <Save className="h-4 w-4 mr-2" />
-                                            Save Changes
-                                          </Button>
-                                        </DialogFooter>
-                                      )}
-                                    </DialogContent>
-                                  </Dialog>
-                                  <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="bg-transparent hover:bg-red-50 text-red-600 hover:text-red-700"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                      <AlertDialogHeader>
-                                        <AlertDialogTitle>
-                                          Delete Order
-                                        </AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                          Are you sure you want to delete order{" "}
-                                          {order.orderId}? This action cannot be
-                                          undone.
-                                        </AlertDialogDescription>
-                                      </AlertDialogHeader>
-                                      <AlertDialogFooter>
-                                        <AlertDialogCancel>
-                                          Cancel
-                                        </AlertDialogCancel>
-                                        <AlertDialogAction
-                                          onClick={() => handleDelete(order.id)}
-                                          className="bg-red-600 hover:bg-red-700"
+                                      </DialogContent>
+                                    </Dialog>
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="bg-transparent hover:bg-red-50 text-red-600 hover:text-red-700 border-red-200"
                                         >
-                                          Delete
-                                        </AlertDialogAction>
-                                      </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                  </AlertDialog>
-                                </div>
-                              </TableCell>
-                            </TableRow>
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>
+                                            Delete Order
+                                          </AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            Are you sure you want to delete
+                                            order {order.orderId}? This action
+                                            cannot be undone.
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>
+                                            Cancel
+                                          </AlertDialogCancel>
+                                          <AlertDialogAction
+                                            onClick={() =>
+                                              handleDelete(order.id)
+                                            }
+                                            className="bg-red-600 hover:bg-red-700"
+                                          >
+                                            Delete
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+
+                              {expandedOrderId === order.id &&
+                                order.products &&
+                                order.products.length > 0 && (
+                                  <TableRow className="bg-blue-100">
+                                    <TableCell colSpan={8} className="p-4">
+                                      <div className="space-y-3">
+                                        <h4 className="font-semibold text-slate-900 text-sm">
+                                          Order Items:
+                                        </h4>
+                                        <div className="space-y-2">
+                                          {order.products.map((item, idx) => (
+                                            <div
+                                              key={idx}
+                                              className="flex items-start gap-3 p-3 bg-white rounded border border-blue-200 hover:shadow-sm transition-shadow"
+                                            >
+                                              {/* Product Image */}
+                                              {item.linkImg ? (
+                                                <img
+                                                  src={
+                                                    item.linkImg ||
+                                                    "/placeholder.svg"
+                                                  }
+                                                  alt={item.name || "Product"}
+                                                  className="w-16 h-16 rounded object-cover border border-blue-200"
+                                                />
+                                              ) : (
+                                                <div className="w-16 h-16 rounded bg-blue-100 border border-blue-200 flex items-center justify-center text-slate-400 text-xs">
+                                                  No Image
+                                                </div>
+                                              )}
+                                              {/* Item Details */}
+                                              <div className="flex-1">
+                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                                  <div>
+                                                    <span className="text-slate-600 font-medium">
+                                                      Price:
+                                                    </span>
+                                                    <p className="text-slate-900 font-semibold">
+                                                      ${item.price || "0"}
+                                                    </p>
+                                                  </div>
+                                                  <div>
+                                                    <span className="text-slate-600 font-medium">
+                                                      Quantity:
+                                                    </span>
+                                                    <p className="text-slate-900 font-semibold">
+                                                      {item.quantity || "0"}
+                                                    </p>
+                                                  </div>
+                                                  <div>
+                                                    <span className="text-slate-600 font-medium">
+                                                      Total:
+                                                    </span>
+                                                    <p className="text-indigo-600 font-bold">
+                                                      $
+                                                      {(
+                                                        Number.parseFloat(
+                                                          item.price || 0
+                                                        ) * (item.quantity || 0)
+                                                      ).toFixed(2)}
+                                                    </p>
+                                                  </div>
+                                                  <div>
+                                                    <span className="text-slate-600 font-medium">
+                                                      Name:
+                                                    </span>
+                                                    <p className="text-slate-900">
+                                                      {item.name || "N/A"}
+                                                    </p>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                            </>
                           ))
                         )}
                       </TableBody>
                     </Table>
                   </div>
 
-                  <div className="bg-gray-50 px-4 py-3 border-t border-gray-200 sm:px-6">
+                  {/* Pagination Footer */}
+                  <div className="bg-blue-100 px-4 py-3 border-t border-blue-200 sm:px-6">
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-700">Show</span>
-                        <select
-                          value={itemsPerPage}
-                          onChange={(e) =>
-                            handleItemsPerPageChange(e.target.value)
-                          }
-                          className="px-2 py-1 border border-gray-300 rounded-md text-sm"
-                        >
-                          <option value="5">5</option>
-                          <option value="10">10</option>
-                          <option value="20">20</option>
-                          <option value="50">50</option>
-                        </select>
-                        <span className="text-sm text-gray-700">per page</span>
+                      <div className="text-sm text-slate-600">
+                        Showing{" "}
+                        {paginatedOrders.length > 0
+                          ? (page - 1) * itemsPerPage + 1
+                          : 0}{" "}
+                        to{" "}
+                        {Math.min(page * itemsPerPage, filteredOrders.length)}{" "}
+                        of {filteredOrders.length}
                       </div>
-
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-700">
-                          Showing {startIndex + 1} to{" "}
-                          {Math.min(endIndex, sortedOrders.length)} of{" "}
-                          {sortedOrders.length} results
-                        </span>
-                      </div>
-
                       <div className="flex items-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setPage(page - 1)}
                           disabled={page === 1}
-                          className="disabled:opacity-50"
+                          onClick={() => setPage(page - 1)}
+                          className="disabled:opacity-50 border-blue-200 hover:bg-blue-50"
                         >
                           <ChevronLeft className="h-4 w-4" />
-                          <span className="hidden sm:inline ml-1">
-                            Previous
-                          </span>
                         </Button>
-
-                        <div className="flex items-center gap-1">
-                          {Array.from(
-                            { length: Math.min(5, totalPages) },
-                            (_, i) => {
-                              let pageNum;
-                              if (totalPages <= 5) {
-                                pageNum = i + 1;
-                              } else if (page <= 3) {
-                                pageNum = i + 1;
-                              } else if (page >= totalPages - 2) {
-                                pageNum = totalPages - 4 + i;
-                              } else {
-                                pageNum = page - 2 + i;
-                              }
-                              return (
-                                <Button
-                                  key={pageNum}
-                                  variant={
-                                    page === pageNum ? "default" : "outline"
-                                  }
-                                  size="sm"
-                                  onClick={() => setPage(pageNum)}
-                                  className="w-8 h-8 p-0"
-                                >
-                                  {pageNum}
-                                </Button>
-                              );
-                            }
-                          )}
-                        </div>
-
+                        {Array.from(
+                          { length: totalPages },
+                          (_, i) => i + 1
+                        ).map((pageNum) => (
+                          <Button
+                            key={pageNum}
+                            variant={page === pageNum ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setPage(pageNum)}
+                            className={`w-8 h-8 p-0 ${
+                              page === pageNum
+                                ? "bg-indigo-600 hover:bg-indigo-700"
+                                : "border-blue-200 hover:bg-blue-50"
+                            }`}
+                          >
+                            {pageNum}
+                          </Button>
+                        ))}
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setPage(page + 1)}
                           disabled={page === totalPages}
-                          className="disabled:opacity-50"
+                          onClick={() => setPage(page + 1)}
+                          className="disabled:opacity-50 border-blue-200 hover:bg-blue-50"
                         >
-                          <span className="hidden sm:inline mr-1">Next</span>
                           <ChevronRight className="h-4 w-4" />
                         </Button>
                       </div>
@@ -2446,7 +2550,7 @@ export default function ManageOrder() {
                 <AlertDialogDescription>{resultMessage}</AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogAction onClick={() => setShowResultDialog(false)}>
+                <AlertDialogAction className="bg-indigo-600 hover:bg-indigo-700">
                   OK
                 </AlertDialogAction>
               </AlertDialogFooter>
@@ -2454,7 +2558,6 @@ export default function ManageOrder() {
           </AlertDialog>
         </main>
       </div>
-
       <MakeManualModal
         isOpen={showMakeManualModal}
         onClose={() => setShowMakeManualModal(false)}
@@ -2475,7 +2578,7 @@ export default function ManageOrder() {
               value={selectedDesignerId}
               onValueChange={(value) => setSelectedDesignerId(value)}
             >
-              <SelectTrigger>
+              <SelectTrigger className="border-blue-100 focus:border-blue-300">
                 <SelectValue placeholder="Choose designer" />
               </SelectTrigger>
               <SelectContent>
@@ -2491,10 +2594,16 @@ export default function ManageOrder() {
               <Button
                 variant="outline"
                 onClick={() => setIsAssignPopupOpen(false)}
+                className="border-blue-100 hover:bg-blue-50"
               >
                 Cancel
               </Button>
-              <Button onClick={handleConfirmAssignDesigner}>OK</Button>
+              <Button
+                onClick={handleConfirmAssignDesigner}
+                className="bg-indigo-600 hover:bg-indigo-700"
+              >
+                OK
+              </Button>
             </div>
           </div>
         </DialogContent>
@@ -2507,11 +2616,15 @@ export default function ManageOrder() {
           </DialogHeader>
           <p className="text-gray-700 py-4">{successMessage}</p>
           <DialogFooter>
-            <Button onClick={() => setShowSuccessDialog(false)}>OK</Button>
+            <Button
+              onClick={() => setShowSuccessDialog(false)}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              OK
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       {/* ❌ Error Dialog */}
       <Dialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
         <DialogContent>
@@ -2520,7 +2633,12 @@ export default function ManageOrder() {
           </DialogHeader>
           <p className="text-gray-700 py-4">{errorMessage}</p>
           <DialogFooter>
-            <Button onClick={() => setShowErrorDialog(false)}>Close</Button>
+            <Button
+              onClick={() => setShowErrorDialog(false)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Close
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
