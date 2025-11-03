@@ -24,12 +24,19 @@ export default function DashboardContent() {
           credentials: "include",
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        console.log("📦 Orders fetched:", data);
-        setOrders(data || []);
+
+        // ✅ Sửa lỗi: Nhận response từ BE (hiện đã là cấu trúc phân trang {total, orders})
+        const responseData = await res.json();
+
+        // ✅ Lấy mảng orders từ object response
+        const orderList = responseData.orders || responseData || [];
+
+        console.log("📦 Orders fetched:", orderList);
+        setOrders(orderList); // Gán mảng đơn hàng thực tế
       } catch (err) {
         console.error("❌ Fetch orders failed:", err);
-        alert("Không thể tải danh sách đơn hàng: " + err.message);
+        //alert("Không thể tải danh sách đơn hàng: " + err.message); // Giữ lại alert nếu cần
+        setOrders([]); // Đảm bảo orders là mảng rỗng nếu lỗi
       } finally {
         setLoading(false);
       }
@@ -91,10 +98,14 @@ export default function DashboardContent() {
     },
   ];
 
+  // ✅ Sửa lỗi: Đảm bảo orders là một mảng trước khi gọi filter
+  const safeOrders = Array.isArray(orders) ? orders : [];
+
   let statsWithCounts = stats.map((stat) => ({
     ...stat,
     value: stat.statusFilter
-      ? orders.filter(
+      ? safeOrders.filter(
+          // ✅ Sử dụng safeOrders
           (o) => (o.status || o.statusOderName) === stat.statusFilter
         ).length
       : 0,
@@ -107,12 +118,16 @@ export default function DashboardContent() {
   statsWithCounts[0].value = totalCount;
 
   // ===== Lấy Top 5 order mới nhất =====
-  const recentOrders = [...orders]
+  // ✅ Sửa lỗi: Đảm bảo orders là mảng trước khi dùng sort
+  const recentOrders = [...safeOrders]
     .sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate))
     .slice(0, 5);
 
   // ===== Tổng tiền toàn bộ đơn hàng =====
-  const totalRevenue = orders.reduce((sum, o) => sum + (o.totalCost || 0), 0);
+  const totalRevenue = safeOrders.reduce(
+    (sum, o) => sum + (o.totalCost || 0),
+    0
+  );
 
   return (
     <div className="space-y-6">
