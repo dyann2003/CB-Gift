@@ -101,6 +101,7 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddHttpClient();
 
 // ================== CORS (cho Next.js FE) ==================
 builder.Services.AddCors(options =>
@@ -134,6 +135,8 @@ builder.Services.AddScoped<ITagService, TagService>();
 builder.Services.AddScoped<IDesignerSellerService, DesignerSellerService>();
 builder.Services.AddScoped<IDesignerTaskService, DesignerTaskService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+builder.Services.AddScoped<IHuggingFaceService, HuggingFaceService>();
+builder.Services.AddScoped<IAiStudioService, AiStudioService>();
 
 // --- Quartz ---
 builder.Services.AddQuartz(q =>
