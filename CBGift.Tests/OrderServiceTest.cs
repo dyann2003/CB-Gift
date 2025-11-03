@@ -278,7 +278,7 @@ namespace CB_Gift.Tests.Services
         [Fact]
         public async Task SellerApproveOrderDetailDesignAsync_Updates_Single_Detail()
         {
-            var ok = await _svc.SellerApproveOrderDetailDesignAsync(1000, ProductionStatus.READY_PROD, "sellerA");
+            var ok = await _svc.SellerApproveOrderDetailDesignAsync(1000, ProductionStatus.READY_PROD, "sellerA","reason");
             ok.Should().BeTrue();
 
             (await _db.OrderDetails.FindAsync(1000))!.ProductionStatus.Should().Be(ProductionStatus.READY_PROD);
