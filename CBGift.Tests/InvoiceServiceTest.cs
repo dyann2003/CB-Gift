@@ -1,16 +1,21 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using CB_Gift.Data;
-using CB_Gift.Models;
+﻿using CB_Gift.Data;
 using CB_Gift.DTOs;
+using CB_Gift.Hubs;
+using CB_Gift.Models;
 using CB_Gift.Services;
+using CB_Gift.Services.IService;
+using FluentAssertions;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Moq;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Xunit;
-using FluentAssertions;
 
 namespace CB_Gift.Tests.Services
 {
@@ -20,7 +25,7 @@ namespace CB_Gift.Tests.Services
         {
             var options = new DbContextOptionsBuilder<CBGiftDbContext>()
                 .UseInMemoryDatabase(databaseName: dbName)
-                // QUAN TRỌNG: tắt cảnh báo TransactionIgnoredWarning để tránh throw InvalidOperationException
+                // tránh cảnh báo transaction của InMemory
                 .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
                 .EnableSensitiveDataLogging()
                 .Options;
@@ -32,7 +37,7 @@ namespace CB_Gift.Tests.Services
         {
             var dict = new Dictionary<string, string?>
             {
-                // Giá trị mock để InvoiceService khởi tạo PayOS (nhưng ta sẽ không gọi tới)
+                // các giá trị mock để khởi tạo PayOS (không gọi tới trong các test bên dưới)
                 ["PayOS:ClientId"] = "dummy",
                 ["PayOS:ApiKey"] = "dummy",
                 ["PayOS:ChecksumKey"] = "dummy",
@@ -40,19 +45,70 @@ namespace CB_Gift.Tests.Services
             return new ConfigurationBuilder().AddInMemoryCollection(dict!).Build();
         }
 
+        /// <summary>
+        /// Tạo InvoiceService với đầy đủ mocks cho Notification & SignalR.
+        /// </summary>
+        private static InvoiceService CreateService(
+            CBGiftDbContext db,
+            out Mock<INotificationService> notifyMock,
+            out Mock<IHubContext<NotificationHub>> hubCtxMock,
+            out Mock<IHubClients> hubClientsMock,
+            out Mock<IClientProxy> clientProxyMock,
+            out ILogger<InvoiceService> logger)
+        {
+            // Notification
+            notifyMock = new Mock<INotificationService>(MockBehavior.Strict);
+            notifyMock
+                .Setup(n => n.CreateAndSendNotificationAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>()))
+                .Returns(Task.CompletedTask);
+
+            // SignalR
+            clientProxyMock = new Mock<IClientProxy>(MockBehavior.Strict);
+            clientProxyMock
+                .Setup(p => p.SendCoreAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<object[]>(),
+                    It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
+
+            hubClientsMock = new Mock<IHubClients>(MockBehavior.Strict);
+            hubClientsMock
+                .Setup(c => c.Group(It.IsAny<string>()))
+                .Returns(clientProxyMock.Object);
+
+            hubCtxMock = new Mock<IHubContext<NotificationHub>>(MockBehavior.Strict);
+            hubCtxMock
+                .SetupGet(h => h.Clients)
+                .Returns(hubClientsMock.Object);
+
+            logger = Mock.Of<ILogger<InvoiceService>>();
+
+            return new InvoiceService(
+                db,
+                CreateConfig(),
+                notifyMock.Object,
+                hubCtxMock.Object,
+                logger
+            );
+        }
+
+        /// <summary>
+        /// Bản rút gọn nếu không cần bắt mocks ở ngoài.
+        /// </summary>
+        private static InvoiceService CreateService(CBGiftDbContext db)
+            => CreateService(db, out _, out _, out _, out _, out _);
+
         private static async Task SeedBasicAsync(CBGiftDbContext db)
         {
-            // Seller & Staff
             var sellerId = "seller-1";
             var staffId = "staff-1";
 
             db.Users.Add(new AppUser { Id = sellerId, UserName = "seller@example.com" });
             db.Users.Add(new AppUser { Id = staffId, UserName = "staff@example.com" });
 
-            //// Status dictionary if used by Order.StatusOrderNavigation (optional)
-            //db.StatusOrders.Add(new StatusOrder { StatusOrderId = 1, StatusName = "New" });
-
-            // Một vài order
             db.Orders.AddRange(
                 new Order
                 {
@@ -88,10 +144,6 @@ namespace CB_Gift.Tests.Services
 
             await db.SaveChangesAsync();
         }
-
-        private static InvoiceService CreateService(CBGiftDbContext db)
-            => new InvoiceService(db, CreateConfig());
-
         // ---------- TESTS ----------
 
         [Fact]

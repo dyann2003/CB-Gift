@@ -1,7 +1,9 @@
 ﻿using CB_Gift.Data;
 using CB_Gift.DTOs;
+using CB_Gift.Hubs;
 using CB_Gift.Models;
 using CB_Gift.Services.IService;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Net.payOS;
 using Net.payOS.Types;
@@ -13,10 +15,18 @@ public class InvoiceService : IInvoiceService
 {
     private readonly CBGiftDbContext _context;
     private readonly PayOS _payOS;
+    private readonly INotificationService _notificationService;
+    private readonly IHubContext<NotificationHub> _hubContext;
+    private readonly ILogger<InvoiceService> _logger;
 
-    public InvoiceService(CBGiftDbContext context, IConfiguration configuration)
+    public InvoiceService(CBGiftDbContext context, IConfiguration configuration,INotificationService notificationService,
+        IHubContext<NotificationHub> hubContext,
+        ILogger<InvoiceService> logger)
     {
         _context = context;
+        _notificationService = notificationService;
+        _hubContext = hubContext; 
+        _logger = logger;
         _payOS = new PayOS(
             configuration["PayOS:ClientId"],
             configuration["PayOS:ApiKey"],
@@ -128,6 +138,29 @@ public class InvoiceService : IInvoiceService
 
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
+            // ✅ BẮT ĐẦU GỬI THÔNG BÁO (SAU KHI COMMIT THÀNH CÔNG)
+            try
+            {
+                // 1. Gửi thông báo (chuông) đến Seller
+                await _notificationService.CreateAndSendNotificationAsync(
+                    newInvoice.SellerUserId,
+                    $"Bạn có một hóa đơn mới #{newInvoice.InvoiceNumber} với tổng tiền {newInvoice.TotalAmount:C0}.",
+                    $"/seller/invoices/{newInvoice.InvoiceId}" // Link để seller xem hóa đơn
+                );
+
+                // 2. Gửi sự kiện real-time để cập nhật UI
+                // Gửi đến "phòng" của Seller
+                await _hubContext.Clients.Group($"user_{newInvoice.SellerUserId}").SendAsync(
+                    "NewInvoiceCreated",
+                    newInvoice // Gửi đi đối tượng hóa đơn vừa tạo
+                );
+            }
+            catch (Exception ex)
+            {
+                // Ghi log lỗi nhưng không làm hỏng kết quả trả về
+                _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho CreateInvoiceAsync (InvoiceID: {InvoiceId})", newInvoice.InvoiceId);
+            }
+            // ✅ KẾT THÚC GỬI THÔNG BÁO
             return newInvoice;
         }
         catch
@@ -245,7 +278,8 @@ public class InvoiceService : IInvoiceService
     {
         var log = await _context.WebhookLogs.FindAsync(webhookLogId);
         if (log == null || log.ProcessingStatus != "Received") return;
-
+        Invoice invoiceForNotification = null;
+        List<Order> ordersForNotification = new List<Order>();
         try
         {
             var payload = JsonConvert.DeserializeObject<WebhookType>(log.RawPayload);
@@ -253,7 +287,7 @@ public class InvoiceService : IInvoiceService
             WebhookData verifiedData = _payOS.verifyPaymentWebhookData(payload);
             log.ProcessingStatus = "Verified";
 
-            // SỬA LỖI 1: Kiểm tra "success" 
+            // Kiểm tra "success" 
             if (verifiedData?.desc?.Equals("success", StringComparison.OrdinalIgnoreCase) == true || verifiedData?.desc?.Equals("Thành công", StringComparison.OrdinalIgnoreCase) == true)
             {
                 int invoiceId = (int)verifiedData.orderCode;
@@ -261,13 +295,14 @@ public class InvoiceService : IInvoiceService
                               .Include(i=>i.Items)
                               .FirstOrDefaultAsync(i=>i.InvoiceId==invoiceId);
 
-                // SỬA LỖI 2: Xử lý trường hợp không tìm thấy hóa đơn
+                // Xử lý trường hợp không tìm thấy hóa đơn
                 if (invoice == null)
                 {
                     // Biến lỗi "im lặng" thành lỗi rõ ràng
                     throw new Exception($"Webhook đã được xác thực nhưng không tìm thấy Invoice với ID: {invoiceId} trong database.");
                 }
-
+                // Gán giá trị để gửi thông báo sau
+                invoiceForNotification = invoice;
                 if (invoice.Status != "Paid")
                 {
                     // Logic cập nhật đúng
@@ -291,6 +326,8 @@ public class InvoiceService : IInvoiceService
                     {
                         order.PaymentStatus = "Paid"; // cập nhật trạng thái Order thành Paid
                     }
+                    // Gán giá trị để gửi thông báo sau
+                    ordersForNotification = ordersToUpdate;
                     _context.InvoiceHistories.Add(new InvoiceHistory { InvoiceId = invoiceId, Action = "Payment received via PayOS Webhook" });
 
                     log.ProcessingStatus = "Processed";
@@ -312,6 +349,12 @@ public class InvoiceService : IInvoiceService
             }
 
             await _context.SaveChangesAsync();
+            // ✅ BẮT ĐẦU GỬI THÔNG BÁO (SAU KHI LƯU DB THÀNH CÔNG)
+            // Chỉ gửi nếu có hóa đơn được cập nhật
+            if (invoiceForNotification != null && log.ProcessingStatus == "Processed")
+            {
+                await SendPaymentSuccessNotificationsAsync(invoiceForNotification, ordersForNotification);
+            }
         }
         catch (Exception ex)
         {
@@ -319,6 +362,41 @@ public class InvoiceService : IInvoiceService
             log.ErrorMessage = $"Message: {ex.Message} --- StackTrace: {ex.StackTrace}";
             await _context.SaveChangesAsync();
             throw; // Ném lại lỗi để dễ dàng thấy trong log của server
+        }
+    }
+    /// <summary>
+    /// Hàm private để gửi thông báo sau khi webhook xử lý thanh toán thành công.
+    /// </summary>
+    private async Task SendPaymentSuccessNotificationsAsync(Invoice invoice, List<Order> orders)
+    {
+        try
+        {
+            // Gửi thông báo (chuông) cho Seller
+            await _notificationService.CreateAndSendNotificationAsync(
+                invoice.SellerUserId,
+                $"Hóa đơn #{invoice.InvoiceNumber} đã được thanh toán thành công!",
+                $"/seller/invoices/{invoice.InvoiceId}"
+            );
+
+            // Gửi sự kiện real-time cập nhật Giao diện Hóa đơn (cho Seller)
+            await _hubContext.Clients.Group($"user_{invoice.SellerUserId}").SendAsync(
+                "InvoicePaid",
+                new { invoiceId = invoice.InvoiceId, newStatus = "Paid" }
+            );
+
+            // Gửi sự kiện real-time cập nhật Giao diện Đơn hàng (cho từng đơn hàng)
+            foreach (var order in orders)
+            {
+                // Gửi cho bất kỳ ai đang xem đơn hàng này
+                await _hubContext.Clients.Group($"order_{order.OrderId}").SendAsync(
+                    "OrderStatusChanged",
+                    new { orderId = order.OrderId, newPaymentStatus = "Paid" }
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho ProcessPayOSWebhookAsync (InvoiceID: {InvoiceId})", invoice.InvoiceId);
         }
     }
 }

@@ -20,6 +20,7 @@ builder.Services.AddControllers()
         x.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles);
 
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSignalR();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "CBGift API", Version = "v1" });
@@ -111,7 +112,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins("http://localhost:3000") // FE URL
               .AllowAnyHeader()
               .AllowAnyMethod()
-              .AllowCredentials();
+              .AllowCredentials();// SignalR
     });
 });
 
@@ -137,6 +138,7 @@ builder.Services.AddScoped<IDesignerTaskService, DesignerTaskService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IHuggingFaceService, HuggingFaceService>();
 builder.Services.AddScoped<IAiStudioService, AiStudioService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 
 // --- Quartz ---
 builder.Services.AddQuartz(q =>
@@ -181,6 +183,10 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Map Hub tới một endpoint
+// Client sẽ kết nối tới URL "/notificationHub"
+app.MapHub<CB_Gift.Hubs.NotificationHub>("/notificationHub");
 
 // ================== Seed Roles + User ==================
 using (var scope = app.Services.CreateScope())

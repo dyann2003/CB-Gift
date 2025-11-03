@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
+using System.Net;
 
 namespace CB_Gift.Services
 {
@@ -46,19 +47,26 @@ namespace CB_Gift.Services
             var details = await _context.OrderDetails
                 .Include(od => od.Order)
                 .Include(od => od.ProductVariant)
+                .ThenInclude(pv => pv.Product) // ✅ BỔ SUNG
                 .Where(od => orderDetailIds.Contains(od.OrderDetailId))
                 .ToListAsync();
 
-            return details.Select(detail => new
+            return details.Select(detail =>
             {
-                detail.OrderDetailId,
-                detail.Order.OrderCode,
-                ProductName = detail.ProductVariant?.Product?.ProductName ?? "",
-                detail.Quantity,
-                QrCodeUrl = $"https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=" +
-                             System.Net.WebUtility.UrlEncode(
-                                 $"OrderDetailId:{detail.OrderDetailId}, Product:{detail.ProductVariant.Product}, Qty:{detail.Quantity}")
+                var productName = detail.ProductVariant?.Product?.ProductName ?? "";
+                var raw = $"OrderDetailId:{detail.OrderDetailId}, Product:{productName}, Qty:{detail.Quantity}";
+                var url = "https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=" + WebUtility.UrlEncode(raw);
+
+                return new
+                {
+                    detail.OrderDetailId,
+                    detail.Order.OrderCode,
+                    ProductName = productName,
+                    detail.Quantity,
+                    QrCodeUrl = url
+                };
             });
         }
+
     }
 }

@@ -1,37 +1,92 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using CB_Gift.Data;
+﻿using CB_Gift.Data;
 using CB_Gift.DTOs;
+using CB_Gift.Hubs;
 using CB_Gift.Models;
 using CB_Gift.Models.Enums;
 using CB_Gift.Services;
 using CB_Gift.Services.IService;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging;
 using Moq;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;              // <<-- cần cho CancellationToken
+using System.Threading.Tasks;
 using Xunit;
 
 namespace CB_Gift.Tests.Services
 {
     public class DesignerTaskServiceTests
     {
-        private static CBGiftDbContext CreateDbContext(string dbName)
+        private CBGiftDbContext CreateDbContext(string dbName)
         {
             var options = new DbContextOptionsBuilder<CBGiftDbContext>()
                 .UseInMemoryDatabase(dbName)
-                .EnableSensitiveDataLogging()
+
+                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
                 .Options;
-            return new CBGiftDbContext(options);
+
+            var db = new CBGiftDbContext(options);
+            db.Database.EnsureCreated();
+            return db;
         }
 
+        // Overload tiện dụng: cho phép gọi CreateService(db) không cần out
         private static DesignerTaskService CreateService(CBGiftDbContext ctx)
+            => CreateService(ctx, out _, out _, out _, out _, out _, out _);
+
+        private static DesignerTaskService CreateService(
+            CBGiftDbContext ctx,
+            out Mock<IImageManagementService> imageSvcMock,
+            out Mock<INotificationService> notifySvcMock,
+            out Mock<IHubContext<NotificationHub>> hubCtxMock,
+            out Mock<IHubClients> hubClientsMock,
+            out Mock<IClientProxy> clientProxyMock,
+            out Mock<ILogger<DesignerTaskService>> loggerMock)
         {
-            var imageSvcMock = new Mock<IImageManagementService>(MockBehavior.Strict);
-            // Không dùng nhánh upload file trong test, nên không cần Setup.
-            return new DesignerTaskService(ctx, imageSvcMock.Object);
+            imageSvcMock = new Mock<IImageManagementService>(MockBehavior.Strict);
+
+            notifySvcMock = new Mock<INotificationService>(MockBehavior.Strict);
+            // Cho phép gọi ở các nhánh gửi thông báo
+            notifySvcMock
+                .Setup(s => s.CreateAndSendNotificationAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>()))
+                .Returns(Task.CompletedTask);
+
+            // Mock SignalR hub
+            clientProxyMock = new Mock<IClientProxy>(MockBehavior.Strict);
+            clientProxyMock
+                .Setup(p => p.SendCoreAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<object[]>(),
+                    It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
+
+            hubClientsMock = new Mock<IHubClients>(MockBehavior.Strict);
+            hubClientsMock
+                .Setup(c => c.Group(It.IsAny<string>()))
+                .Returns(clientProxyMock.Object);
+
+            hubCtxMock = new Mock<IHubContext<NotificationHub>>(MockBehavior.Strict);
+            hubCtxMock
+                .SetupGet(h => h.Clients)
+                .Returns(hubClientsMock.Object);
+
+            loggerMock = new Mock<ILogger<DesignerTaskService>>();
+
+            return new DesignerTaskService(
+                ctx,
+                imageSvcMock.Object,
+                notifySvcMock.Object,
+                hubCtxMock.Object,
+                loggerMock.Object
+            );
         }
 
         #region Helpers - Seed data
@@ -53,13 +108,13 @@ namespace CB_Gift.Tests.Services
                 ProductVariantId = id,
                 ProductId = p.ProductId,
                 Product = p,
-                LengthCm = 10m,      // decimal
-                HeightCm = 20m,      // decimal
-                WidthCm = 5m,       // decimal
-                ThicknessMm = "2",   // string
-                SizeInch = "8x10", // string
-                Layer = "1",    // string
-                CustomShape = "false", // string
+                LengthCm = 10m,
+                HeightCm = 20m,
+                WidthCm = 5m,
+                ThicknessMm = "2",
+                SizeInch = "8x10",
+                Layer = "1",
+                CustomShape = "false",
                 Sku = "SKU-TEST"
             };
         }
@@ -80,7 +135,7 @@ namespace CB_Gift.Tests.Services
             int id,
             Order order,
             ProductVariant variant,
-            string designerId,
+            string? designerId,
             bool needDesign,
             ProductionStatus? prodStatus,
             string linkImg = "img",
@@ -114,7 +169,15 @@ namespace CB_Gift.Tests.Services
         {
             // Arrange
             var db = CreateDbContext(Guid.NewGuid().ToString());
-            var service = CreateService(db);
+
+            var service = CreateService(
+                db,
+                out var _img,
+                out var _notify,
+                out var _hub,
+                out var _hubClients,
+                out var _clientProxy,
+                out var _logger);
 
             string designerId = "designer-1";
             string otherDesignerId = "designer-2";
@@ -154,57 +217,22 @@ namespace CB_Gift.Tests.Services
             Assert.Equal(orderOk.StatusOrder, t.OrderStatus);
             Assert.Equal(ProductionStatus.DESIGNING.ToString(), t.ProductionStatus);
             Assert.NotNull(t.ProductDetails);
-            Assert.Equal(v.ProductVariantId.ToString(), t.ProductDetails.ProductVariantId);
+            Assert.Equal(v.ProductVariantId.ToString(), t.ProductDetails!.ProductVariantId);
         }
-
-        //[Fact]
-        //public async Task UploadDesignFileAsync_With_FileUrl_Updates_Record_And_Moves_To_CHECK_DESIGN()
-        //{
-        //    // Arrange
-        //    var db = CreateDbContext(Guid.NewGuid().ToString());
-        //    var service = CreateService(db);
-
-        //    string designerId = "designer-1";
-        //    var p = MakeProduct(1, "Prod A");
-        //    var v = MakeVariant(1, p);
-        //    var order = MakeOrder(1, "ORD-1", "seller-1", 3);
-        //    var od = MakeOrderDetail(1, order, v, designerId, true, ProductionStatus.DESIGNING);
-
-        //    await db.Products.AddAsync(p);
-        //    await db.ProductVariants.AddAsync(v);
-        //    await db.Orders.AddAsync(order);
-        //    await db.SaveChangesAsync();
-
-        //    var dto = new UploadDesignDto
-        //    {
-        //        // Không nạp file; đi theo nhánh FileUrl
-        //        FileUrl = "https://cdn.example.com/design.psd",
-        //        Note = "v1-preview"
-        //    };
-
-        //    // Act
-        //    var ok = await service.UploadDesignFileAsync(od.OrderDetailId, designerId, dto);
-
-        //    // Assert
-        //    Assert.True(ok);
-
-        //    var updated = await db.OrderDetails.AsNoTracking().FirstAsync(x => x.OrderDetailId == od.OrderDetailId);
-        //    Assert.Equal("https://cdn.example.com/design.psd", updated.LinkFileDesign);
-        //    Assert.Equal(ProductionStatus.CHECK_DESIGN, updated.ProductionStatus);
-
-        //    var designRow = await db.OrderDetailDesigns.AsNoTracking().FirstOrDefaultAsync(x => x.OrderDetailId == od.OrderDetailId);
-        //    Assert.NotNull(designRow);
-        //    Assert.False(designRow!.IsFinal);
-        //    Assert.Equal(dto.Note, designRow.Note);
-        //    Assert.Equal(dto.FileUrl, designRow.FileUrl);
-        //}
 
         [Fact]
         public async Task UploadDesignFileAsync_Throws_If_Status_Not_Designing_Or_Redo()
         {
             // Arrange
             var db = CreateDbContext(Guid.NewGuid().ToString());
-            var service = CreateService(db);
+            var service = CreateService(
+                db,
+                out var _img,
+                out var _notify,
+                out var _hub,
+                out var _hubClients,
+                out var _clientProxy,
+                out var _logger);
 
             string designerId = "designer-1";
             var p = MakeProduct(1, "Prod A");
@@ -224,46 +252,19 @@ namespace CB_Gift.Tests.Services
                 service.UploadDesignFileAsync(od.OrderDetailId, designerId, dto));
         }
 
-        //[Fact]
-        //public async Task UpdateStatusAsync_Designing_To_CheckDesign_Also_Sets_Order_StatusOrder_5_When_All_Checked()
-        //{
-        //    // Arrange
-        //    var db = CreateDbContext(Guid.NewGuid().ToString());
-        //    var service = CreateService(db);
-
-        //    var p = MakeProduct(1, "P");
-        //    var v = MakeVariant(1, p);
-
-        //    var order = MakeOrder(1, "ORD", "seller", statusOrder: 4); // đang ở 4 (ví dụ: All Designing)
-        //    var od1 = MakeOrderDetail(1, order, v, "d1", true, ProductionStatus.DESIGNING);
-        //    var od2 = MakeOrderDetail(2, order, v, "d2", true, ProductionStatus.DESIGNING);
-
-        //    await db.Products.AddAsync(p);
-        //    await db.ProductVariants.AddAsync(v);
-        //    await db.Orders.AddAsync(order);
-        //    await db.SaveChangesAsync();
-
-        //    // Act: chuyển od1 -> CHECK_DESIGN (chưa all)
-        //    var ok1 = await service.UpdateStatusAsync(od1.OrderDetailId, ProductionStatus.CHECK_DESIGN);
-        //    Assert.True(ok1);
-
-        //    var orderAfter1 = await db.Orders.AsNoTracking().FirstAsync(x => x.OrderId == order.OrderId);
-        //    Assert.Equal(4, orderAfter1.StatusOrder); // chưa lên 5 vì od2 chưa CHECK_DESIGN
-
-        //    // Act: chuyển od2 -> CHECK_DESIGN (now all)
-        //    var ok2 = await service.UpdateStatusAsync(od2.OrderDetailId, ProductionStatus.CHECK_DESIGN);
-        //    Assert.True(ok2);
-
-        //    var orderAfter2 = await db.Orders.AsNoTracking().FirstAsync(x => x.OrderId == order.OrderId);
-        //    Assert.Equal(5, orderAfter2.StatusOrder); // đã lên 5 khi tất cả đều CHECK_DESIGN
-        //}
-
         [Fact]
         public async Task UpdateStatusAsync_NeedDesign_To_Designing_Sets_Order_StatusOrder_4_When_All_Detail_Designing()
         {
             // Arrange
             var db = CreateDbContext(Guid.NewGuid().ToString());
-            var service = CreateService(db);
+            var service = CreateService(
+                db,
+                out var _img,
+                out var _notify,
+                out var _hub,
+                out var _hubClients,
+                out var _clientProxy,
+                out var _logger);
 
             var p = MakeProduct(1, "P");
             var v = MakeVariant(1, p);
@@ -295,7 +296,14 @@ namespace CB_Gift.Tests.Services
         {
             // Arrange
             var db = CreateDbContext(Guid.NewGuid().ToString());
-            var service = CreateService(db);
+            var service = CreateService(
+                db,
+                out var _img,
+                out var _notify,
+                out var _hub,
+                out var _hubClients,
+                out var _clientProxy,
+                out var _logger);
 
             var p = MakeProduct(1, "P");
             var v = MakeVariant(1, p);
@@ -308,60 +316,25 @@ namespace CB_Gift.Tests.Services
             await db.Orders.AddAsync(order);
             await db.SaveChangesAsync();
 
-            // CHECK_DESIGN -> DESIGN_REDO là hợp lệ theo business?
-            // Trong code hiện tại, chỉ cho: DESIGN_REDO->DESIGNING, NEED_DESIGN->DESIGNING, DESIGNING->CHECK_DESIGN.
+            // Trong code hiện tại, các chuyển đổi hợp lệ:
+            // NEED_DESIGN->DESIGNING, DESIGNING/DESIGN_REDO->CHECK_DESIGN, DESIGN_REDO->DESIGNING.
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 service.UpdateStatusAsync(od.OrderDetailId, ProductionStatus.DESIGN_REDO));
         }
-
-        //[Fact]
-        //public async Task AssignDesignerToOrderDetailAsync_Succeeds_When_SellerOwns_And_DesignerAllowed()
-        //{
-        //    // Arrange
-        //    var db = CreateDbContext(Guid.NewGuid().ToString());
-        //    var service = CreateService(db);
-
-        //    var sellerId = "seller-1";
-        //    var designerId = "designer-1";
-        //    var p = MakeProduct(1, "P");
-        //    var v = MakeVariant(1, p);
-        //    var order = MakeOrder(1, "ORD", sellerId, statusOrder: 2); // 2: Lên Đơn
-        //    var od = MakeOrderDetail(1, order, v, null, true, ProductionStatus.NEED_DESIGN);
-
-        //    // Quan hệ Designer–Seller cho phép
-        //    var ds = new DesignerSeller
-        //    {
-        //        SellerUserId = sellerId,
-        //        DesignerUserId = designerId,
-        //        CreatedAt = DateTime.UtcNow,
-        //        CreatedByUserId = sellerId
-        //    };
-
-        //    await db.Products.AddAsync(p);
-        //    await db.ProductVariants.AddAsync(v);
-        //    await db.Orders.AddAsync(order);
-        //    await db.DesignerSellers.AddAsync(ds);
-        //    await db.SaveChangesAsync();
-
-        //    // Act
-        //    var ok = await service.AssignDesignerToOrderDetailAsync(od.OrderDetailId, designerId, sellerId);
-
-        //    // Assert
-        //    Assert.True(ok);
-
-        //    var updatedOd = await db.OrderDetails.AsNoTracking().FirstAsync(x => x.OrderDetailId == od.OrderDetailId);
-        //    Assert.Equal(designerId, updatedOd.AssignedDesignerUserId);
-        //    Assert.True(updatedOd.AssignedAt.HasValue);
-        //    var updatedOrder = await db.Orders.AsNoTracking().FirstAsync(x => x.OrderId == order.OrderId);
-        //    Assert.Equal(3, updatedOrder.StatusOrder); // chuyển lên NEED_DESIGN
-        //}
 
         [Fact]
         public async Task AssignDesignerToOrderDetailAsync_Fails_When_Designer_Not_Allowed()
         {
             // Arrange
             var db = CreateDbContext(Guid.NewGuid().ToString());
-            var service = CreateService(db);
+            var service = CreateService(
+                db,
+                out var _img,
+                out var _notify,
+                out var _hub,
+                out var _hubClients,
+                out var _clientProxy,
+                out var _logger);
 
             var sellerId = "seller-1";
             var designerId = "designer-1";
@@ -380,75 +353,76 @@ namespace CB_Gift.Tests.Services
                 service.AssignDesignerToOrderDetailAsync(od.OrderDetailId, designerId, sellerId));
         }
 
-        //[Fact]
-        //public async Task AssignDesignerToOrderAsync_Assigns_All_Details_Sets_NeedDesign_And_Order_Status_3()
-        //{
-        //    // Arrange
-        //    var db = CreateDbContext(Guid.NewGuid().ToString());
-        //    var service = CreateService(db);
+        [Fact]
+        public async Task AssignDesignerToOrderAsync_Assigns_All_Details_Sets_NeedDesign_And_Order_Status_3()
+        {
+            // Arrange
+            var db = CreateDbContext(Guid.NewGuid().ToString());
+            var service = CreateService(db); // dùng overload không cần out
 
-        //    var sellerId = "seller-1";
-        //    var designerId = "designer-1";
-        //    var p = MakeProduct(1, "P");
-        //    var v = MakeVariant(1, p);
-        //    var order = MakeOrder(1, "ORD", sellerId, statusOrder: 2);
+            var sellerId = "seller-1";
+            var designerId = "designer-1";
+            var p = MakeProduct(1, "P");
+            var v = MakeVariant(1, p);
+            var order = MakeOrder(1, "ORD", sellerId, statusOrder: 2);
 
-        //    var od1 = MakeOrderDetail(1, order, v, null, needDesign: true, prodStatus: null);
-        //    var od2 = MakeOrderDetail(2, order, v, null, needDesign: true, prodStatus: null);
+            var od1 = MakeOrderDetail(1, order, v, null, needDesign: true, prodStatus: null);
+            var od2 = MakeOrderDetail(2, order, v, null, needDesign: true, prodStatus: null);
 
-        //    var ds = new DesignerSeller
-        //    {
-        //        SellerUserId = sellerId,
-        //        DesignerUserId = designerId,
-        //        CreatedAt = DateTime.UtcNow,
-        //        CreatedByUserId = sellerId
-        //    };
+            var ds = new DesignerSeller
+            {
+                SellerUserId = sellerId,
+                DesignerUserId = designerId,
+                CreatedAt = DateTime.UtcNow,
+                CreatedByUserId = sellerId
+            };
 
-        //    await db.Products.AddAsync(p);
-        //    await db.ProductVariants.AddAsync(v);
-        //    await db.Orders.AddAsync(order);
-        //    await db.DesignerSellers.AddAsync(ds);
-        //    await db.SaveChangesAsync();
+            await db.Products.AddAsync(p);
+            await db.ProductVariants.AddAsync(v);
+            await db.Orders.AddAsync(order);
+            await db.DesignerSellers.AddAsync(ds);
+            await db.SaveChangesAsync();
 
-        //    // Act
-        //    var ok = await service.AssignDesignerToOrderAsync(order.OrderId, designerId, sellerId);
+            // Act
+            var ok = await service.AssignDesignerToOrderAsync(order.OrderId, designerId, sellerId);
 
-        //    // Assert
-        //    Assert.True(ok);
+            // Assert
+            Assert.True(ok);
 
-        //    var updatedOrder = await db.Orders.Include(o => o.OrderDetails)
-        //                                      .AsNoTracking()
-        //                                      .FirstAsync(x => x.OrderId == order.OrderId);
-        //    Assert.Equal(3, updatedOrder.StatusOrder); // NEED_DESIGN
-        //    Assert.All(updatedOrder.OrderDetails, d =>
-        //    {
-        //        Assert.Equal(designerId, d.AssignedDesignerUserId);
-        //        Assert.True(d.AssignedAt.HasValue);
-        //        Assert.Equal(ProductionStatus.NEED_DESIGN, d.ProductionStatus);
-        //    });
-        //}
+            var updatedOrder = await db.Orders.Include(o => o.OrderDetails)
+                                              .AsNoTracking()
+                                              .FirstAsync(x => x.OrderId == order.OrderId);
+            Assert.Equal(3, updatedOrder.StatusOrder); // NEED_DESIGN
+            Assert.All(updatedOrder.OrderDetails, d =>
+            {
+                Assert.Equal(designerId, d.AssignedDesignerUserId);
+                Assert.True(d.AssignedAt.HasValue);
+                Assert.Equal(ProductionStatus.NEED_DESIGN, d.ProductionStatus);
+            });
+        }
 
-        //[Fact]
-        //public async Task AssignDesignerToOrderAsync_ReturnsFalse_When_Order_Not_Owned_By_Seller()
-        //{
-        //    // Arrange
-        //    var db = CreateDbContext(Guid.NewGuid().ToString());
-        //    var service = CreateService(db);
+        [Fact]
+        public async Task AssignDesignerToOrderAsync_ReturnsFalse_When_Order_Not_Owned_By_Seller()
+        {
+            // Arrange
+            var db = CreateDbContext(Guid.NewGuid().ToString());
+            var service = CreateService(db); // dùng overload không cần out
 
-        //    var p = MakeProduct(1, "P");
-        //    var v = MakeVariant(1, p);
-        //    var order = MakeOrder(1, "ORD", "seller-OTHER", statusOrder: 2);
+            var p = MakeProduct(1, "P");
+            var v = MakeVariant(1, p);
+            var order = MakeOrder(1, "ORD", "seller-OTHER", statusOrder: 2);
 
-        //    await db.Products.AddAsync(p);
-        //    await db.ProductVariants.AddAsync(v);
-        //    await db.Orders.AddAsync(order);
-        //    await db.SaveChangesAsync();
+            await db.Products.AddAsync(p);
+            await db.ProductVariants.AddAsync(v);
+            await db.Orders.AddAsync(order);
+            await db.SaveChangesAsync();
 
-        //    // Act
-        //    var ok = await service.AssignDesignerToOrderAsync(order.OrderId, "designer-1", "seller-1");
+            // Act
+            var ok = await service.AssignDesignerToOrderAsync(order.OrderId, "designer-1", "seller-1");
 
-        //    // Assert
-        //    Assert.False(ok);
-        //}
+            // Assert
+            Assert.False(ok);
+        }
     }
 }
+
