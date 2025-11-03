@@ -22,7 +22,13 @@ namespace CB_Gift.Services
             _stabilityApiKey = config["StabilityAiSettings:ApiKey"];
             _logger = logger;
         }
-
+        public AiStudioService(IConfiguration config, ILogger<AiStudioService> logger, HttpClient? httpClient = null)
+        {
+            _httpClient = httpClient ?? new HttpClient();
+            _geminiApiKey = config["GeminiSettings:ApiKey"];
+            _stabilityApiKey = config["StabilityAiSettings:ApiKey"];
+            _logger = logger;
+        }
         //        private const string staticInstructions = @"
         //Based on the character in this image, convert it into a clean black-and-white line art specifically designed for CNC or laser cutting.
         //Keep only the outlines and essential details; remove all colors, shading, textures, and backgrounds.
