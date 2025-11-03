@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react"; // ✅ Đảm bảo useMemo được import
+import React from "react";
 import SellerSidebar from "@/components/layout/seller/sidebar";
 import SellerHeader from "@/components/layout/seller/header";
 import * as XLSX from "xlsx";
@@ -88,18 +89,25 @@ export default function ManageOrder() {
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
   const [showMakeManualModal, setShowMakeManualModal] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState(null); // This seems unused, consider removing
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  // This seems unused, consider removing
   const [isEditMode, setIsEditMode] = useState(false);
   const [editedOrder, setEditedOrder] = useState(null);
+
+  // ✅ Cập nhật state Page và ItemsPerPage
   const [page, setPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [dateRange, setDateRange] = useState({ from: null, to: null });
-  const [sortColumn, setSortColumn] = useState(null);
-  const [sortDirection, setSortDirection] = useState("asc");
+
+  // ✅ Cập nhật state Sắp xếp
+  const [sortColumn, setSortColumn] = useState("orderDate"); // Mặc định sắp xếp theo ngày
+  const [sortDirection, setSortDirection] = useState("desc"); // Mặc định giảm dần
+
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [showCannotAssignDialog, setShowCannotAssignDialog] = useState(false);
   const [cannotAssignMessage, setCannotAssignMessage] = useState("");
-  const [isDialogOpen, setIsDialogOpen] = useState(false); // Added for dialog state management
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  // Added for dialog state management
   const [showResultDialog, setShowResultDialog] = useState(false);
   const [resultMessage, setResultMessage] = useState("");
   const [isAssignPopupOpen, setIsAssignPopupOpen] = useState(false);
@@ -110,22 +118,47 @@ export default function ManageOrder() {
   const [designCheckOrderId, setDesignCheckOrderId] = useState(null);
 
   const [expandedOrderId, setExpandedOrderId] = useState(null);
-
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [showErrorDialog, setShowErrorDialog] = useState(false);
 
+  // orders: chỉ chứa dữ liệu trang hiện tại
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // ✅ STATE MỚI: Lưu tổng số lượng đơn hàng (từ BE)
+  const [totalOrdersCount, setTotalOrdersCount] = useState(0);
 
   const fetchOrders = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await fetch("https://localhost:7015/api/seller", {
+      // 1. Xác định Status Filter (BE cần tên Status đầy đủ)
+      const selectedStatConfig = stats.find(
+        (stat) => stat.title === selectedStat
+      );
+      const statusFilter = selectedStatConfig?.statusFilter;
+
+      // 2. Xây dựng Query Parameters
+      const params = new URLSearchParams({
+        page: page.toString(),
+        pageSize: itemsPerPage.toString(),
+        searchTerm: searchTerm,
+        sortColumn: sortColumn || "orderDate", // Mặc định sortColumn
+        sortDirection: sortDirection,
+      });
+
+      if (statusFilter && selectedStat !== "Total Order") {
+        params.append("status", statusFilter);
+      }
+
+      const url = `https://localhost:7015/api/Seller?${params.toString()}`;
+
+      // 3. Gọi API với URL có tham số
+      const response = await fetch(url, {
         credentials: "include",
       });
 
@@ -133,29 +166,33 @@ export default function ManageOrder() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
+      // 4. Nhận response có { total, orders }
+      const { total, orders: data } = await response.json();
       console.log("📦 Orders fetched:", data);
 
+      setTotalOrdersCount(total);
+
+      // 5. Logic map data (Ánh xạ từ BE DTO sang FE model)
       const mappedOrders = data.map((order) => ({
         id: order.orderId,
         orderId: order.orderCode,
-        orderDate: new Date(order.orderDate).toISOString().split("T")[0], // Format: YYYY-MM-DD
+        orderDate: new Date(order.orderDate).toISOString().split("T")[0],
         customerName: order.customerName,
-        phone: "", // Not provided in API
-        email: "", // Not provided in API
+        phone: order.phone || "",
+        email: order.email || "",
         products: order.details.map((detail) => ({
-          name: `Product ${detail.productVariantID}`,
+          name: detail.productName || `Product ${detail.productVariantID}`,
           quantity: detail.quantity,
           price: detail.price,
-          size: "",
+          size: detail.size || "",
           accessory: detail.accessory || "",
-          activeTTS: order.activeTTS || false, // Read from order level
+          activeTTS: order.activeTts || false,
           linkFileDesign: detail.linkFileDesign,
           linkThanksCard: detail.linkThanksCard,
           linkImg: detail.linkImg,
         })),
-        address: "", // Not provided in API
-        shipTo: "", // Not provided in API
+        address: order.address || "",
+        shipTo: "",
         status: order.statusOderName,
         totalAmount: `$${order.totalCost.toFixed(2)}`,
         timeCreated: new Date(order.creationDate).toLocaleString(),
@@ -186,7 +223,6 @@ export default function ManageOrder() {
           },
         },
       }));
-      // </CHANGE>
 
       setOrders(mappedOrders);
     } catch (err) {
@@ -197,9 +233,10 @@ export default function ManageOrder() {
     }
   };
 
+  // ✅ Dependency Array: Gọi lại fetchOrders khi bất kỳ tham số filter/pagination/sort nào thay đổi
   useEffect(() => {
     fetchOrders();
-  }, []);
+  }, [page, itemsPerPage, searchTerm, selectedStat, sortColumn, sortDirection]);
 
   const stats = [
     {
@@ -232,6 +269,7 @@ export default function ManageOrder() {
     },
     {
       title: "Need Check Design",
+
       color: "bg-green-50 border-green-200",
       icon: ListTodo,
       iconColor: "text-green-500",
@@ -246,6 +284,7 @@ export default function ManageOrder() {
     },
     {
       title: "Redesign (Design Error)",
+
       color: "bg-red-50 border-red-200",
       icon: AlertTriangle,
       iconColor: "text-red-500",
@@ -275,6 +314,7 @@ export default function ManageOrder() {
     {
       title: "Quality Checked",
       color: "bg-emerald-50 border-emerald-200",
+
       icon: CheckCircle,
       iconColor: "text-emerald-500",
       statusFilter: "Đã Kiểm tra Chất lượng",
@@ -290,6 +330,7 @@ export default function ManageOrder() {
       title: "Cancel",
       color: "bg-gray-50 border-gray-300",
       icon: AlertTriangle,
+
       iconColor: "text-gray-600",
       statusFilter: "Cancel",
     },
@@ -303,86 +344,39 @@ export default function ManageOrder() {
     // </CHANGE>
   ];
 
-  let statsWithCounts = stats.map((stat) => ({
-    ...stat,
-    value: stat.statusFilter
-      ? orders.filter((o) => o.status === stat.statusFilter).length
-      : 0,
-  }));
+  // ✅ Sửa lỗi: Đảm bảo orders là một mảng trước khi dùng filter
+  const statsWithCounts = useMemo(() => {
+    // ❌ Lỗi Orders.filter is not a function thường do orders không phải là mảng
+    const safeOrders = Array.isArray(orders) ? orders : [];
 
-  statsWithCounts = statsWithCounts.map((stat, i) =>
-    i === 0
-      ? { ...stat, value: statsWithCounts.reduce((sum, s) => sum + s.value, 0) }
-      : stat
-  );
+    let newStats = stats.map((stat) => ({
+      ...stat,
+      // Sử dụng safeOrders
+      value: stat.statusFilter
+        ? safeOrders.filter((o) => o.status === stat.statusFilter).length
+        : 0,
+    }));
 
-  const filteredOrders = orders.filter((order) => {
-    const matchesSearch =
-      order.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.products.some((product) =>
-        product.name.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-
-    const selectedStatConfig = stats.find(
-      (stat) => stat.title === selectedStat
+    // Cập nhật Total Order bằng totalOrdersCount từ BE
+    newStats = newStats.map((stat, i) =>
+      i === 0 ? { ...stat, value: totalOrdersCount } : stat
     );
-    const matchesStatus =
-      !selectedStatConfig?.statusFilter ||
-      order.status === selectedStatConfig.statusFilter;
+    return newStats;
+  }, [orders, stats, totalOrdersCount]);
 
-    let matchesDateRange = true;
-    if (dateRange.from && dateRange.to) {
-      const orderDate = new Date(order.orderDate);
-      matchesDateRange =
-        orderDate >= dateRange.from && orderDate <= dateRange.to;
-    } else if (dateRange.from) {
-      const orderDate = new Date(order.orderDate);
-      matchesDateRange =
-        orderDate.toDateString() === dateRange.from.toDateString();
-    }
-
-    return matchesSearch && matchesStatus && matchesDateRange;
-  });
-
-  const sortedOrders = [...filteredOrders].sort((a, b) => {
-    if (!sortColumn) return 0;
-
-    let aValue, bValue;
-
-    if (sortColumn === "orderDate") {
-      aValue = new Date(a.orderDate).getTime();
-      bValue = new Date(b.orderDate).getTime();
-    } else if (sortColumn === "customerName") {
-      aValue = a.customerName.toLowerCase();
-      bValue = b.customerName.toLowerCase();
-    } else if (sortColumn === "totalAmount") {
-      aValue = Number.parseFloat(a.totalAmount.replace("$", ""));
-      bValue = Number.parseFloat(b.totalAmount.replace("$", ""));
-    } else if (sortColumn === "orderId") {
-      aValue = a.orderId.toLowerCase();
-      bValue = b.orderId.toLowerCase();
-    }
-
-    if (sortDirection === "asc") {
-      return aValue > bValue ? 1 : -1;
-    } else {
-      return aValue < bValue ? 1 : -1;
-    }
-  });
-
-  const totalPages = Math.ceil(sortedOrders.length / itemsPerPage);
-  const startIndex = (page - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedOrders = sortedOrders.slice(startIndex, endIndex);
+  const totalPages = Math.ceil(totalOrdersCount / itemsPerPage);
+  // orders đã là dữ liệu phân trang (paginatedOrders)
+  const paginatedOrders = orders;
 
   const handleSort = (column) => {
+    // Luôn setPage(1) khi đổi sắp xếp để BE trả về dữ liệu mới từ trang đầu
     if (sortColumn === column) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
     } else {
       setSortColumn(column);
       setSortDirection("asc");
     }
+    setPage(1);
   };
 
   const renderSortIcon = (column) => {
@@ -398,22 +392,23 @@ export default function ManageOrder() {
 
   const handleSearchChange = (value) => {
     setSearchTerm(value);
-    setPage(1);
+    setPage(1); // Quay về trang 1 khi tìm kiếm
   };
 
   const handleStatClick = (statTitle) => {
     setSelectedStat(statTitle);
-    setPage(1);
+    setPage(1); // Quay về trang 1 khi lọc status
   };
 
   const handleItemsPerPageChange = (value) => {
     setItemsPerPage(Number(value));
-    setPage(1);
+    setPage(1); // Quay về trang 1 khi đổi số lượng item
   };
 
+  // Giữ lại handleDateSelect, nhưng nó không ảnh hưởng đến fetchOrders hiện tại
   const handleDateSelect = (range) => {
     setDateRange(range || { from: null, to: null });
-    setPage(1);
+    setPage(1); // Mặc dù BE chưa hỗ trợ lọc theo ngày, giữ lại để FE reset state
   };
 
   const handleOpenAssignPopup = async () => {
@@ -421,12 +416,10 @@ export default function ManageOrder() {
     const selectedOrdersData = orders.filter((order) =>
       selectedOrders.includes(order.id)
     );
-
     // Kiểm tra có order nào KHÔNG phải là Draft (Nháp)
     const nonDraftOrders = selectedOrdersData.filter(
       (order) => order.status !== "Draft (Nháp)"
     );
-
     if (nonDraftOrders.length > 0) {
       setCannotAssignMessage(
         `Cannot assign ${nonDraftOrders.length} order(s) to designer. Only orders with "Draft (Nháp)" status can be assigned.`
@@ -466,11 +459,11 @@ export default function ManageOrder() {
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+
             credentials: "include",
             body: JSON.stringify({ designerUserId: selectedDesignerId }),
           }
         );
-
         if (!res.ok) throw new Error(`Failed to assign for order ${orderId}`);
       }
 
@@ -484,9 +477,11 @@ export default function ManageOrder() {
       setIsAssignPopupOpen(false);
       setSelectedDesignerId("");
 
-      // ✅ Reload lại trang sau 1.5s để cập nhật dữ liệu
+      // ✅ Reload lại dữ liệu sau 1.5s để cập nhật dữ liệu
       setTimeout(() => {
-        window.location.reload();
+        fetchOrders(); // ✅ GỌI LẠI fetchOrders THAY CHO window.location.reload()
+        setSelectedOrders([]);
+        setSelectAll(false);
       }, 1500);
     } catch (err) {
       console.error("❌ Assign designer failed:", err);
@@ -496,14 +491,20 @@ export default function ManageOrder() {
   };
 
   const handleExport = () => {
-    if (!filteredOrders || filteredOrders.length === 0) {
+    // Vì FE chỉ có dữ liệu 1 trang, cần gọi 1 API BE không phân trang để export toàn bộ
+    alert(
+      "Chức năng export đang sử dụng dữ liệu lọc hiện tại. Nếu muốn export toàn bộ, cần có API riêng!"
+    );
+
+    // Logic export hiện tại đang dùng orders (chỉ 1 trang) - cần sửa nếu muốn export full
+    if (!paginatedOrders || paginatedOrders.length === 0) {
       alert("❌ Không có đơn hàng nào để export!");
       return;
     }
 
     const exportData = [];
 
-    filteredOrders.forEach((order) => {
+    paginatedOrders.forEach((order) => {
       const products = order.products || [];
 
       products.forEach((p) => {
@@ -520,6 +521,7 @@ export default function ManageOrder() {
           Quantity: p.quantity || 0,
           Price: p.price || 0,
           Accessory: p.accessory || "",
+
           Note: order.orderNotes || "",
           LinkImg: order.uploadedFiles?.linkImg?.url || "",
           LinkThanksCard: order.uploadedFiles?.linkThanksCard?.url || "",
@@ -530,7 +532,6 @@ export default function ManageOrder() {
           TimeCreated: order.timeCreated || "",
         });
       });
-
       // Nếu order không có product nào, vẫn export 1 dòng tổng
       if (products.length === 0) {
         exportData.push({
@@ -539,6 +540,7 @@ export default function ManageOrder() {
           OrderDate: formatMySQLDate(order.orderDate),
           CustomerName: order.customerName || order.customerInfo?.name || "",
           Phone: order.phone || order.customerInfo?.phone || "",
+
           Email: order.email || order.customerInfo?.email || "",
           Address: order.address || order.customerInfo?.address || "",
           ProductName: "",
@@ -547,6 +549,7 @@ export default function ManageOrder() {
           Size: "",
           Accessory: "",
           Note: order.orderNotes || "",
+
           LinkImg: order.uploadedFiles?.linkImg?.url || "",
           LinkThanksCard: order.uploadedFiles?.linkThanksCard?.url || "",
           LinkFileDesign: order.uploadedFiles?.linkFileDesign?.url || "",
@@ -559,11 +562,9 @@ export default function ManageOrder() {
     });
 
     console.log("📦 Export Data:", exportData);
-
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Orders");
-
     const excelBuffer = XLSX.write(workbook, {
       bookType: "xlsx",
       type: "array",
@@ -571,12 +572,11 @@ export default function ManageOrder() {
     const blob = new Blob([excelBuffer], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
-
     const fileName = `Orders_${new Date().toISOString().slice(0, 10)}.xlsx`;
     saveAs(blob, fileName);
 
     alert(
-      `✅ Đã export ${exportData.length} dòng dữ liệu từ ${filteredOrders.length} đơn hàng!`
+      `✅ Đã export ${exportData.length} dòng dữ liệu từ ${paginatedOrders.length} đơn hàng!`
     );
   };
 
@@ -594,11 +594,9 @@ export default function ManageOrder() {
 
   const handleDelete = async (orderId) => {
     if (!orderId) return;
-
     try {
       // 🔍 Tìm đơn hàng trong danh sách hiện tại
       const orderToDelete = orders.find((o) => o.id === orderId);
-
       if (!orderToDelete) {
         setResultMessage("⚠️ Không tìm thấy đơn hàng để xóa.");
         setShowResultDialog(true);
@@ -615,6 +613,7 @@ export default function ManageOrder() {
       }
 
       // ✅ Gọi API xóa
+
       const response = await fetch(
         `https://localhost:7015/api/Order/${orderId}`,
         {
@@ -627,7 +626,9 @@ export default function ManageOrder() {
 
       if (response.ok) {
         setOrders((prev) => prev.filter((o) => o.id !== orderId));
+
         setResultMessage(result.message || "Delete Successfully");
+        fetchOrders(); // ✅ Gọi lại fetchOrders để cập nhật danh sách và count
       } else {
         setResultMessage(result.message || "Can't delete this order");
       }
@@ -639,30 +640,30 @@ export default function ManageOrder() {
     }
   };
 
-  const handleSelectAll = () => {
-    const newSelectAll = !selectAll;
-    setSelectAll(newSelectAll);
-    if (newSelectAll) {
-      setSelectedOrders(paginatedOrders.map((order) => order.id));
-    } else {
-      setSelectedOrders([]);
-    }
-  };
+  // const handleSelectAll = () => {
+  //   const newSelectAll = !selectAll;
+  //   setSelectAll(newSelectAll);
+  //   if (newSelectAll) {
+  //     setSelectedOrders(paginatedOrders.map((order) => order.id));
+  //   } else {
+  //     setSelectedOrders([]);
+  //   }
+  // };
 
-  const handleOrderSelect = (orderId) => {
-    if (selectedOrders.includes(orderId)) {
-      setSelectedOrders(selectedOrders.filter((id) => id !== orderId));
-    } else {
-      setSelectedOrders([...selectedOrders, orderId]);
-    }
-  };
+  // const handleOrderSelect = (orderId) => {
+  //   if (selectedOrders.includes(orderId)) {
+  //     setSelectedOrders(selectedOrders.filter((id) => id !== orderId));
+  //   } else {
+  //     setSelectedOrders([...selectedOrders, orderId]);
+  //   }
+  // };
 
-  const handleFileImport = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      console.log("File selected:", file.name);
-    }
-  };
+  // const handleFileImport = (event) => {
+  //   const file = event.target.files[0];
+  //   if (file) {
+  //     console.log("File selected:", file.name);
+  //   }
+  // };
 
   const handleAssignClick = () => {
     const selectedOrdersData = orders.filter((order) =>
@@ -671,7 +672,6 @@ export default function ManageOrder() {
     const nonDraftOrders = selectedOrdersData.filter(
       (order) => order.status !== "Draft (Nháp)"
     );
-
     if (nonDraftOrders.length > 0) {
       setCannotAssignMessage(
         `Cannot assign ${nonDraftOrders.length} order(s) to designer. Only orders with "Draft Seller Order" status can be assigned.`
@@ -697,24 +697,19 @@ export default function ManageOrder() {
     link.click();
   };
 
+  // ✅ Cập nhật: Gọi API GET /api/Seller/{id} để lấy chi tiết 1 đơn hàng
   const handleViewDetails = async (order) => {
     try {
       console.log("🧾 Selected order (before fetch):", order);
 
-      const res = await fetch(`https://localhost:7015/api/Seller`, {
+      // ✅ Gọi API chi tiết đơn hàng
+      const res = await fetch(`https://localhost:7015/api/Seller/${order.id}`, {
         credentials: "include",
       });
+
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      const allOrders = await res.json();
-      console.log("📦 All orders fetched:", allOrders);
-
-      const fullOrder = allOrders.find(
-        (o) =>
-          o.orderCode === order.orderId || // FE displays as "ORD-xxxx"
-          o.orderId == order.id // fallback for numeric id
-      );
-
+      const fullOrder = await res.json();
       console.log("✅ Full order fetched:", fullOrder);
       console.log("🧩 Details inside order:", fullOrder?.details);
 
@@ -723,6 +718,7 @@ export default function ManageOrder() {
         return;
       }
 
+      // Map data (giữ nguyên logic, đảm bảo lấy trường từ fullOrder)
       const mappedOrder = {
         id: fullOrder.orderId,
         orderId: fullOrder.orderCode,
@@ -769,18 +765,18 @@ export default function ManageOrder() {
           price: detail.price,
           size: detail.size || "",
           accessory: detail.accessory || "",
-          activeTTS: fullOrder.activeTTS || false, // Read from order level
+
+          activeTTS: fullOrder.activeTts || false,
           linkFileDesign: detail.linkFileDesign,
           linkThanksCard: detail.linkThanksCard,
           linkImg: detail.linkImg,
         })),
       };
-      // </CHANGE>
 
       console.log("🎯 Mapped order for modal:", mappedOrder);
 
       setEditedOrder(mappedOrder);
-      setIsDialogOpen(true); // Use setIsDialogOpen to control the Dialog
+      setIsDialogOpen(true);
     } catch (err) {
       console.error("❌ Failed to fetch order details:", err);
       alert("Failed to load order details. Please try again.");
@@ -794,14 +790,15 @@ export default function ManageOrder() {
   const handleSaveUpdate = () => {
     console.log("Saving updated order:", editedOrder);
     setIsEditMode(false);
-    setSelectedOrder(editedOrder); // This line might be redundant if selectedOrder is unused
-    setIsDialogOpen(false); // Close the dialog after saving
+    setSelectedOrder(editedOrder);
+    setIsDialogOpen(false);
   };
 
   const handleCancelEdit = () => {
-    setEditedOrder({ ...selectedOrder }); // This might be problematic if selectedOrder is null or stale
+    // Sửa: Dùng editedOrder hiện tại để reset nếu selectedOrder chưa được set
+    setEditedOrder(editedOrder);
     setIsEditMode(false);
-    setIsDialogOpen(false); // Close the dialog on cancel
+    setIsDialogOpen(false);
   };
 
   const handleFieldChange = (field, value) => {
@@ -843,7 +840,6 @@ export default function ManageOrder() {
         "Type:",
         typeof orderId
       );
-
       const res = await fetch(
         `https://localhost:7015/api/Seller/orders/${orderId}/approve-or-reject-design`,
         {
@@ -853,10 +849,8 @@ export default function ManageOrder() {
           body: JSON.stringify({ productionStatus: 6 }), // 6 = READY_PROD (Approve)
         }
       );
-
       console.log("[v0] API Response status:", res.status);
       console.log("[v0] API Response headers:", res.headers);
-
       if (!res.ok) {
         const errorText = await res.text();
         console.error("[v0] API Error response text:", errorText);
@@ -877,8 +871,9 @@ export default function ManageOrder() {
       setShowSuccessDialog(true);
       setIsDialogOpen(false);
 
+      // ✅ GỌI LẠI fetchOrders THAY CHO window.location.reload()
       setTimeout(() => {
-        window.location.reload();
+        fetchOrders();
       }, 1500);
     } catch (err) {
       console.error("[v0] Approve design failed:", err);
@@ -900,7 +895,6 @@ export default function ManageOrder() {
         "Type:",
         typeof orderId
       );
-
       const res = await fetch(
         `https://localhost:7015/api/Seller/orders/${orderId}/approve-or-reject-design`,
         {
@@ -910,10 +904,8 @@ export default function ManageOrder() {
           body: JSON.stringify({ productionStatus: 5 }), // 5 = DESIGN_REDO (Reject)
         }
       );
-
       console.log("[v0] API Response status:", res.status);
       console.log("[v0] API Response headers:", res.headers);
-
       if (!res.ok) {
         const errorText = await res.text();
         console.error("[v0] API Error response text:", errorText);
@@ -934,8 +926,9 @@ export default function ManageOrder() {
       setShowSuccessDialog(true);
       setIsDialogOpen(false);
 
+      // ✅ GỌI LẠI fetchOrders THAY CHO window.location.reload()
       setTimeout(() => {
-        window.location.reload();
+        fetchOrders();
       }, 1500);
     } catch (err) {
       console.error("[v0] Reject design failed:", err);
@@ -960,7 +953,6 @@ export default function ManageOrder() {
         return <Badge variant="secondary">Cancel</Badge>;
       case "Hoàn Hàng":
         return <Badge variant="secondary">Hoàn Hàng</Badge>;
-      // </CHANGE>
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
@@ -977,7 +969,6 @@ export default function ManageOrder() {
 
     try {
       const failedOrders = [];
-
       for (const orderId of selectedOrders) {
         try {
           const res = await fetch(
@@ -988,7 +979,6 @@ export default function ManageOrder() {
               credentials: "include", // Added credentials to send authentication token
             }
           );
-
           if (!res.ok) {
             const errorData = await res.json().catch(() => ({}));
             console.error("[v0] Assign staff error:", errorData);
@@ -1023,6 +1013,31 @@ export default function ManageOrder() {
     }
   };
 
+  const handleSelectAll = () => {
+    const newSelectAll = !selectAll;
+    setSelectAll(newSelectAll);
+    if (newSelectAll) {
+      setSelectedOrders(paginatedOrders.map((order) => order.id));
+    } else {
+      setSelectedOrders([]);
+    }
+  };
+
+  const handleOrderSelect = (orderId) => {
+    if (selectedOrders.includes(orderId)) {
+      setSelectedOrders(selectedOrders.filter((id) => id !== orderId));
+    } else {
+      setSelectedOrders([...selectedOrders, orderId]);
+    }
+  };
+
+  const handleFileImport = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      console.log("File selected:", file.name);
+    }
+  };
+
   return (
     <div className="flex h-screen bg-blue-50">
       {" "}
@@ -1051,7 +1066,8 @@ export default function ManageOrder() {
                 <div className="mt-3 sm:mt-0">
                   <div className="flex items-center gap-2 text-sm text-slate-700">
                     <Package className="h-4 w-4" />
-                    <span>{filteredOrders.length} orders</span>
+                    <span>{totalOrdersCount} orders</span>{" "}
+                    {/* ✅ Sửa: Dùng totalOrdersCount */}
                   </div>
                 </div>
               </div>
@@ -1079,6 +1095,7 @@ export default function ManageOrder() {
                         <p className="text-lg font-bold text-slate-900">
                           {stat.value}
                         </p>
+
                         <h3 className="text-[10px] sm:text-xs font-medium text-slate-600 uppercase tracking-wide">
                           {stat.title}
                         </h3>
@@ -1103,14 +1120,14 @@ export default function ManageOrder() {
                     <label className="block text-sm font-medium text-slate-700 mb-1">
                       Search Orders
                     </label>
+
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
                       <Input
                         placeholder="Order ID, Customer, Product..."
                         value={searchTerm}
                         onChange={(e) => {
-                          setSearchTerm(e.target.value);
-                          setPage(1);
+                          handleSearchChange(e.target.value);
                         }}
                         className="pl-10 bg-white border-blue-100 focus:border-blue-300"
                       />
@@ -1125,7 +1142,8 @@ export default function ManageOrder() {
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className="w-full justify-start text-left font-normal bg-white border-blue-100 hover:border-blue-300 hover:bg-blue-50"
+                          className="w-full justify-start text-left font-normal 
+                            bg-white border-blue-100 hover:border-blue-300 hover:bg-blue-50"
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
                           {dateRange.from ? (
@@ -1142,6 +1160,7 @@ export default function ManageOrder() {
                           )}
                         </Button>
                       </PopoverTrigger>
+
                       <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
                           mode="range"
@@ -1150,6 +1169,7 @@ export default function ManageOrder() {
                           numberOfMonths={2}
                           initialFocus
                         />
+
                         {(dateRange.from || dateRange.to) && (
                           <div className="p-3 border-t">
                             <Button
@@ -1190,6 +1210,7 @@ export default function ManageOrder() {
                     <span className="hidden sm:inline">Import file</span>
                     <span className="sm:hidden">Import</span>
                   </Button>
+
                   <input
                     id="file-input"
                     type="file"
@@ -1345,7 +1366,10 @@ export default function ManageOrder() {
                           >
                             Amount {renderSortIcon("totalAmount")}
                           </TableHead>
-                          <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
+                          <TableHead
+                            className="font-medium text-slate-700 uppercase text-xs tracking-wide 
+whitespace-nowrap"
+                          >
                             Actions
                           </TableHead>
                         </TableRow>
@@ -1388,6 +1412,7 @@ export default function ManageOrder() {
                                     <div className="font-medium text-slate-900">
                                       {order.customerName}
                                     </div>
+
                                     {order.email && (
                                       <div className="text-sm text-slate-500">
                                         {order.email}
@@ -1477,17 +1502,19 @@ export default function ManageOrder() {
                                           <DialogTitle className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
                                               <Package className="h-5 w-5" />
-                                              Order Details -{" "}
+                                              Order Details -
                                               {editedOrder?.orderId}
                                             </div>
                                           </DialogTitle>
                                         </DialogHeader>
+
                                         {editedOrder && (
                                           <div className="space-y-6">
                                             <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
                                               <h3 className="font-semibold text-lg mb-3 text-slate-900">
                                                 Customer Information
                                               </h3>
+
                                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                                 <div>
                                                   <Label className="text-sm text-slate-500 font-medium">
@@ -1502,6 +1529,7 @@ export default function ManageOrder() {
                                                       onChange={(e) =>
                                                         handleCustomerInfoChange(
                                                           "name",
+
                                                           e.target.value
                                                         )
                                                       }
@@ -1518,6 +1546,7 @@ export default function ManageOrder() {
                                                   <Label className="text-sm text-slate-500 font-medium">
                                                     Phone *
                                                   </Label>
+
                                                   {isEditMode ? (
                                                     <Input
                                                       value={
@@ -1527,6 +1556,7 @@ export default function ManageOrder() {
                                                       onChange={(e) =>
                                                         handleCustomerInfoChange(
                                                           "phone",
+
                                                           e.target.value
                                                         )
                                                       }
@@ -1543,6 +1573,7 @@ export default function ManageOrder() {
                                                   <Label className="text-sm text-slate-500 font-medium">
                                                     Email *
                                                   </Label>
+
                                                   {isEditMode ? (
                                                     <Input
                                                       value={
@@ -1552,6 +1583,7 @@ export default function ManageOrder() {
                                                       onChange={(e) =>
                                                         handleCustomerInfoChange(
                                                           "email",
+
                                                           e.target.value
                                                         )
                                                       }
@@ -1568,6 +1600,7 @@ export default function ManageOrder() {
                                                   <Label className="text-sm text-slate-500 font-medium">
                                                     Address *
                                                   </Label>
+
                                                   {isEditMode ? (
                                                     <Input
                                                       value={
@@ -1577,6 +1610,7 @@ export default function ManageOrder() {
                                                       onChange={(e) =>
                                                         handleCustomerInfoChange(
                                                           "address",
+
                                                           e.target.value
                                                         )
                                                       }
@@ -1593,6 +1627,7 @@ export default function ManageOrder() {
                                                   <Label className="text-sm text-slate-500 font-medium">
                                                     Address Line 2
                                                   </Label>
+
                                                   {isEditMode ? (
                                                     <Input
                                                       value={
@@ -1602,6 +1637,7 @@ export default function ManageOrder() {
                                                       onChange={(e) =>
                                                         handleCustomerInfoChange(
                                                           "address1",
+
                                                           e.target.value
                                                         )
                                                       }
@@ -1618,6 +1654,7 @@ export default function ManageOrder() {
                                                   <Label className="text-sm text-slate-500 font-medium">
                                                     Zipcode *
                                                   </Label>
+
                                                   {isEditMode ? (
                                                     <Input
                                                       value={
@@ -1627,6 +1664,7 @@ export default function ManageOrder() {
                                                       onChange={(e) =>
                                                         handleCustomerInfoChange(
                                                           "zipcode",
+
                                                           e.target.value
                                                         )
                                                       }
@@ -1643,6 +1681,7 @@ export default function ManageOrder() {
                                                   <Label className="text-sm text-slate-500 font-medium">
                                                     Ship City *
                                                   </Label>
+
                                                   {isEditMode ? (
                                                     <Input
                                                       value={
@@ -1652,6 +1691,7 @@ export default function ManageOrder() {
                                                       onChange={(e) =>
                                                         handleCustomerInfoChange(
                                                           "city",
+
                                                           e.target.value
                                                         )
                                                       }
@@ -1668,6 +1708,7 @@ export default function ManageOrder() {
                                                   <Label className="text-sm text-slate-500 font-medium">
                                                     Ship State *
                                                   </Label>
+
                                                   {isEditMode ? (
                                                     <Input
                                                       value={
@@ -1677,6 +1718,7 @@ export default function ManageOrder() {
                                                       onChange={(e) =>
                                                         handleCustomerInfoChange(
                                                           "state",
+
                                                           e.target.value
                                                         )
                                                       }
@@ -1693,6 +1735,7 @@ export default function ManageOrder() {
                                                   <Label className="text-sm text-slate-500 font-medium">
                                                     Ship Country *
                                                   </Label>
+
                                                   {isEditMode ? (
                                                     <Input
                                                       value={
@@ -1702,6 +1745,7 @@ export default function ManageOrder() {
                                                       onChange={(e) =>
                                                         handleCustomerInfoChange(
                                                           "country",
+
                                                           e.target.value
                                                         )
                                                       }
@@ -1733,6 +1777,7 @@ export default function ManageOrder() {
                                                           <Label className="text-sm text-slate-500 font-medium">
                                                             Product Name
                                                           </Label>
+
                                                           {isEditMode ? (
                                                             <Input
                                                               value={
@@ -1741,6 +1786,7 @@ export default function ManageOrder() {
                                                               onChange={(e) =>
                                                                 handleProductChange(
                                                                   index,
+
                                                                   "name",
                                                                   e.target.value
                                                                 )
@@ -1753,6 +1799,7 @@ export default function ManageOrder() {
                                                             </p>
                                                           )}
                                                         </div>
+
                                                         <div>
                                                           <Label className="text-sm text-slate-500 font-medium">
                                                             Size/Variant
@@ -1765,6 +1812,7 @@ export default function ManageOrder() {
                                                               onChange={(e) =>
                                                                 handleProductChange(
                                                                   index,
+
                                                                   "size",
                                                                   e.target.value
                                                                 )
@@ -1778,6 +1826,7 @@ export default function ManageOrder() {
                                                             </p>
                                                           )}
                                                         </div>
+
                                                         <div>
                                                           <Label className="text-sm text-slate-500 font-medium">
                                                             Quantity
@@ -1792,6 +1841,7 @@ export default function ManageOrder() {
                                                                 handleProductChange(
                                                                   index,
                                                                   "quantity",
+
                                                                   Number.parseInt(
                                                                     e.target
                                                                       .value
@@ -1806,10 +1856,12 @@ export default function ManageOrder() {
                                                             </p>
                                                           )}
                                                         </div>
+
                                                         <div>
                                                           <Label className="text-sm text-slate-500 font-medium">
                                                             Unit Price
                                                           </Label>
+
                                                           <p className="font-medium text-slate-900 mt-1">
                                                             $
                                                             {product.price?.toFixed(
@@ -1821,6 +1873,7 @@ export default function ManageOrder() {
                                                           <Label className="text-sm text-slate-500 font-medium">
                                                             Total Price
                                                           </Label>
+
                                                           <p className="font-bold text-indigo-600 mt-1">
                                                             $
                                                             {(
@@ -1831,10 +1884,12 @@ export default function ManageOrder() {
                                                             ).toFixed(2)}
                                                           </p>
                                                         </div>
+
                                                         <div>
                                                           <Label className="text-sm text-slate-500 font-medium">
                                                             Accessory
                                                           </Label>
+
                                                           {isEditMode ? (
                                                             <Input
                                                               value={
@@ -1843,6 +1898,7 @@ export default function ManageOrder() {
                                                               onChange={(e) =>
                                                                 handleProductChange(
                                                                   index,
+
                                                                   "accessory",
                                                                   e.target.value
                                                                 )
@@ -1856,6 +1912,7 @@ export default function ManageOrder() {
                                                             </p>
                                                           )}
                                                         </div>
+
                                                         <div className="flex items-center space-x-2 lg:col-span-2">
                                                           <Checkbox
                                                             id={`activeTTS-${index}`}
@@ -1871,11 +1928,13 @@ export default function ManageOrder() {
                                                             ) =>
                                                               handleProductChange(
                                                                 index,
+
                                                                 "activeTTS",
                                                                 checked
                                                               )
                                                             }
                                                           />
+
                                                           <Label
                                                             htmlFor={`activeTTS-${index}`}
                                                             className="text-sm"
@@ -1892,10 +1951,14 @@ export default function ManageOrder() {
                                                         </h4>
                                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                           {/* Design File */}
-                                                          <div className="border border-blue-100 rounded-lg p-3 hover:shadow-md transition-shadow bg-blue-50">
+                                                          <div
+                                                            className="border border-blue-100 
+rounded-lg p-3 hover:shadow-md transition-shadow bg-blue-50"
+                                                          >
                                                             <Label className="text-xs text-slate-500 font-medium">
                                                               Design File
                                                             </Label>
+
                                                             <div className="mt-2">
                                                               {product.linkFileDesign &&
                                                               product.linkFileDesign !==
@@ -1914,6 +1977,7 @@ export default function ManageOrder() {
                                                                     ) => {
                                                                       console.log(
                                                                         "[v0] Design file image failed to load:",
+
                                                                         e.target
                                                                           .src
                                                                       );
@@ -1923,6 +1987,7 @@ export default function ManageOrder() {
                                                                         "flex";
                                                                     }}
                                                                   />
+
                                                                   <div
                                                                     className="w-full h-32 bg-blue-100 rounded border border-blue-200 flex items-center justify-center"
                                                                     style={{
@@ -1938,10 +2003,12 @@ export default function ManageOrder() {
                                                                   <QrCode className="h-8 w-8 text-indigo-400" />
                                                                 </div>
                                                               )}
+
                                                               <p className="text-xs mt-2 text-slate-600 truncate">
                                                                 design-file-
                                                                 {index + 1}.psd
                                                               </p>
+
                                                               {product.linkFileDesign &&
                                                                 product.linkFileDesign !==
                                                                   "#" && (
@@ -1956,6 +2023,7 @@ export default function ManageOrder() {
                                                                     View file
                                                                   </a>
                                                                 )}
+
                                                               <Button
                                                                 variant="outline"
                                                                 size="sm"
@@ -1984,6 +2052,7 @@ export default function ManageOrder() {
                                                           </div>
 
                                                           {/* Thanks Card */}
+
                                                           <div className="border border-blue-100 rounded-lg p-3 hover:shadow-md transition-shadow bg-blue-50">
                                                             <Label className="text-xs text-slate-500 font-medium">
                                                               Thanks Card
@@ -2006,6 +2075,7 @@ export default function ManageOrder() {
                                                                     ) => {
                                                                       console.log(
                                                                         "[v0] Thanks card image failed to load:",
+
                                                                         e.target
                                                                           .src
                                                                       );
@@ -2015,6 +2085,7 @@ export default function ManageOrder() {
                                                                         "flex";
                                                                     }}
                                                                   />
+
                                                                   <div
                                                                     className="w-full h-32 bg-blue-100 rounded border border-blue-200 flex items-center justify-center"
                                                                     style={{
@@ -2030,10 +2101,12 @@ export default function ManageOrder() {
                                                                   <QrCode className="h-8 w-8 text-indigo-400" />
                                                                 </div>
                                                               )}
+
                                                               <p className="text-xs mt-2 text-slate-600 truncate">
                                                                 thanks-card-
                                                                 {index + 1}.jpg
                                                               </p>
+
                                                               {product.linkThanksCard &&
                                                                 product.linkThanksCard !==
                                                                   "#" && (
@@ -2048,6 +2121,7 @@ export default function ManageOrder() {
                                                                     View file
                                                                   </a>
                                                                 )}
+
                                                               <Button
                                                                 variant="outline"
                                                                 size="sm"
@@ -2075,6 +2149,7 @@ export default function ManageOrder() {
                                                             </div>
                                                           </div>
                                                           {/* Product Image */}
+
                                                           <div className="border border-blue-100 rounded-lg p-3 hover:shadow-md transition-shadow bg-blue-50">
                                                             <Label className="text-xs text-slate-500 font-medium">
                                                               Product Image
@@ -2097,6 +2172,7 @@ export default function ManageOrder() {
                                                                     ) => {
                                                                       console.log(
                                                                         "[v0] Product image failed to load:",
+
                                                                         e.target
                                                                           .src
                                                                       );
@@ -2106,6 +2182,7 @@ export default function ManageOrder() {
                                                                         "flex";
                                                                     }}
                                                                   />
+
                                                                   <div className="w-full h-32 bg-blue-100 rounded border border-blue-200 flex items-center justify-center">
                                                                     <QrCode className="h-8 w-8 text-indigo-400" />
                                                                   </div>
@@ -2173,6 +2250,7 @@ export default function ManageOrder() {
                                                   <Label className="text-sm text-amber-800 font-medium">
                                                     Order Notes
                                                   </Label>
+
                                                   {isEditMode ? (
                                                     <Textarea
                                                       value={
@@ -2181,6 +2259,7 @@ export default function ManageOrder() {
                                                       onChange={(e) =>
                                                         handleFieldChange(
                                                           "orderNotes",
+
                                                           e.target.value
                                                         )
                                                       }
@@ -2205,12 +2284,14 @@ export default function ManageOrder() {
                                                   <Label className="text-sm text-slate-500 font-medium">
                                                     Current Status
                                                   </Label>
+
                                                   {isEditMode ? (
                                                     <Select
                                                       value={editedOrder.status}
                                                       onValueChange={(value) =>
                                                         handleFieldChange(
                                                           "status",
+
                                                           value
                                                         )
                                                       }
@@ -2218,13 +2299,16 @@ export default function ManageOrder() {
                                                       <SelectTrigger className="mt-1 bg-white border-blue-100 focus:border-blue-300">
                                                         <SelectValue />
                                                       </SelectTrigger>
+
                                                       <SelectContent>
                                                         <SelectItem value="Draft">
                                                           Draft
                                                         </SelectItem>
+
                                                         <SelectItem value="Pending Design">
                                                           Pending Design
                                                         </SelectItem>
+
                                                         <SelectItem value="Assigned Designer">
                                                           Assigned Designer
                                                         </SelectItem>
@@ -2234,9 +2318,11 @@ export default function ManageOrder() {
                                                         <SelectItem value="Check File Design">
                                                           Check File Design
                                                         </SelectItem>
+
                                                         <SelectItem value="Seller Approved Design">
                                                           Seller Approved Design
                                                         </SelectItem>
+
                                                         <SelectItem value="Seller Reject Design">
                                                           Seller Reject Design
                                                         </SelectItem>
@@ -2257,7 +2343,10 @@ export default function ManageOrder() {
                                                   )}
                                                 </div>
                                                 <div>
-                                                  <Label className="text-sm text-slate-500 font-medium">
+                                                  <Label
+                                                    className="text-sm 
+text-slate-500 font-medium"
+                                                  >
                                                     Order Date
                                                   </Label>
                                                   <p className="font-medium text-slate-900 mt-1">
@@ -2273,6 +2362,7 @@ export default function ManageOrder() {
                                                       "N/A"}
                                                   </p>
                                                 </div>
+
                                                 <div>
                                                   <Label className="text-sm text-slate-500 font-medium">
                                                     Order ID
@@ -2293,17 +2383,22 @@ export default function ManageOrder() {
                                             </div>
 
                                             {/* QR Code Section */}
-                                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                            <div
+                                              className="bg-blue-50 p-4 rounded-lg border 
+border-blue-100"
+                                            >
                                               <h4 className="font-medium mb-2 text-slate-900">
                                                 QR Code for Order{" "}
                                                 {editedOrder.orderId}
                                               </h4>
+
                                               <div className="w-32 h-32 bg-white border-2 border-blue-300 rounded flex items-center justify-center">
                                                 <QrCode className="h-16 w-16 text-indigo-400" />
                                               </div>
                                             </div>
                                           </div>
                                         )}
+
                                         {editedOrder?.status ===
                                           "Cần Check Design" &&
                                           !isEditMode && (
@@ -2338,6 +2433,7 @@ export default function ManageOrder() {
                                               </Button>
                                             </DialogFooter>
                                           )}
+
                                         {isEditMode && (
                                           <DialogFooter className="flex gap-2">
                                             <Button
@@ -2427,6 +2523,7 @@ export default function ManageOrder() {
                                                   No Image
                                                 </div>
                                               )}
+
                                               {/* Item Details */}
                                               <div className="flex-1">
                                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -2486,14 +2583,35 @@ export default function ManageOrder() {
                   {/* Pagination Footer */}
                   <div className="bg-blue-100 px-4 py-3 border-t border-blue-200 sm:px-6">
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                      {/* Thêm Items Per Page Selector */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-slate-600">
+                          Items per page:
+                        </span>
+                        <Select
+                          value={itemsPerPage.toString()}
+                          onValueChange={handleItemsPerPageChange}
+                        >
+                          <SelectTrigger className="w-[70px] bg-white border-blue-200 hover:bg-blue-50">
+                            <SelectValue placeholder={itemsPerPage} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="5">5</SelectItem>
+                            <SelectItem value="10">10</SelectItem>
+                            <SelectItem value="15">15</SelectItem>
+                            <SelectItem value="20">20</SelectItem>
+                            <SelectItem value="50">50</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
                       <div className="text-sm text-slate-600">
                         Showing{" "}
                         {paginatedOrders.length > 0
                           ? (page - 1) * itemsPerPage + 1
                           : 0}{" "}
-                        to{" "}
-                        {Math.min(page * itemsPerPage, filteredOrders.length)}{" "}
-                        of {filteredOrders.length}
+                        to {Math.min(page * itemsPerPage, totalOrdersCount)} of{" "}
+                        {totalOrdersCount}
                       </div>
                       <div className="flex items-center gap-2">
                         <Button
@@ -2505,24 +2623,39 @@ export default function ManageOrder() {
                         >
                           <ChevronLeft className="h-4 w-4" />
                         </Button>
-                        {Array.from(
-                          { length: totalPages },
-                          (_, i) => i + 1
-                        ).map((pageNum) => (
-                          <Button
-                            key={pageNum}
-                            variant={page === pageNum ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => setPage(pageNum)}
-                            className={`w-8 h-8 p-0 ${
-                              page === pageNum
-                                ? "bg-indigo-600 hover:bg-indigo-700"
-                                : "border-blue-200 hover:bg-blue-50"
-                            }`}
-                          >
-                            {pageNum}
-                          </Button>
-                        ))}
+
+                        {/* Sửa lỗi: Thay thế React.Fragment bằng cú pháp rút gọn <> */}
+                        {Array.from({ length: totalPages }, (_, i) => i + 1)
+                          .filter(
+                            (pageNum) =>
+                              pageNum === 1 ||
+                              pageNum === totalPages ||
+                              (pageNum >= page - 2 && pageNum <= page + 2)
+                          )
+                          .map((pageNum, index, arr) => (
+                            <React.Fragment key={pageNum}>
+                              {/* Thêm dấu ... nếu cần */}
+                              {index > 0 && pageNum > arr[index - 1] + 1 && (
+                                <span className="text-slate-600 mx-1">...</span>
+                              )}
+
+                              <Button
+                                key={pageNum}
+                                variant={
+                                  page === pageNum ? "default" : "outline"
+                                }
+                                size="sm"
+                                onClick={() => setPage(pageNum)}
+                                className={`w-8 h-8 p-0 ${
+                                  page === pageNum
+                                    ? "bg-indigo-600 hover:bg-indigo-700"
+                                    : "border-blue-200 hover:bg-blue-50"
+                                }`}
+                              >
+                                {pageNum}
+                              </Button>
+                            </React.Fragment>
+                          ))}
                         <Button
                           variant="outline"
                           size="sm"
@@ -2598,6 +2731,7 @@ export default function ManageOrder() {
               >
                 Cancel
               </Button>
+
               <Button
                 onClick={handleConfirmAssignDesigner}
                 className="bg-indigo-600 hover:bg-indigo-700"
@@ -2615,6 +2749,7 @@ export default function ManageOrder() {
             <DialogTitle className="text-green-600">Success</DialogTitle>
           </DialogHeader>
           <p className="text-gray-700 py-4">{successMessage}</p>
+
           <DialogFooter>
             <Button
               onClick={() => setShowSuccessDialog(false)}
