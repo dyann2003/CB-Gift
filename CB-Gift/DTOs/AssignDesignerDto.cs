@@ -37,6 +37,7 @@ namespace CB_Gift.DTOs
         public string Note { get; set; } // Ghi chú từ Seller
         public int OrderStatus { get; set; }
         public DateTime? AssignedAt { get; set; }
+        public string? Reason { get; set; }
         public ProductDetails ProductDetails { get; set; }
     }
     public class ProductDetails
@@ -78,5 +79,7 @@ namespace CB_Gift.DTOs
         // Frontend sẽ gửi JSON: { "orderStatus": 4 }
         [Required]
         public ProductionStatus ProductionStatus { get; set; }
+        // Thêm trường Reason
+        public string? Reason { get; set; }
     }
 }

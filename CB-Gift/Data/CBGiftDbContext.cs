@@ -32,7 +32,9 @@ namespace CB_Gift.Data
         public virtual DbSet<InvoiceHistory> InvoiceHistories { get; set; }
         public virtual DbSet<WebhookLog> WebhookLogs { get; set; }
         public virtual DbSet<Notification> Notifications { get; set; }
-
+        public virtual DbSet<OrderDetailLog> OrderDetailLogs { get; set; }
+        public virtual DbSet<CancellationRequest> CancellationRequests { get; set; }
+        public virtual DbSet<Refund> Refunds { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

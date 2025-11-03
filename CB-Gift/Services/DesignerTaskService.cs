@@ -57,48 +57,55 @@ namespace CB_Gift.Services
             // Định nghĩa các trạng thái OrderStatus liên quan đến thiết kế
             var designOrderStatuses = new[] { 3, 4, 5, 6 }; // StatusOrder là kiểu int
             var tasks = await _context.OrderDetails
-                .Include(od => od.Order)
-                .Include(od => od.ProductVariant.Product)
-                .Where(od => od.AssignedDesignerUserId == designerId &&
-                             od.NeedDesign == true &&
-                             // Lọc theo ProductionStatus của OrderDetail
-                             od.ProductionStatus.HasValue &&
-                             designStatuses.Contains(od.ProductionStatus.Value) &&
-                             // <<< TIÊU CHÍ 2: Lọc theo StatusOrder của Order >>>
-                             designOrderStatuses.Contains(od.Order.StatusOrder))
-                .Select(od => new DesignTaskDto
-                {
-                    OrderDetailId = od.OrderDetailId,
-                    OrderId = od.OrderId,
-                    OrderCode = od.Order.OrderCode,
-                    ProductName = od.ProductVariant.Product.ProductName,
-                    ProductDescribe = od.ProductVariant.Product.Describe,
-                    ProductTemplate = od.ProductVariant.Product.Template,
-                    OrderStatus = od.Order.StatusOrder,
-                    Quantity = od.Quantity,
-                    LinkImg = od.LinkImg,
-                    LinkThankCard = od.LinkThanksCard,
-                    LinkFileDesign = od.LinkFileDesign,
-                    Note = od.Note,
-                    AssignedAt = od.AssignedAt,
-                    // THÊM ProductionStatus vào DTO để designer xem trạng thái chi tiết
-                    ProductionStatus = od.ProductionStatus.ToString(),
-                    ProductDetails = od.ProductVariant != null ? new ProductDetails
-                    {
-                        ProductVariantId = od.ProductVariant.ProductVariantId.ToString(),
-                        LengthCm = od.ProductVariant.LengthCm,
-                        HeightCm = od.ProductVariant.HeightCm,
-                        WidthCm = od.ProductVariant.WidthCm,
-                        ThicknessMm = od.ProductVariant.ThicknessMm,
-                        SizeInch = od.ProductVariant.SizeInch,
-                        Layer = od.ProductVariant.Layer,
-                        CustomShape = od.ProductVariant.CustomShape,
-                        Sku = od.ProductVariant.Sku
-                    } : null
-                })
-                .AsNoTracking()
-                .ToListAsync();
-            return tasks;
+            .Include(od => od.Order)
+            .Include(od => od.ProductVariant.Product)
+            .Where(od => od.AssignedDesignerUserId == designerId &&
+                         od.NeedDesign == true &&
+                         od.ProductionStatus.HasValue &&
+                         designStatuses.Contains(od.ProductionStatus.Value) &&
+                         designOrderStatuses.Contains(od.Order.StatusOrder))
+            .Select(od => new DesignTaskDto
+            {
+                OrderDetailId = od.OrderDetailId,
+                OrderId = od.OrderId,
+                OrderCode = od.Order.OrderCode,
+                ProductName = od.ProductVariant.Product.ProductName,
+                ProductDescribe = od.ProductVariant.Product.Describe,
+                ProductTemplate = od.ProductVariant.Product.Template,
+                OrderStatus = od.Order.StatusOrder,
+                Quantity = od.Quantity,
+                LinkImg = od.LinkImg,
+                LinkThankCard = od.LinkThanksCard,
+                LinkFileDesign = od.LinkFileDesign,
+                Note = od.Note,
+                AssignedAt = od.AssignedAt,
+                ProductionStatus = od.ProductionStatus.ToString(),
+
+                //Truy vấn con để lấy lý do
+                Reason = (od.ProductionStatus == ProductionStatus.DESIGN_REDO )
+                    ? (from log in _context.OrderDetailLogs
+                       where log.OrderDetailId == od.OrderDetailId &&
+                             (log.EventType == "DESIGN_REJECTED")
+                       orderby log.CreatedAt descending
+                       select log.Reason
+                      ).FirstOrDefault()
+                    : null, // Nếu không phải trạng thái bị từ chối, Reason là null
+                ProductDetails = od.ProductVariant != null ? new ProductDetails
+                        {
+                            ProductVariantId = od.ProductVariant.ProductVariantId.ToString(),
+                            LengthCm = od.ProductVariant.LengthCm,
+                            HeightCm = od.ProductVariant.HeightCm,
+                            WidthCm = od.ProductVariant.WidthCm,
+                            ThicknessMm = od.ProductVariant.ThicknessMm,
+                            SizeInch = od.ProductVariant.SizeInch,
+                            Layer = od.ProductVariant.Layer,
+                            CustomShape = od.ProductVariant.CustomShape,
+                            Sku = od.ProductVariant.Sku
+                        } : null
+                    })
+                    .AsNoTracking()
+                    .ToListAsync();
+                return tasks;
         }
 
         // DesignerTaskService.cs

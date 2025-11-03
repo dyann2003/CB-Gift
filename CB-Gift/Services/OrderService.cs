@@ -527,7 +527,8 @@ namespace CB_Gift.Services
         public async Task<bool> SellerApproveOrderDetailDesignAsync(
         int orderDetailId,
         ProductionStatus action,
-        string sellerId)
+        string sellerId,
+        string? reason)
         {
             // 1. Tải OrderDetail và Order cha
             var orderDetail = await _context.OrderDetails
@@ -559,8 +560,32 @@ namespace CB_Gift.Services
             {
                 throw new InvalidOperationException($"Invalid action status {action}. Must be DESIGN_REDO or READY_PROD.");
             }
+            string eventType;
+            string notificationMessage;
 
-            // 5. Cập nhật ProductionStatus của OrderDetail duy nhất
+            if (action == ProductionStatus.DESIGN_REDO)
+            {
+                eventType = "DESIGN_REJECTED";
+                notificationMessage = $"YÊU CẦU LÀM LẠI thiết kế cho mục #{orderDetailId}. Lý do: {reason}";
+            }
+            else // (action == ProductionStatus.READY_PROD)
+            {
+                eventType = "DESIGN_APPROVED";
+                notificationMessage = $"CHẤP NHẬN thiết kế cho mục #{orderDetailId}.";
+            }
+
+            // Tạo bản ghi log mới
+            var newLog = new OrderDetailLog
+            {
+                OrderDetailId = orderDetailId,
+                ActorUserId = sellerId,
+                EventType = eventType,
+                Reason = reason, // Sẽ là null nếu được chấp nhận, và có nội dung nếu bị từ chối
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.OrderDetailLogs.Add(newLog);
+
+            // 5. Cập nhật ProductionStatus của OrderDetail
             orderDetail.ProductionStatus = action;
 
             // 6. Lưu thay đổi
