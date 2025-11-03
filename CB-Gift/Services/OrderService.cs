@@ -24,6 +24,8 @@ namespace CB_Gift.Services
             _context = context ?? throw new ArgumentNullException(nameof(context));
             _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _notificationService = notificationService;
+            _hubContext = hubContext;
         }
 
         // ----------------------------------------------------------------------
@@ -328,7 +330,6 @@ namespace CB_Gift.Services
                 await _context.SaveChangesAsync();
             }
         }
-
         public async Task<MakeOrderResponse> MakeOrder(MakeOrderDto request, string sellerUserId)
         {
             int customerId;
@@ -506,6 +507,10 @@ namespace CB_Gift.Services
 
             int newOrderStatus;
             ProductionStatus newProductionStatus;
+            // thêm message để làm thông báo tới designer
+            string designerMessage;
+            // lấy DesignerID để gửi thông báo đến
+            string designerId = order.OrderDetails.FirstOrDefault()?.AssignedDesignerUserId; // Lấy ID designer
 
             if (action == ProductionStatus.DESIGN_REDO)
             {
@@ -527,6 +532,31 @@ namespace CB_Gift.Services
             {
                 detail.ProductionStatus = newProductionStatus;
             }
+            // ✅ BẮT ĐẦU GỬI THÔNG BÁO
+            try
+            {
+                // 1. Gửi thông báo đến Designer
+                if (!string.IsNullOrEmpty(designerId))
+                {
+                    await _notificationService.CreateAndSendNotificationAsync(
+                        designerId,
+                        designerMessage,
+                        $"/designer/tasks" // Hoặc link chi tiết đơn hàng
+                    );
+                }
+
+                // 2. Gửi cập nhật trạng thái real-time cho group của đơn hàng
+                var orderGroupName = $"order_{orderId}";
+                await _hubContext.Clients.Group(orderGroupName).SendAsync(
+                    "OrderStatusChanged",
+                    new { orderId = orderId, newStatus = newProductionStatus.ToString() }
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho SellerApproveOrderDesignAsync");
+            }
+            // ✅ KẾT THÚC GỬI THÔNG BÁO
 
             await _context.SaveChangesAsync();
             return true;
@@ -534,7 +564,8 @@ namespace CB_Gift.Services
         public async Task<bool> SellerApproveOrderDetailDesignAsync(
         int orderDetailId,
         ProductionStatus action,
-        string sellerId)
+        string sellerId,
+        string? reason)
         {
             var orderDetail = await _context.OrderDetails
                 .Include(od => od.Order)
@@ -606,6 +637,28 @@ namespace CB_Gift.Services
             {
                 _context.Orders.Update(order);
                 await _context.SaveChangesAsync();
+                // ✅ BẮT ĐẦU GỬI THÔNG BÁO
+                try
+                {
+                    // 1. Gửi thông báo (chuông) cho Seller
+                    await _notificationService.CreateAndSendNotificationAsync(
+                        order.SellerUserId,
+                        $"Đơn hàng #{orderId} của bạn đã được giao.",
+                        $"/seller/orders/{orderId}"
+                    );
+
+                    // 2. Gửi cập nhật real-time
+                    var orderGroupName = $"order_{orderId}";
+                    await _hubContext.Clients.Group(orderGroupName).SendAsync(
+                        "OrderStatusChanged",
+                        new { orderId = orderId, newStatus = "SHIPPED" } // Giả sử 14 là Shipped
+                    );
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho ApproveOrderForShippingAsync");
+                }
+                // ✅ KẾT THÚC GỬI THÔNG BÁO
                 return new ApproveOrderResult { IsSuccess = true };
             }
             catch (DbUpdateException)
