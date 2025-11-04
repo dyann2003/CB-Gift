@@ -3,9 +3,9 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace CB_Gift.Models 
+namespace CB_Gift.Models
 {
-    [Table("Refunds")] 
+    [Table("Refunds")]
     public partial class Refund
     {
         [Key]
@@ -14,28 +14,46 @@ namespace CB_Gift.Models
         [Required]
         public int OrderId { get; set; }
 
-        
-        [Column(TypeName = "decimal(18, 2)")] // Kiểu dữ liệu chuẩn cho tiền tệ
-        public decimal? Amount { get; set; }
-
-        [Column(TypeName = "TEXT")]
-        public string? Reason { get; set; }
-
-        
-        public string? RefundedByStaffId { get; set; } // ID của Staff thực hiện hoàn tiền
+        [Required]
+        [Column(TypeName = "decimal(18, 2)")]
+        public decimal Amount { get; set; } // số tiền *yêu cầu* hoàn
 
         [Required]
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        [Column(TypeName = "TEXT")]
+        public string Reason { get; set; } 
+
+        [StringLength(500)]
+        public string? ProofUrl { get; set; } // Link bằng chứng của Seller
+
+        [Required]
+        [StringLength(20)]
+        public string Status { get; set; } // "Pending", "Approved", "Rejected"
+
+        [Required]
+        public string RequestedBySellerId { get; set; }
+
+        public string? ReviewedByStaffId { get; set; }
+
+        public DateTime? ReviewedAt { get; set; } 
+
+        [Column(TypeName = "TEXT")]
+        public string? StaffRejectionReason { get; set; } // Lý do Staff từ chối
+
+        [Required]
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow; 
 
         [StringLength(100)]
-        public string? GatewayRefundId { get; set; } // Mã giao dịch hoàn tiền từ PayOS (nếu có)
+        public string? GatewayRefundId { get; set; } 
 
         // --- Thuộc tính điều hướng (Navigation Properties) ---
 
         [ForeignKey("OrderId")]
         public virtual Order Order { get; set; }
 
-        [ForeignKey("RefundedByStaffId")]
-        public virtual AppUser RefundedByStaff { get; set; }
+        [ForeignKey("RequestedBySellerId")]
+        public virtual AppUser RequestedBySeller { get; set; } 
+
+        [ForeignKey("ReviewedByStaffId")]
+        public virtual AppUser? ReviewedByStaff { get; set; } 
     }
 }
