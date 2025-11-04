@@ -65,7 +65,8 @@ namespace CB_Gift.Mapper
                 .ForMember(d => d.ProductionStatus, opt => opt.MapFrom(s => s.ProductionStatus.HasValue ? s.ProductionStatus.Value.ToString() : null))
                 .ForMember(d => d.LinkThankCard, opt => opt.MapFrom(s => s.LinkThanksCard)) // khác tên: LinkThanksCard -> LinkThankCard
                 .ForMember(d => d.OrderStatus, opt => opt.MapFrom(s => s.Order.StatusOrder))
-                .ForMember(d => d.ProductDetails, opt => opt.MapFrom(s => s.ProductVariant));
+                .ForMember(d => d.ProductDetails, opt => opt.MapFrom(s => s.ProductVariant))
+                .ForMember(dest => dest.Reason, opt => opt.Ignore());
         }
     }
 }
