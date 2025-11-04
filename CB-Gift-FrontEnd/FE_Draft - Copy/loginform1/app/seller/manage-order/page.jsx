@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react"; // ✅ Đảm bảo useMemo được import
-import React from "react";
+import { useState, useEffect, useMemo } from "react";
 import SellerSidebar from "@/components/layout/seller/sidebar";
 import SellerHeader from "@/components/layout/seller/header";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+import React from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -186,7 +186,7 @@ export default function ManageOrder() {
           price: detail.price,
           size: detail.size || "",
           accessory: detail.accessory || "",
-          activeTTS: order.activeTts || false,
+          activeTTS: order.activeTts || false, // Đã sửa từ activeTTS sang activeTts
           linkFileDesign: detail.linkFileDesign,
           linkThanksCard: detail.linkThanksCard,
           linkImg: detail.linkImg,
@@ -344,16 +344,14 @@ export default function ManageOrder() {
     // </CHANGE>
   ];
 
-  // ✅ Sửa lỗi: Đảm bảo orders là một mảng trước khi dùng filter
+  // ✅ Dùng useMemo để tính toán số lượng thống kê
   const statsWithCounts = useMemo(() => {
-    // ❌ Lỗi Orders.filter is not a function thường do orders không phải là mảng
-    const safeOrders = Array.isArray(orders) ? orders : [];
-
     let newStats = stats.map((stat) => ({
       ...stat,
-      // Sử dụng safeOrders
+      // Tạm thời tính các status khác trên dữ liệu trang hiện tại (chỉ có 10-20 orders)
+      // Để chính xác, cần một API BE riêng chỉ trả về COUNT theo từng Status.
       value: stat.statusFilter
-        ? safeOrders.filter((o) => o.status === stat.statusFilter).length
+        ? orders.filter((o) => o.status === stat.statusFilter).length
         : 0,
     }));
 
@@ -363,6 +361,8 @@ export default function ManageOrder() {
     );
     return newStats;
   }, [orders, stats, totalOrdersCount]);
+
+  // ❌ Loại bỏ logic Filter/Sort/Pagination ở FE
 
   const totalPages = Math.ceil(totalOrdersCount / itemsPerPage);
   // orders đã là dữ liệu phân trang (paginatedOrders)
@@ -2624,7 +2624,7 @@ border-blue-100"
                           <ChevronLeft className="h-4 w-4" />
                         </Button>
 
-                        {/* Sửa lỗi: Thay thế React.Fragment bằng cú pháp rút gọn <> */}
+                        {/* Chỉ hiển thị tối đa 5 nút trang */}
                         {Array.from({ length: totalPages }, (_, i) => i + 1)
                           .filter(
                             (pageNum) =>
