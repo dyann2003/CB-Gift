@@ -1,15 +1,15 @@
-// Trong OrderService.cs
 
 using CB_Gift.Data;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using CB_Gift.Data;
 using CB_Gift.DTOs;
 using CB_Gift.Models;
 using CB_Gift.Services.IService;
 using Microsoft.EntityFrameworkCore;
 using CB_Gift.Models.Enums;
-using System.Linq;
-using System.Collections.Generic; // Cần thiết cho List
+using Microsoft.AspNetCore.SignalR;
+using CB_Gift.Hubs;
 
 namespace CB_Gift.Services
 {
@@ -18,8 +18,10 @@ namespace CB_Gift.Services
         private readonly CBGiftDbContext _context;
         private readonly ILogger<OrderService> _logger;
         private readonly IMapper _mapper;
-
-        public OrderService(CBGiftDbContext context, IMapper mapper, ILogger<OrderService> logger)
+        private readonly INotificationService _notificationService;
+        private readonly IHubContext<NotificationHub> _hubContext;
+        public OrderService(CBGiftDbContext context, IMapper mapper, ILogger<OrderService> logger,
+            INotificationService notificationService, IHubContext<NotificationHub> hubContext)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
             _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
@@ -27,134 +29,24 @@ namespace CB_Gift.Services
             _notificationService = notificationService;
             _hubContext = hubContext;
         }
-
-        // ----------------------------------------------------------------------
-        // ✅ 1. TRIỂN KHAI GET DASHBOARD STATS (TỐI ƯU)
-        // ----------------------------------------------------------------------
-        public async Task<DashboardStatsDto> GetDashboardStatsForSellerAsync(string sellerUserId)
-        {
-            // ĐỊNH NGHĨA CÁC NHÓM TRẠNG THÁI (Sử dụng tên Tiếng Việt để đồng bộ với FE)
-            var designStatuses = new[] { "Draft (Nháp)", "Cần Design", "Đang làm Design", "Cần Check Design" };
-            var productionReadyStatuses = new[] { "Sẵn sàng Sản xuất", "Sản xuất Xong" };
-
-            var urgentIssueStatuses = new[] { "Sản xuất Lại", "Thiết kế Lại (Design Lỗi)" };
-
-            var completedStatuses = new[] { "Đã Ship", "Đã Kiểm tra Chất lượng" };
-            var closedStatuses = new[] { "Chốt Đơn (Khóa Seller)" };
-            var excludedStatuses = new[] { "Cancel", "Hoàn Hàng" };
-
-
-            // 1. CHỈ TRUY VẤN LẤY STATUS (Rất hiệu quả về mặt hiệu suất DB)
-            var allOrderStatuses = await _context.Orders
-                .Include(o => o.StatusOrderNavigation)
-                .Where(o => o.SellerUserId == sellerUserId)
-                .Select(o => o.StatusOrderNavigation.NameVi) // Chỉ lấy trường NameVi
-                .ToListAsync();
-
-            // 2. Tính toán các Stats trên bộ nhớ (rất nhanh)
-            int totalOrders = allOrderStatuses.Count;
-
-            int completed = allOrderStatuses.Count(s => completedStatuses.Contains(s));
-            int urgentIssues = allOrderStatuses.Count(s => urgentIssueStatuses.Contains(s));
-
-            // CẦN HÀNH ĐỘNG = (Design Action) + (Ready Prod Action) + (Closed Order)
-            int needsAction = allOrderStatuses.Count(s =>
-                designStatuses.Contains(s) ||
-                productionReadyStatuses.Contains(s) ||
-                closedStatuses.Contains(s) // Giả định Chốt Đơn vẫn là cần hành động từ góc độ Seller
-            );
-
-            return new DashboardStatsDto
-            {
-                TotalOrders = totalOrders,
-                NeedsAction = needsAction,
-                UrgentIssues = urgentIssues,
-                Completed = completed
-            };
-        }
-
-        // ----------------------------------------------------------------------
-        // ✅ 2. TRIỂN KHAI GET FILTERED AND PAGED ORDERS
-        // ----------------------------------------------------------------------
-        public async Task<(List<OrderWithDetailsDto> Orders, int TotalCount)> GetFilteredAndPagedOrdersForSellerAsync(
-            string sellerUserId,
-            string? status,
-            string? searchTerm,
-            string? sortColumn,
-            string? sortDirection,
-            int page,
-            int pageSize)
-        {
-            var query = _context.Orders
-                .Include(o => o.EndCustomer)
-                .Include(o => o.StatusOrderNavigation)
-                .Include(o => o.OrderDetails)
-                    .ThenInclude(od => od.ProductVariant)
-                .Where(o => o.SellerUserId == sellerUserId)
-                .AsQueryable();
-
-            // 1. Lọc theo Status
-            if (!string.IsNullOrEmpty(status))
-                query = query.Where(o => o.StatusOrderNavigation.NameVi == status);
-
-            // 2. Xử lý Tìm kiếm
-            if (!string.IsNullOrEmpty(searchTerm))
-            {
-                string term = searchTerm.ToLower();
-                query = query.Where(o =>
-                    (o.OrderCode != null && o.OrderCode.ToLower().Contains(term)) ||
-                    (o.EndCustomer != null && o.EndCustomer.Name.ToLower().Contains(term))
-                // ❌ Loại bỏ ProductVariant Name để tránh lỗi biên dịch
-                );
-            }
-
-            // 3. Đếm tổng số lượng (sau khi lọc, trước khi phân trang)
-            var totalCount = await query.CountAsync();
-
-            // 4. Xử lý Sắp xếp
-            if (!string.IsNullOrEmpty(sortColumn))
-            {
-                query = sortColumn.ToLower() switch
-                {
-                    "orderid" => (sortDirection.ToLower() == "asc" ? query.OrderBy(o => o.OrderCode) : query.OrderByDescending(o => o.OrderCode)),
-                    "orderdate" => (sortDirection.ToLower() == "asc" ? query.OrderBy(o => o.OrderDate) : query.OrderByDescending(o => o.OrderDate)),
-                    "customername" => (sortDirection.ToLower() == "asc" ? query.OrderBy(o => o.EndCustomer.Name) : query.OrderByDescending(o => o.EndCustomer.Name)),
-                    "totalamount" => (sortDirection.ToLower() == "asc" ? query.OrderBy(o => o.TotalCost) : query.OrderByDescending(o => o.TotalCost)),
-                    _ => query.OrderByDescending(o => o.CreationDate ?? o.OrderDate)
-                };
-            }
-            else
-            {
-                query = query.OrderByDescending(o => o.OrderDate);
-            }
-
-            // 5. Phân trang
-            var orders = await query
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                // 6. Project To DTO
-                .ProjectTo<OrderWithDetailsDto>(_mapper.ConfigurationProvider)
-                .ToListAsync();
-
-            return (orders, totalCount);
-        }
-
-        // ----------------------------------------------------------------------
-        // Giữ nguyên các phương thức còn lại
-        // ----------------------------------------------------------------------
+        //public async Task<List<Order>> GetAllOrders()
+        //{
+        //    return await _context.Orders
+        //         .Include(o => o.OrderDetails)
+        //         .Include(o => o.StatusOrderNavigation)
+        //         .ToListAsync();
+        //}
 
         public async Task<List<OrderWithDetailsDto>> GetAllOrders()
         {
             return await _context.Orders
-           .Include(o => o.EndCustomer)
-           .Include(o => o.StatusOrderNavigation)
-           .Include(o => o.OrderDetails)
-                 .ThenInclude(od => od.ProductVariant)
-           .ProjectTo<OrderWithDetailsDto>(_mapper.ConfigurationProvider)
-           .ToListAsync();
+         .Include(o => o.EndCustomer)
+         .Include(o => o.StatusOrderNavigation)
+         .Include(o => o.OrderDetails)
+              .ThenInclude(od => od.ProductVariant)
+         .ProjectTo<OrderWithDetailsDto>(_mapper.ConfigurationProvider)
+         .ToListAsync();
         }
-
-        // ❌ Phương thức này không còn cần thiết, GetMyOrders mới sẽ dùng GetFilteredAndPagedOrdersForSellerAsync
         public async Task<List<OrderDto>> GetOrdersForSellerAsync(string sellerUserId)
         {
             return await _context.Orders
@@ -174,8 +66,6 @@ namespace CB_Gift.Services
             })
             .ToListAsync();
         }
-
-        // ❌ Phương thức này không còn cần thiết, GetMyOrders mới sẽ dùng GetFilteredAndPagedOrdersForSellerAsync
         public async Task<List<OrderWithDetailsDto>> GetOrdersAndOrderDetailForSellerAsync(string sellerUserId)
         {
             return await _context.Orders
@@ -188,15 +78,10 @@ namespace CB_Gift.Services
              .ProjectTo<OrderWithDetailsDto>(_mapper.ConfigurationProvider)
             .ToListAsync();
         }
-
         public async Task<OrderWithDetailsDto?> GetOrderDetailAsync(int orderId, string sellerUserId)
         {
             var query = _context.Orders
                 .Include(o => o.OrderDetails)
-                .Include(o => o.EndCustomer)
-                .Include(o => o.StatusOrderNavigation)
-                 .Include(o => o.OrderDetails)
-                    .ThenInclude(od => od.ProductVariant)
                 .Where(o => o.OrderId == orderId);
 
             if (!string.IsNullOrEmpty(sellerUserId))
@@ -204,6 +89,8 @@ namespace CB_Gift.Services
                 query = query.Where(o => o.SellerUserId == sellerUserId);
             }
 
+
+            // Map trực tiếp sang DTO gồm cả collection Details
             var dto = await query
             .ProjectTo<OrderWithDetailsDto>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync();
@@ -242,9 +129,22 @@ namespace CB_Gift.Services
             {
                 order.TotalCost += 1; // cộng thêm 1 là giá CostScan TTS
             }
-
             _context.Orders.Add(order);
             await _context.SaveChangesAsync();
+
+            // không thêm OrdeDetail ở CreateOrder
+            /* if (request.OrderDetails?.Any() == true)
+             {
+                 var details = _mapper.Map<List<OrderDetail>>(request.OrderDetails);
+                 foreach (var d in details)
+                 {
+                     d.OrderId = order.OrderId;
+                     d.CreatedDate = DateTime.UtcNow;
+                 }
+                 _context.OrderDetails.AddRange(details);
+                 await _context.SaveChangesAsync();
+             }*/
+
 
             return order.OrderId;
         }
@@ -256,10 +156,11 @@ namespace CB_Gift.Services
             if (order == null) throw new Exception("Order not found or not yours.");
 
             var productVariant = await _context.ProductVariants
-                                           .AnyAsync(pv => pv.ProductVariantId == request.ProductVariantID);
+                                       .AnyAsync(pv => pv.ProductVariantId == request.ProductVariantID);
 
             if (!productVariant)
             {
+                // Sử dụng một loại Exception rõ ràng hơn cho nghiệp vụ (Ví dụ: ArgumentException)
                 throw new ArgumentException($"Product Variant with ID {request.ProductVariantID} does not exist.", nameof(request.ProductVariantID));
             }
             if (request.Quantity <= 0)
@@ -274,6 +175,7 @@ namespace CB_Gift.Services
             detail.CreatedDate = DateTime.UtcNow;
             _context.OrderDetails.Add(detail);
             await _context.SaveChangesAsync();
+            // cập nhập tổng tiền của Order ( TotalCost)
             await RecalculateOrderTotalCost(orderId);
         }
         private async Task<decimal> CalculatePriceAsync(int productVariantId)
@@ -294,11 +196,13 @@ namespace CB_Gift.Services
         }
         private async Task RecalculateOrderTotalCost(int orderId)
         {
+            // lấy toàn bộ detail thuộc order
             var details = await _context.OrderDetails
                 .Include(d => d.ProductVariant)
                 .Where(d => d.OrderId == orderId)
                 .ToListAsync();
-            Console.WriteLine(details.ToString());
+            Console.WriteLine(details.ToString()); // debug
+            // nếu không có orderDetail nào thì TotalCost =0;
             if (!details.Any())
             {
                 var order = await _context.Orders.FindAsync(orderId);
@@ -309,20 +213,28 @@ namespace CB_Gift.Services
                 }
                 return;
             }
+            //ItemBase = tổng base của các sản phẩm trong order.
+            //maxExtra = phí ExtraShip cao nhất của 1 sẩn phẩm trong order đó.
+            //baseShip = phí ShipCost cao nhất của 1 sản phẩm trong order đó.
+            //totalQuantity = Sum của detail.Quantity
+            // If ActiveTTS = true thì cộng thêm CostScan = 1 vào.
+            //totalCost = ItemBase + baseShip
+            //if(totalQuantity > 1) totalCost += (totalQuantity-1)*maxExtra ( Cộng thêm phí ship phụ trội khi có thêm sản phẩm)
             decimal itemBase = details.Sum(d =>
             {
                 var pv = d.ProductVariant;
                 decimal baseCost = pv.BaseCost ?? 0;
                 return d.Quantity * baseCost;
             });
-            decimal baseShip = details.Max(d => d.ProductVariant.ShipCost ?? 0);
-            decimal maxExtra = details.Max(d => d.ProductVariant.ExtraShipping ?? 0);
+            decimal baseShip = details.Max(d => d.ProductVariant.ShipCost ?? 0); // decimal baseShip không cho phép null, mà ShipCost trong Model cho phép null
+            decimal maxExtra = details.Max(d => d.ProductVariant.ExtraShipping ?? 0); // thêm dấu ? được!
             decimal totalQty = details.Sum(d => d.Quantity);
             decimal totalCost = itemBase + baseShip;
             if (totalQty > 1)
             {
                 totalCost += (totalQty - 1) * maxExtra;
             }
+            // cập nhập lại TotalCost trong order
             var orderToUpdate = await _context.Orders.FindAsync(orderId);
             if (orderToUpdate != null)
             {
@@ -331,18 +243,20 @@ namespace CB_Gift.Services
             }
         }
         public async Task<MakeOrderResponse> MakeOrder(MakeOrderDto request, string sellerUserId)
-        {
+        {  // Step1: Tạo Endcustomer
             int customerId;
             var newEndCustomer = _mapper.Map<EndCustomer>(request.CustomerInfo);
             _context.EndCustomers.Add(newEndCustomer);
             await _context.SaveChangesAsync();
             customerId = newEndCustomer.CustId;
+            //Step2: tạo order
             var order = _mapper.Map<Order>(request.OrderCreate);
             order.SellerUserId = sellerUserId;
             order.EndCustomerId = customerId;
             order.OrderDate = DateTime.Now;
             order.ProductionStatus = "Created";
             order.StatusOrder = 1;
+            // Nếu ActiveTTS = true thì cộng thêm CostScan vào tổng
             decimal totalCost = 0;
             if (order.ActiveTts == true)
             {
@@ -350,6 +264,7 @@ namespace CB_Gift.Services
             }
             _context.Orders.Add(order);
             await _context.SaveChangesAsync();
+            // Step 3: Thêm các OrderDetail
             var details = new List<OrderDetail>();
 
             foreach (var item in request.OrderDetails)
@@ -383,6 +298,7 @@ namespace CB_Gift.Services
             order.TotalCost = totalCost;
             await _context.SaveChangesAsync();
 
+            // Step 4: Chuẩn bị dữ liệu trả về
             var response = new MakeOrderResponse
             {
                 OrderId = order.OrderId,
@@ -401,8 +317,9 @@ namespace CB_Gift.Services
         }
         public async Task<MakeOrderResponse> UpdateOrderAsync(int orderId, OrderUpdateDto request, string sellerUserId)
         {
+            // Step 1: Tìm đơn hàng và kiểm tra điều kiện
             var order = await _context.Orders
-                .Include(o => o.OrderDetails)
+                .Include(o => o.OrderDetails) // Lấy danh sách chi tiết hiện có
                 .FirstOrDefaultAsync(o => o.OrderId == orderId && o.SellerUserId == sellerUserId);
 
             if (order == null)
@@ -415,13 +332,16 @@ namespace CB_Gift.Services
                 throw new InvalidOperationException("Chỉ có thể cập nhật đơn hàng ở trạng thái 'Mới tạo'.");
             }
 
+            // Step 2: Cập nhật thông tin khách hàng và đơn hàng chính
             var customer = await _context.EndCustomers.FindAsync(order.EndCustomerId);
             if (customer != null) _mapper.Map(request.CustomerInfo, customer);
             _mapper.Map(request.OrderUpdate, order);
 
+            // Step 3: Đồng bộ hóa Order Details
             var detailsInRequest = request.OrderDetailsUpdate ?? new List<OrderDetailUpdateRequest>();
             var requestDetailIds = detailsInRequest.Select(d => d.OrderDetailID).ToHashSet();
 
+            // 3.1: Xác định các details cần xóa
             var detailsToRemove = order.OrderDetails
                 .Where(d => !requestDetailIds.Contains(d.OrderDetailId))
                 .ToList();
@@ -430,29 +350,37 @@ namespace CB_Gift.Services
                 _context.OrderDetails.RemoveRange(detailsToRemove);
             }
 
+            // 3.2: Cập nhật hoặc Thêm mới
             foreach (var detailDto in detailsInRequest)
             {
-                if (detailDto.OrderDetailID > 0)
+                if (detailDto.OrderDetailID > 0) // Đây là item cần UPDATE
                 {
                     var existingDetail = order.OrderDetails
                         .FirstOrDefault(d => d.OrderDetailId == detailDto.OrderDetailID);
                     if (existingDetail != null)
                     {
+                        // Dùng AutoMapper để cập nhật các thuộc tính
                         _mapper.Map(detailDto, existingDetail);
                     }
                 }
-                else
+                else // Đây là item mới cần ADD
                 {
                     var newDetail = _mapper.Map<OrderDetail>(detailDto);
+                    // Gán các giá trị cần thiết mà không có trong DTO
                     newDetail.OrderId = order.OrderId;
                     newDetail.CreatedDate = DateTime.UtcNow;
-                    order.OrderDetails.Add(newDetail);
+                    order.OrderDetails.Add(newDetail); // Thêm vào danh sách của order
                 }
             }
 
-            await _context.SaveChangesAsync();
+            // Step 4: Tính toán lại tổng tiền và lưu thay đổi
+            // Bạn nên gọi lại hàm RecalculateOrderTotalCost để đảm bảo logic tính toán là nhất quán
+            await _context.SaveChangesAsync(); // Lưu các thay đổi (add, update, remove)
+
+            // Gọi hàm tính toán lại sau khi đã lưu DB để nó lấy được dữ liệu mới nhất
             await RecalculateOrderTotalCost(order.OrderId);
 
+            // Step 5: Chuẩn bị dữ liệu trả về (tương tự như trước)
             var updatedOrder = await _context.Orders
                 .Include(o => o.OrderDetails)
                 .AsNoTracking()
@@ -463,48 +391,73 @@ namespace CB_Gift.Services
         public async Task<bool> DeleteOrderAsync(int orderId, string sellerUserId)
         {
             var order = await _context.Orders
-                .Include(o => o.OrderDetails)
+                .Include(o => o.OrderDetails) // Lấy cả các order details liên quan
                 .FirstOrDefaultAsync(o => o.OrderId == orderId && o.SellerUserId == sellerUserId);
+
+            if (order == null)
+            {
+                return false; // Trả về false để controller xử lý NotFound
+            }
+
+            if (order.StatusOrder != 1)
+            {
+                // Ném ra lỗi để Controller có thể bắt và trả về BadRequest
+                throw new InvalidOperationException("Chỉ có thể xóa đơn hàng ở trạng thái 'Daft(Nháp)'.");
+            }
+
+            // Xóa các OrderDetail liên quan trước
+            if (order.OrderDetails.Any())
+            {
+                _context.OrderDetails.RemoveRange(order.OrderDetails);
+            }
+
+            // Sau đó xóa Order
+            _context.Orders.Remove(order);
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+        public async Task<bool> SellerApproveOrderDesignAsync(  // update status order
+        int orderId,
+        ProductionStatus action,
+        string sellerId)
+        {
+            // 1. Tải Order cha và TẤT CẢ OrderDetail cần design
+            var order = await _context.Orders
+                // Đảm bảo chỉ include các OrderDetail cần thiết kế
+                .Include(o => o.OrderDetails.Where(od => od.NeedDesign == true))
+                .FirstOrDefaultAsync(o => o.OrderId == orderId);
 
             if (order == null)
             {
                 return false;
             }
 
-            if (order.StatusOrder != 1)
+            // 2. Kiểm tra Quyền
+            if (order.SellerUserId != sellerId)
             {
-                throw new InvalidOperationException("Chỉ có thể xóa đơn hàng ở trạng thái 'Daft(Nháp)'.");
+                throw new UnauthorizedAccessException($"Seller {sellerId} is not authorized to modify Order {orderId}.");
             }
 
-            if (order.OrderDetails.Any())
+            // 3. Kiểm tra trạng thái hiện tại của Order cha
+            // Phải đang ở trạng thái CHECK_DESIGN (StatusOrder = 5 là CHECK_DESIGN)
+            if (order.StatusOrder != 5)
             {
-                _context.OrderDetails.RemoveRange(order.OrderDetails);
+                throw new InvalidOperationException($"Order {orderId} is not in CHECK_DESIGN status (4). Current status: {order.StatusOrder}.");
             }
 
-            _context.Orders.Remove(order);
-
-            await _context.SaveChangesAsync();
-            return true;
-        }
-        public async Task<bool> SellerApproveOrderDesignAsync(
-        int orderId,
-        ProductionStatus action,
-        string sellerId)
-        {
-            var order = await _context.Orders
-                .Include(o => o.OrderDetails.Where(od => od.NeedDesign == true))
-                .FirstOrDefaultAsync(o => o.OrderId == orderId);
-
-            if (order == null) return false;
-            if (order.SellerUserId != sellerId) throw new UnauthorizedAccessException($"Seller {sellerId} is not authorized to modify Order {orderId}.");
-            if (order.StatusOrder != 5) throw new InvalidOperationException($"Order {orderId} is not in CHECK_DESIGN status (4). Current status: {order.StatusOrder}.");
-
+            // 4. Kiểm tra ProductionStatus của OrderDetails
+            // Tất cả chi tiết phải đang ở CHECK_DESIGN để cho phép duyệt/từ chối
             var allDetailsInCheckDesign = order.OrderDetails.All(od =>
                 od.ProductionStatus.GetValueOrDefault() == ProductionStatus.CHECK_DESIGN
             );
 
-            if (!allDetailsInCheckDesign) throw new InvalidOperationException($"Not all OrderDetails in Order {orderId} are in CHECK_DESIGN status. Cannot proceed with approval/rejection.");
+            if (!allDetailsInCheckDesign)
+            {
+                throw new InvalidOperationException($"Not all OrderDetails in Order {orderId} are in CHECK_DESIGN status. Cannot proceed with approval/rejection.");
+            }
 
+            // 5. Xác định trạng thái đích cho Order và OrderDetails
             int newOrderStatus;
             ProductionStatus newProductionStatus;
             // thêm message để làm thông báo tới designer
@@ -514,20 +467,28 @@ namespace CB_Gift.Services
 
             if (action == ProductionStatus.DESIGN_REDO)
             {
-                newOrderStatus = 6;
-                newProductionStatus = ProductionStatus.DESIGN_REDO;
+                // Thiết kế lại (Reject)
+                newOrderStatus = 6; // Giả định 6 là Order Status cho DESIGN_REDO
+                newProductionStatus = ProductionStatus.DESIGN_REDO; // Trạng thái mới cho OrderDetail
+                designerMessage = $"Seller has REQUESTED to REDO the design for the order #{orderId}.";
             }
             else if (action == ProductionStatus.READY_PROD)
             {
-                newOrderStatus = 7;
-                newProductionStatus = ProductionStatus.READY_PROD;
+                // Chốt Đơn (Confirm)
+                newOrderStatus = 7; // Giả định 7 là Order Status cho CONFIRMED/READY_PROD
+                newProductionStatus = ProductionStatus.READY_PROD; // Trạng thái cuối cho OrderDetail
+                designerMessage = $"Seller has ACCEPTED the design for the order #{orderId}.";
             }
             else
             {
+                // Trạng thái không hợp lệ đã được Controller chặn, nhưng vẫn kiểm tra phòng hờ
                 throw new InvalidOperationException($"Invalid action status {action}. Must be DESIGN_REDO (3) or CONFIRMED (5).");
             }
 
+            // 6. Cập nhật Order cha
             order.StatusOrder = newOrderStatus;
+
+            // 7. Cập nhật HÀNG LOẠT ProductionStatus của các OrderDetail
             foreach (var detail in order.OrderDetails)
             {
                 detail.ProductionStatus = newProductionStatus;
@@ -558,7 +519,9 @@ namespace CB_Gift.Services
             }
             // ✅ KẾT THÚC GỬI THÔNG BÁO
 
+            // 8. Lưu thay đổi
             await _context.SaveChangesAsync();
+
             return true;
         }
         public async Task<bool> SellerApproveOrderDetailDesignAsync(
@@ -567,44 +530,162 @@ namespace CB_Gift.Services
         string sellerId,
         string? reason)
         {
+            // 1. Tải OrderDetail và Order cha
             var orderDetail = await _context.OrderDetails
                 .Include(od => od.Order)
                 .FirstOrDefaultAsync(od => od.OrderDetailId == orderDetailId);
 
-            if (orderDetail == null) return false;
+            if (orderDetail == null)
+            {
+                return false;
+            }
 
             var order = orderDetail.Order;
 
-            if (order.SellerUserId != sellerId) throw new UnauthorizedAccessException($"Seller {sellerId} is not authorized to modify OrderDetail {orderDetailId}.");
-            if (orderDetail.ProductionStatus.GetValueOrDefault() != ProductionStatus.CHECK_DESIGN) throw new InvalidOperationException($"OrderDetail {orderDetailId} is not in a modifiable state (Must be CHECK_DESIGN).");
-            if (action != ProductionStatus.DESIGN_REDO && action != ProductionStatus.READY_PROD) throw new InvalidOperationException($"Invalid action status {action}. Must be DESIGN_REDO or READY_PROD.");
+            // 2. Kiểm tra Quyền
+            if (order.SellerUserId != sellerId)
+            {
+                throw new UnauthorizedAccessException($"Seller {sellerId} is not authorized to modify OrderDetail {orderDetailId}.");
+            }
 
+            // 3. Kiểm tra trạng thái hiện tại của OrderDetail
+            // Phải đang ở CHECK_DESIGN và cần thiết kế
+            if (orderDetail.ProductionStatus.GetValueOrDefault() != ProductionStatus.CHECK_DESIGN)
+            {
+                throw new InvalidOperationException($"OrderDetail {orderDetailId} is not in a modifiable state (Must be CHECK_DESIGN).");
+            }
+
+            // 4. Kiểm tra trạng thái đích hợp lệ
+            if (action != ProductionStatus.DESIGN_REDO && action != ProductionStatus.READY_PROD)
+            {
+                throw new InvalidOperationException($"Invalid action status {action}. Must be DESIGN_REDO or READY_PROD.");
+            }
+            string eventType;
+            string notificationMessage;
+
+            if (action == ProductionStatus.DESIGN_REDO)
+            {
+                eventType = "DESIGN_REJECTED";
+                notificationMessage = $"YÊU CẦU LÀM LẠI thiết kế cho mục #{orderDetailId}. Lý do: {reason}";
+            }
+            else // (action == ProductionStatus.READY_PROD)
+            {
+                eventType = "DESIGN_APPROVED";
+                notificationMessage = $"CHẤP NHẬN thiết kế cho mục #{orderDetailId}.";
+            }
+
+            // Tạo bản ghi log mới
+            var newLog = new OrderDetailLog
+            {
+                OrderDetailId = orderDetailId,
+                ActorUserId = sellerId,
+                EventType = eventType,
+                Reason = reason, // Sẽ là null nếu được chấp nhận, và có nội dung nếu bị từ chối
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.OrderDetailLogs.Add(newLog);
+
+            // 5. Cập nhật ProductionStatus của OrderDetail
             orderDetail.ProductionStatus = action;
+
+            // 6. Lưu thay đổi
+            // LƯU Ý: Không có logic cập nhật Order cha tại đây theo yêu cầu.
+
+
+            // ✅ BẮT ĐẦU GỬI THÔNG BÁO
+            try
+            {
+                string actionText = (action == ProductionStatus.READY_PROD) ? "CHẤP NHẬN" : "YÊU CẦU LÀM LẠI";
+                string designerId = orderDetail.AssignedDesignerUserId;
+                int orderId = orderDetail.OrderId;
+
+                // 1. Gửi thông báo đến Designer
+                if (!string.IsNullOrEmpty(designerId))
+                {
+                    await _notificationService.CreateAndSendNotificationAsync(
+                        designerId,
+                        $"Seller đã {actionText} thiết kế cho mục #{orderDetailId} (Đơn hàng #{orderId}).",
+                        $"/designer/tasks"
+                    );
+                }
+
+                // 2. Gửi cập nhật trạng thái real-time
+                var orderGroupName = $"order_{orderId}";
+                await _hubContext.Clients.Group(orderGroupName).SendAsync(
+                    "OrderStatusChanged",
+                    new { orderId = orderId, orderDetailId = orderDetailId, newStatus = action.ToString() }
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho SellerApproveOrderDetailDesignAsync");
+            }
+            // ✅ KẾT THÚC GỬI THÔNG BÁO
+
             await _context.SaveChangesAsync();
+
             return true;
         }
         public async Task<bool> SendOrderToReadyProdAsync(int orderId, string sellerId)
         {
+            // Sử dụng transaction để đảm bảo cả Order và OrderDetails được cập nhật đồng thời
             using var transaction = await _context.Database.BeginTransactionAsync();
 
             try
             {
                 var order = await _context.Orders
+                    // Include tất cả OrderDetails
                     .Include(o => o.OrderDetails)
                     .FirstOrDefaultAsync(o => o.OrderId == orderId);
 
-                if (order == null) { await transaction.RollbackAsync(); return false; }
-                if (order.SellerUserId != sellerId) throw new UnauthorizedAccessException($"Seller {sellerId} is not authorized to modify Order {orderId}.");
-                if (order.StatusOrder != 1) throw new InvalidOperationException($"Chỉ có thể chuyển đơn hàng ở trạng thái 'Mới tạo' (StatusOrder = 1). Trạng thái hiện tại: {order.StatusOrder}.");
+                if (order == null)
+                {
+                    await transaction.RollbackAsync();
+                    return false;
+                }
 
+                // 1. Kiểm tra Quyền
+                if (order.SellerUserId != sellerId)
+                {
+                    throw new UnauthorizedAccessException($"Seller {sellerId} is not authorized to modify Order {orderId}.");
+                }
+
+                // 2. Kiểm tra Trạng thái (Chỉ cho phép từ StatusOrder = 1)
+                // Giả định 1 là 'Mới tạo' (hoặc tương đương)
+                if (order.StatusOrder != 1)
+                {
+                    throw new InvalidOperationException($"Chỉ có thể chuyển đơn hàng ở trạng thái 'Mới tạo' (StatusOrder = 1). Trạng thái hiện tại: {order.StatusOrder}.");
+                }
+
+                // 3. Cập nhật Order cha
+                // Giả định 7 là Order Status cho CONFIRMED/READY_PROD
                 const int READY_PROD_ORDER_STATUS = 7;
                 order.StatusOrder = READY_PROD_ORDER_STATUS;
 
+                // 4. Cập nhật HÀNG LOẠT ProductionStatus của các OrderDetail
                 foreach (var detail in order.OrderDetails)
                 {
                     detail.ProductionStatus = ProductionStatus.READY_PROD;
+                    // Nếu có trường liên quan đến việc chốt file thiết kế (như IsFinal), bạn cần xử lý tại đây.
+                    // Ví dụ: detail.LinkFileDesign = detail.LinkImg; // Giả định dùng ảnh gốc làm file thiết kế
                 }
-
+                // ✅ BẮT ĐẦU GỬI THÔNG BÁO
+                // Không cần gửi notification (chuông) vì seller là người thực hiện
+                // Chỉ cần gửi cập nhật real-time cho ai đang xem
+                try
+                {
+                    var orderGroupName = $"order_{orderId}";
+                    await _hubContext.Clients.Group(orderGroupName).SendAsync(
+                        "OrderStatusChanged",
+                        new { orderId = orderId, newStatus = ProductionStatus.READY_PROD.ToString() }
+                    );
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho SendOrderToReadyProdAsync");
+                }
+                // ✅ KẾT THÚC GỬI THÔNG BÁO
+                // 5. Lưu thay đổi và Commit Transaction
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
@@ -614,24 +695,45 @@ namespace CB_Gift.Services
             {
                 _logger.LogError(ex, "Lỗi khi chuyển đơn hàng ID {OrderId} sang READY_PROD.", orderId);
                 await transaction.RollbackAsync();
-                throw;
+                throw; // Ném lại lỗi để Controller xử lý
             }
         }
 
         public async Task<ApproveOrderResult> ApproveOrderForShippingAsync(int orderId)
         {
             var order = await _context.Orders
-                                    .Include(o => o.OrderDetails)
-                                    .FirstOrDefaultAsync(o => o.OrderId == orderId);
+                                      .Include(o => o.OrderDetails)
+                                      .FirstOrDefaultAsync(o => o.OrderId == orderId);
 
-            if (order == null) return new ApproveOrderResult { IsSuccess = false, OrderFound = false };
-            if (order.OrderDetails == null || !order.OrderDetails.Any()) return new ApproveOrderResult { IsSuccess = false, CanApprove = false, ErrorMessage = "Order has no product details." };
+            if (order == null)
+            {
+                return new ApproveOrderResult { IsSuccess = false, OrderFound = false };
+            }
+
+            if (order.OrderDetails == null || !order.OrderDetails.Any())
+            {
+                return new ApproveOrderResult
+                {
+                    IsSuccess = false,
+                    CanApprove = false,
+                    ErrorMessage = "Order has no product details."
+                };
+            }
+
 
             bool allDetailsQcDone = order.OrderDetails.All(d => d.ProductionStatus == ProductionStatus.QC_DONE);
 
-            if (!allDetailsQcDone) return new ApproveOrderResult { IsSuccess = false, CanApprove = false, ErrorMessage = "Not all products have passed QC (Status QC_DONE)." };
-
-            order.StatusOrder = 14;
+            if (!allDetailsQcDone)
+            {
+                return new ApproveOrderResult
+                {
+                    IsSuccess = false,
+                    CanApprove = false,
+                    ErrorMessage = "Not all products have passed QC (Status QC_DONE)."
+                };
+            }
+            //order.StatusOrder = (int)ProductionStatus.PACKING;
+            order.StatusOrder = 14; // chuyển trạng thái là đã ship
 
             try
             {
@@ -661,14 +763,15 @@ namespace CB_Gift.Services
                 // ✅ KẾT THÚC GỬI THÔNG BÁO
                 return new ApproveOrderResult { IsSuccess = true };
             }
-            catch (DbUpdateException)
+            catch (DbUpdateException ex)
             {
                 return new ApproveOrderResult { IsSuccess = false, ErrorMessage = "Database error occurred while updating the order status." };
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 return new ApproveOrderResult { IsSuccess = false, ErrorMessage = "An unexpected error occurred." };
             }
         }
     }
 }
+

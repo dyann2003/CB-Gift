@@ -1,6 +1,4 @@
-﻿// Trong SellerController.cs
-
-using CB_Gift.DTOs;
+﻿using CB_Gift.DTOs;
 using CB_Gift.Models.Enums;
 using CB_Gift.Services;
 using CB_Gift.Services.IService;
@@ -27,54 +25,13 @@ namespace CB_Gift.Controllers
             _designerSellerservice = designerSellerservice;
         }
 
-        // ----------------------------------------------------------------------
-        // ✅ API ĐÃ SỬA: GET ORDERS (Dùng Service tối ưu)
-        // ----------------------------------------------------------------------
         [HttpGet]
-        public async Task<IActionResult> GetMyOrders(
-            [FromQuery] string? status = null,
-            [FromQuery] string? searchTerm = null,
-            [FromQuery] string? sortColumn = null,
-            [FromQuery] string? sortDirection = "desc",
-            [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 10)
+        public async Task<IActionResult> GetMyOrders()
         {
             string sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-
-            try
-            {
-                var (orders, total) = await _orderService.GetFilteredAndPagedOrdersForSellerAsync(
-                    sellerId, status, searchTerm, sortColumn, sortDirection, page, pageSize);
-
-                return Ok(new { total, orders });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = "Đã xảy ra lỗi khi lấy danh sách đơn hàng.", detail = ex.Message });
-            }
+            var orders = await _orderService.GetOrdersAndOrderDetailForSellerAsync(sellerId);
+            return Ok(orders);
         }
-
-        // ----------------------------------------------------------------------
-        // ✅ API MỚI: GET DASHBOARD STATS (Dùng Service tối ưu)
-        // ----------------------------------------------------------------------
-        [HttpGet("DashboardStats")]
-        public async Task<IActionResult> GetDashboardStats()
-        {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (userId == null)
-            {
-                return Unauthorized();
-            }
-
-            var stats = await _orderService.GetDashboardStatsForSellerAsync(userId);
-
-            return Ok(stats);
-        }
-
-        // ----------------------------------------------------------------------
-        // Giữ nguyên các API còn lại
-        // ----------------------------------------------------------------------
-
         [HttpPost]
         public async Task<IActionResult> CreateOrder([FromBody] OrderCreateRequest request)
         {
@@ -100,19 +57,24 @@ namespace CB_Gift.Controllers
 
             try
             {
+                // Gọi Service (đã thêm kiểm tra Variant ID)
                 await _orderService.AddOrderDetailAsync(orderId, request, sellerId);
                 return Ok(new { message = "Order detail added successfully." });
             }
             catch (ArgumentException ex)
             {
+                // Bắt lỗi khi ProductVariantID không tồn tại
                 return BadRequest(new { error = ex.Message });
             }
             catch (Exception ex)
             {
+                // Bắt các lỗi chung khác
                 return StatusCode(500, new { error = "An unexpected error occurred.", detail = ex.Message });
             }
         }
 
+        // Endpoint để giao việc
+        // POST: /api/seller/tasks/order-details/123/assign
         [HttpPost("order-details/{orderDetailId}/assign")]
         public async Task<IActionResult> AssignDesigner(int orderDetailId, [FromBody] AssignDesignerToOrderDetailDto dto)
         {
@@ -139,7 +101,8 @@ namespace CB_Gift.Controllers
                 return StatusCode(500, "Đã xảy ra lỗi không mong muốn.");
             }
         }
-
+        //assign theo OrderId
+        // POST: /api/seller/orders/{orderId}/assign-designer
         [HttpPost("orders/{orderId}/assign-designer")]
         public async Task<IActionResult> AssignDesignerToOrder(int orderId, [FromBody] AssignDesignerToOrderDetailDto dto)
         {
@@ -148,6 +111,7 @@ namespace CB_Gift.Controllers
                 var sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
                 if (string.IsNullOrEmpty(sellerId)) return Unauthorized();
 
+                // Gọi phương thức service mới
                 var success = await _designerTaskService.AssignDesignerToOrderAsync(orderId, dto.DesignerUserId, sellerId);
 
                 if (!success)
@@ -163,10 +127,11 @@ namespace CB_Gift.Controllers
             }
             catch (Exception)
             {
+                // _logger.LogError(...)
                 return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn." });
             }
         }
-
+        //Get Designer của seller
         [HttpGet("my-designer")]
         public async Task<IActionResult> GetDesignersForSeller()
         {
@@ -182,8 +147,12 @@ namespace CB_Gift.Controllers
                 var result = await _designerSellerservice.GetDesignersForSellerAsync(sellerId);
                 return Ok(result);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                // Ghi lại log lỗi chi tiết ở phía server để bạn có thể điều tra
+                // _logger.LogError(ex, "Lỗi xảy ra khi Seller {SellerId} lấy danh sách designer.", sellerId);
+
+                // Chỉ trả về một thông báo lỗi chung chung cho client
                 return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn. Vui lòng thử lại sau." });
             }
         }
@@ -197,6 +166,7 @@ namespace CB_Gift.Controllers
                 return BadRequest(ModelState);
             }
 
+            // LẤY SELLER ID DƯỚI DẠNG STRING
             var sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             if (string.IsNullOrEmpty(sellerId))
@@ -206,6 +176,7 @@ namespace CB_Gift.Controllers
 
             var action = request.ProductionStatus;
 
+            // Kiểm tra tính hợp lệ của Action (phải là DESIGN_REDO (5) hoặc READY_PROD (6))
             if (action != ProductionStatus.DESIGN_REDO && action != ProductionStatus.READY_PROD)
             {
                 return BadRequest($"Invalid action. Must be {ProductionStatus.DESIGN_REDO} (DESIGN_REDO) or {ProductionStatus.READY_PROD} (READY_PROD).");
@@ -213,6 +184,7 @@ namespace CB_Gift.Controllers
 
             try
             {
+                // GỌI SERVICE VỚI SELLER ID LÀ STRING
                 bool success = await _orderService.SellerApproveOrderDesignAsync(
                     orderId,
                     action,
@@ -222,8 +194,8 @@ namespace CB_Gift.Controllers
                 if (success)
                 {
                     var actionText = action == ProductionStatus.READY_PROD
-                                        ? "CONFIRMED (Chốt Đơn)"
-                                        : "DESIGN_REDO (Thiết Kế Lại)";
+                                     ? "CONFIRMED (Chốt Đơn)"
+                                     : "DESIGN_REDO (Thiết Kế Lại)";
 
                     return Ok(new { message = $"Order {orderId} design successfully updated to {actionText}." });
                 }
@@ -263,6 +235,7 @@ namespace CB_Gift.Controllers
 
             var action = request.ProductionStatus;
 
+            // Kiểm tra tính hợp lệ của Action
             if (action != ProductionStatus.DESIGN_REDO && action != ProductionStatus.READY_PROD)
             {
                 return BadRequest($"Invalid action. Must be {ProductionStatus.DESIGN_REDO} or {ProductionStatus.READY_PROD}.");
@@ -280,7 +253,7 @@ namespace CB_Gift.Controllers
                     orderDetailId,
                     action,
                     sellerId,
-                    request.Reason 
+                    request.Reason
                 );
 
                 if (success)
@@ -305,6 +278,7 @@ namespace CB_Gift.Controllers
                 return StatusCode(500, "Internal server error during status update.");
             }
         }
+        // POST: /api/seller/orders/{orderId}/send-to-staff
         [HttpPost("orders/{orderId}/send-to-staff")]
         public async Task<IActionResult> SendOrderToReadyProd(int orderId)
         {
@@ -313,6 +287,7 @@ namespace CB_Gift.Controllers
 
             try
             {
+                // Gọi phương thức service mới để chuyển trạng thái từ StatusOrder=1 sang 7
                 var success = await _orderService.SendOrderToReadyProdAsync(orderId, sellerId);
 
                 if (!success)
