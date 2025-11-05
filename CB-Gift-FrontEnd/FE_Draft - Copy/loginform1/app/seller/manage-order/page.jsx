@@ -6,6 +6,7 @@ import SellerHeader from "@/components/layout/seller/header";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import React from "react";
+import { RotateCcw, XCircle, MoreVertical } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -133,12 +134,84 @@ export default function ManageOrder() {
     stageGroups: {},
   });
 
+  // Define all possible status codes (optional, dễ đọc hơn)
+  const STATUS = {
+    CHECK_DESIGN: 4,
+    NEED_DESIGN: 2,
+    REDESIGN: 3,
+  };
+
+  const getProductionStatusName = (status) => {
+    switch (Number(status)) {
+      case 0:
+        return "Draft";
+      case 1:
+        return "Created";
+      case 2:
+        return "Need Design";
+      case 3:
+        return "Designing";
+      case 4:
+        return "Check Design";
+      case 5:
+        return "Design Redo";
+      case 6:
+        return "Ready for Production";
+      case 7:
+        return "In Production";
+      case 8:
+        return "Finished";
+      case 9:
+        return "Quality Checked";
+      case 10:
+        return "Quality Failed";
+      case 11:
+        return "Production Rework";
+      case 12:
+        return "Packing";
+      case 13:
+        return "On Hold";
+      case 14:
+        return "Cancelled";
+      default:
+        return "Unknown";
+    }
+  };
+
+  // Utility: check if the product detail can be approved/rejected
+  // status code 4 là "Cần Check Design"
+  const canApproveOrReject = (item) => {
+    const statusVal = Number(item.status);
+    const productionVal = Number(item.productionStatus);
+    return statusVal === 4 || productionVal === 4;
+  };
+
   // orders: chỉ chứa dữ liệu trang hiện tại
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const [selectedStatConfig, setSelectedStatConfig] = useState(null);
+
+  const openRefundPopup = (order) => {
+    const reason = prompt(`Nhập lý do hoàn tiền cho đơn ${order.orderId}:`);
+    if (!reason || reason.trim().length < 5) {
+      alert("Vui lòng nhập lý do hợp lệ (tối thiểu 5 ký tự).");
+      return;
+    }
+    // Gọi API refund tại đây
+    console.log("Refund order:", order.id, "Reason:", reason);
+  };
+
+  const openCancelPopup = (order) => {
+    const reason = prompt(`Nhập lý do hủy đơn ${order.orderId}:`);
+    if (!reason || reason.trim().length < 5) {
+      alert("Vui lòng nhập lý do hợp lệ (tối thiểu 5 ký tự).");
+      return;
+    }
+    // Gọi API cancel tại đây
+    console.log("Cancel order:", order.id, "Reason:", reason);
+  };
 
   // ✅ STATE MỚI: Lưu tổng số lượng đơn hàng (từ BE)
   const [totalOrdersCount, setTotalOrdersCount] = useState(0);
@@ -210,6 +283,10 @@ export default function ManageOrder() {
           linkFileDesign: detail.linkFileDesign,
           linkThanksCard: detail.linkThanksCard,
           linkImg: detail.linkImg,
+
+          orderDetailID: detail.orderDetailID,
+          status: detail.status,
+          productionStatus: detail.productionStatus,
         })),
         address: order.address || "",
         shipTo: "",
@@ -745,7 +822,7 @@ export default function ManageOrder() {
   };
 
   // ✅ Cập nhật: Gọi API GET /api/Seller/{id} để lấy chi tiết 1 đơn hàng
- const handleViewDetails = async (order) => {
+  const handleViewDetails = async (order) => {
     try {
       console.log("🧾 Selected order (before fetch):", order);
       const res = await fetch(`https://localhost:7015/api/Seller/${order.id}`, {
@@ -813,7 +890,7 @@ export default function ManageOrder() {
           linkImg: detail.linkImg,
           // === BỔ SUNG TRƯỜNG CÒN THIẾU ===
           orderDetailId: detail.orderDetailID,
-          productionStatus: detail.productionStatus 
+          productionStatus: detail.productionStatus,
         })),
       };
 
@@ -982,42 +1059,47 @@ export default function ManageOrder() {
     }
   };
   const handleApproveOrderDetail = async (orderDetailId) => {
-    setIsSubmittingDetail(orderDetailId); // Bật loading cho nút này
+    setIsSubmittingDetail(orderDetailId);
     try {
       const res = await fetch(
-        `https://localhost:7015/api/order/order-details/${orderDetailId}/design-status`,
+        `https://localhost:7015/api/Seller/order/order-details/${orderDetailId}/design-status`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ 
-            productionStatus: "READY_PROD",
-            reason: null 
-          }), 
+          body: JSON.stringify({
+            productionStatus: 6,
+            reason: null,
+          }),
         }
       );
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || `HTTP ${res.status}`);
+      // ✅ Dùng text() + try parse JSON để tránh lỗi
+      const text = await res.text();
+      let data = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        data = { message: text };
       }
-      
+
+      if (!res.ok) {
+        throw new Error(data.message || `HTTP ${res.status}`);
+      }
+
       setSuccessMessage(`✅ Đã duyệt thành công chi tiết #${orderDetailId}!`);
       setShowSuccessDialog(true);
-      setIsDialogOpen(false); // Đóng modal
-
+      setIsDialogOpen(false);
       setTimeout(() => fetchOrders(), 1500);
-
     } catch (err) {
       console.error("Approve detail failed:", err);
       setErrorMessage(`❌ Lỗi: ${err.message}`);
       setShowErrorDialog(true);
     } finally {
-      setIsSubmittingDetail(null); // Tắt loading
+      setIsSubmittingDetail(null);
     }
   };
 
-  // === THÊM HÀM MỚI ===
   const handleRejectOrderDetail = async (orderDetailId) => {
     const reason = prompt("Vui lòng nhập lý do từ chối (ít nhất 10 ký tự):");
     if (!reason || reason.trim().length < 10) {
@@ -1025,38 +1107,45 @@ export default function ManageOrder() {
       return;
     }
 
-    setIsSubmittingDetail(orderDetailId); // Bật loading cho nút này
+    setIsSubmittingDetail(orderDetailId);
     try {
       const res = await fetch(
-        `https://localhost:7015/api/order/order-details/${orderDetailId}/design-status`,
+        `https://localhost:7015/api/Seller/order/order-details/${orderDetailId}/design-status`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({
-            productionStatus: "DESIGN_REDO",
-            reason: reason
+            productionStatus: 5,
+            reason: reason,
           }),
         }
       );
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || `HTTP ${res.status}`);
+      const text = await res.text();
+      let data = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        data = { message: text };
       }
 
-      setSuccessMessage(`✅ Đã gửi yêu cầu làm lại cho chi tiết #${orderDetailId}.`);
+      if (!res.ok) {
+        throw new Error(data.message || `HTTP ${res.status}`);
+      }
+
+      setSuccessMessage(
+        `✅ Đã gửi yêu cầu làm lại cho chi tiết #${orderDetailId}.`
+      );
       setShowSuccessDialog(true);
-      setIsDialogOpen(false); // Đóng modal
-
+      setIsDialogOpen(false);
       setTimeout(() => fetchOrders(), 1500);
-
     } catch (err) {
       console.error("Reject detail failed:", err);
       setErrorMessage(`❌ Lỗi: ${err.message}`);
       setShowErrorDialog(true);
     } finally {
-      setIsSubmittingDetail(null); // Tắt loading
+      setIsSubmittingDetail(null);
     }
   };
 
@@ -1651,7 +1740,74 @@ whitespace-nowrap"
                                       />
                                     </Button>
 
-                                    {order.status === "Cần Check Design" && (
+                                    {/* Menu hành động */}
+                                    <Popover>
+                                      <PopoverTrigger asChild>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="bg-transparent hover:bg-blue-100 border-blue-200"
+                                          title="More actions"
+                                        >
+                                          <MoreVertical className="h-4 w-4" />
+                                        </Button>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="w-40 p-2">
+                                        <div className="flex flex-col gap-2">
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() =>
+                                              handleViewDetails(order)
+                                            }
+                                            className="justify-start"
+                                          >
+                                            <Eye className="h-4 w-4 mr-2 text-blue-600" />
+                                            View Details
+                                          </Button>
+
+                                          {order.status === "Đã Ship" ? (
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() =>
+                                                openRefundPopup(order)
+                                              }
+                                              className="justify-start text-amber-600 hover:text-amber-700"
+                                            >
+                                              <RotateCcw className="h-4 w-4 mr-2" />
+                                              Refund
+                                            </Button>
+                                          ) : (
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() =>
+                                                openCancelPopup(order)
+                                              }
+                                              className="justify-start text-red-600 hover:text-red-700"
+                                            >
+                                              <XCircle className="h-4 w-4 mr-2" />
+                                              Cancel
+                                            </Button>
+                                          )}
+
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() =>
+                                              handleDelete(order.id)
+                                            }
+                                            className="justify-start text-gray-600 hover:text-gray-800"
+                                          >
+                                            <Trash2 className="h-4 w-4 mr-2" />
+                                            Delete
+                                          </Button>
+                                        </div>
+                                      </PopoverContent>
+                                    </Popover>
+
+                                    {/* {order.status === "Cần Check Design" && (
                                       <>
                                         <Button
                                           variant="outline"
@@ -1676,13 +1832,13 @@ whitespace-nowrap"
                                           ✕
                                         </Button>
                                       </>
-                                    )}
+                                    )} */}
                                     <Dialog
                                       open={isDialogOpen}
                                       onOpenChange={setIsDialogOpen}
                                     >
                                       <DialogTrigger asChild>
-                                        <Button
+                                        {/* <Button
                                           variant="outline"
                                           size="sm"
                                           className="bg-transparent hover:bg-blue-100 border-blue-200"
@@ -1692,7 +1848,7 @@ whitespace-nowrap"
                                           title="View Details"
                                         >
                                           <Eye className="h-4 w-4 mr-1" />
-                                        </Button>
+                                        </Button> */}
                                       </DialogTrigger>
                                       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
                                         <DialogHeader>
@@ -2652,13 +2808,13 @@ border-blue-100"
                                     </Dialog>
                                     <AlertDialog>
                                       <AlertDialogTrigger asChild>
-                                        <Button
+                                        {/* <Button
                                           variant="outline"
                                           size="sm"
                                           className="bg-transparent hover:bg-red-50 text-red-600 hover:text-red-700 border-red-200"
                                         >
                                           <Trash2 className="h-4 w-4" />
-                                        </Button>
+                                        </Button> */}
                                       </AlertDialogTrigger>
                                       <AlertDialogContent>
                                         <AlertDialogHeader>
@@ -2687,12 +2843,106 @@ border-blue-100"
                                       </AlertDialogContent>
                                     </AlertDialog>
                                   </div>
+                                  {/* === Refund hoặc Cancel icon === */}
+                                  {/* <Dialog>
+                                    <DialogTrigger asChild>
+                                      {order.status === "Đã Ship" ? (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="bg-transparent hover:bg-amber-50 text-amber-600 hover:text-amber-700 border-amber-200"
+                                          title="Refund Order"
+                                        >
+                                          <RotateCcw className="h-4 w-4" />
+                                        </Button>
+                                      ) : (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="bg-transparent hover:bg-red-50 text-red-600 hover:text-red-700 border-red-200"
+                                          title="Cancel Order"
+                                        >
+                                          <XCircle className="h-4 w-4" />
+                                        </Button>
+                                      )}
+                                    </DialogTrigger>
+
+                                    <DialogContent className="max-w-md">
+                                      <DialogHeader>
+                                        <DialogTitle>
+                                          {order.status === "Đã Ship"
+                                            ? "Refund Order"
+                                            : "Cancel Order"}
+                                        </DialogTitle>
+                                        <DialogDescription>
+                                          Vui lòng nhập lý do{" "}
+                                          {order.status === "Đã Ship"
+                                            ? "hoàn tiền"
+                                            : "hủy"}{" "}
+                                          đơn hàng này.
+                                        </DialogDescription>
+                                      </DialogHeader>
+
+                                      <Textarea
+                                        placeholder={`Nhập lý do ${
+                                          order.status === "Đã Ship"
+                                            ? "refund"
+                                            : "cancel"
+                                        }...`}
+                                        className="mt-2 border-blue-100 focus:border-blue-300"
+                                        id={`reason-${order.id}`}
+                                      />
+
+                                      <DialogFooter>
+                                        <Button
+                                          onClick={() => {
+                                            const reason =
+                                              document.getElementById(
+                                                `reason-${order.id}`
+                                              ).value;
+                                            if (!reason.trim()) {
+                                              alert(
+                                                "Vui lòng nhập lý do trước khi xác nhận."
+                                              );
+                                              return;
+                                            }
+                                            console.log(
+                                              `📝 ${
+                                                order.status === "Đã Ship"
+                                                  ? "Refund"
+                                                  : "Cancel"
+                                              } order ${order.id} với lý do:`,
+                                              reason
+                                            );
+                                            // TODO: Gọi API refund hoặc cancel ở đây
+                                            alert(
+                                              `${
+                                                order.status === "Đã Ship"
+                                                  ? "Refund"
+                                                  : "Cancel"
+                                              } thành công cho đơn #${
+                                                order.orderId
+                                              }!`
+                                            );
+                                          }}
+                                          className={`${
+                                            order.status === "Đã Ship"
+                                              ? "bg-amber-600 hover:bg-amber-700"
+                                              : "bg-red-600 hover:bg-red-700"
+                                          } text-white`}
+                                        >
+                                          Xác nhận
+                                        </Button>
+                                      </DialogFooter>
+                                    </DialogContent>
+                                  </Dialog> */}
                                 </TableCell>
                               </TableRow>
 
                               {expandedOrderId === order.id &&
-                                order.products &&
-                                order.products.length > 0 && (
+                                (order.products || order.details) &&
+                                (order.products?.length > 0 ||
+                                  order.details?.length > 0) && (
                                   <TableRow className="bg-blue-100">
                                     <TableCell colSpan={8} className="p-4">
                                       <div className="space-y-3">
@@ -2700,71 +2950,159 @@ border-blue-100"
                                           Order Items:
                                         </h4>
                                         <div className="space-y-2">
-                                          {order.products.map((item, idx) => (
-                                            <div
-                                              key={idx}
-                                              className="flex items-start gap-3 p-3 bg-white rounded border border-blue-200 hover:shadow-sm transition-shadow"
-                                            >
-                                              {/* Product Image */}
-                                              {item.linkImg ? (
-                                                <img
-                                                  src={
-                                                    item.linkImg ||
-                                                    "/placeholder.svg"
-                                                  }
-                                                  alt={item.name || "Product"}
-                                                  className="w-16 h-16 rounded object-cover border border-blue-200"
-                                                />
-                                              ) : (
-                                                <div className="w-16 h-16 rounded bg-blue-100 border border-blue-200 flex items-center justify-center text-slate-400 text-xs">
-                                                  No Image
-                                                </div>
-                                              )}
+                                          {(
+                                            order.products || order.details
+                                          ).map((item, idx) => {
+                                            console.log(
+                                              "🧩 OrderDetail debug:",
+                                              item,
+                                              "| Keys:",
+                                              Object.keys(item)
+                                            );
 
-                                              {/* Item Details */}
-                                              <div className="flex-1">
-                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                                  <div>
-                                                    <span className="text-slate-600 font-medium">
-                                                      Price:
-                                                    </span>
-                                                    <p className="text-slate-900 font-semibold">
-                                                      ${item.price || "0"}
-                                                    </p>
+                                            return (
+                                              <div
+                                                key={idx}
+                                                className="flex items-start gap-3 p-3 bg-white rounded border border-blue-200 hover:shadow-sm transition-shadow"
+                                              >
+                                                {/* Product Image */}
+                                                {item.linkImg ? (
+                                                  <img
+                                                    src={
+                                                      item.linkImg ||
+                                                      "/placeholder.svg"
+                                                    }
+                                                    alt={
+                                                      item.productName ||
+                                                      "Product"
+                                                    }
+                                                    className="w-16 h-16 rounded object-cover border border-blue-200"
+                                                  />
+                                                ) : (
+                                                  <div className="w-16 h-16 rounded bg-blue-100 border border-blue-200 flex items-center justify-center text-slate-400 text-xs">
+                                                    No Image
                                                   </div>
-                                                  <div>
-                                                    <span className="text-slate-600 font-medium">
-                                                      Quantity:
-                                                    </span>
-                                                    <p className="text-slate-900 font-semibold">
-                                                      {item.quantity || "0"}
-                                                    </p>
+                                                )}
+
+                                                {/* Item Details */}
+                                                <div className="flex-1">
+                                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                                    <div>
+                                                      <span className="text-slate-600 font-medium">
+                                                        Price:
+                                                      </span>
+                                                      <p className="text-slate-900 font-semibold">
+                                                        ${item.price || "0"}
+                                                      </p>
+                                                    </div>
+                                                    <div>
+                                                      <span className="text-slate-600 font-medium">
+                                                        Quantity:
+                                                      </span>
+                                                      <p className="text-slate-900 font-semibold">
+                                                        {item.quantity || "0"}
+                                                      </p>
+                                                    </div>
+                                                    <div>
+                                                      <span className="text-slate-600 font-medium">
+                                                        Total:
+                                                      </span>
+                                                      <p className="text-indigo-600 font-bold">
+                                                        $
+                                                        {(
+                                                          Number(
+                                                            item.price || 0
+                                                          ) *
+                                                          (item.quantity || 0)
+                                                        ).toFixed(2)}
+                                                      </p>
+                                                    </div>
+                                                    <div>
+                                                      <span className="text-slate-600 font-medium">
+                                                        Name:
+                                                      </span>
+                                                      <p className="text-slate-900">
+                                                        {item.productName ||
+                                                          "N/A"}
+                                                      </p>
+                                                    </div>
+                                                    {/* ✅ Thêm status ở đây */}
+                                                    <div>
+                                                      <span className="text-slate-600 font-medium">
+                                                        Status:
+                                                      </span>
+                                                      <p
+                                                        className={`font-semibold ${
+                                                          item.status === 4
+                                                            ? "text-yellow-600"
+                                                            : item.status === 5
+                                                            ? "text-green-600"
+                                                            : "text-gray-600"
+                                                        }`}
+                                                      >
+                                                        {getProductionStatusName(
+                                                          item.status
+                                                        )}
+                                                      </p>
+                                                    </div>
                                                   </div>
-                                                  <div>
-                                                    <span className="text-slate-600 font-medium">
-                                                      Total:
-                                                    </span>
-                                                    <p className="text-indigo-600 font-bold">
-                                                      $
-                                                      {(
-                                                        Number.parseFloat(
-                                                          item.price || 0
-                                                        ) * (item.quantity || 0)
-                                                      ).toFixed(2)}
-                                                    </p>
-                                                  </div>
-                                                  <div>
-                                                    <span className="text-slate-600 font-medium">
-                                                      Name:
-                                                    </span>
-                                                    <p className="text-slate-900">
-                                                      {item.name || "N/A"}
-                                                    </p>
-                                                  </div>
+                                                </div>
+
+                                                {/* Action buttons */}
+                                                <div className="mt-3 flex items-center gap-2">
+                                                  <button
+                                                    className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded border ${
+                                                      canApproveOrReject(item)
+                                                        ? "bg-green-50 text-green-700 border-green-200 hover:shadow"
+                                                        : "opacity-50 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-200"
+                                                    }`}
+                                                    onClick={() =>
+                                                      handleApproveOrderDetail(
+                                                        item.orderDetailID
+                                                      )
+                                                    }
+                                                    disabled={
+                                                      isSubmittingDetail ===
+                                                        item.orderDetailID ||
+                                                      !canApproveOrReject(item)
+                                                    }
+                                                  >
+                                                    {isSubmittingDetail ===
+                                                    item.orderDetailID ? (
+                                                      <span className="inline-block animate-spin w-4 h-4 border-2 rounded-full mr-2 border-current"></span>
+                                                    ) : (
+                                                      "✓ Approve"
+                                                    )}
+                                                  </button>
+
+                                                  <button
+                                                    className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded border ${
+                                                      canApproveOrReject(item)
+                                                        ? "bg-red-50 text-red-700 border-red-200 hover:shadow"
+                                                        : "opacity-50 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-200"
+                                                    }`}
+                                                    onClick={() =>
+                                                      handleRejectOrderDetail(
+                                                        item.orderDetailID
+                                                      )
+                                                    }
+                                                    disabled={
+                                                      isSubmittingDetail ===
+                                                        item.orderDetailID ||
+                                                      !canApproveOrReject(item)
+                                                    }
+                                                  >
+                                                    {isSubmittingDetail ===
+                                                    item.orderDetailID ? (
+                                                      <span className="inline-block animate-spin w-4 h-4 border-2 rounded-full mr-2 border-current"></span>
+                                                    ) : (
+                                                      "✕ Reject"
+                                                    )}
+                                                  </button>
                                                 </div>
                                               </div>
-                                            </div>
-                                          ))}
+                                            );
+                                          })}
                                         </div>
                                       </div>
                                     </TableCell>
