@@ -125,10 +125,20 @@ export default function ManageOrder() {
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [showErrorDialog, setShowErrorDialog] = useState(false);
 
+  const [orderStats, setOrderStats] = useState({
+    total: 0,
+    needActionCount: 0,
+    urgentCount: 0,
+    completedCount: 0,
+    stageGroups: {},
+  });
+
   // orders: chỉ chứa dữ liệu trang hiện tại
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const [selectedStatConfig, setSelectedStatConfig] = useState(null);
 
   // ✅ STATE MỚI: Lưu tổng số lượng đơn hàng (từ BE)
   const [totalOrdersCount, setTotalOrdersCount] = useState(0);
@@ -139,10 +149,13 @@ export default function ManageOrder() {
       setError(null);
 
       // 1. Xác định Status Filter (BE cần tên Status đầy đủ)
-      const selectedStatConfig = stats.find(
+      const selectedStatConfigInList = stats.find(
         (stat) => stat.title === selectedStat
       );
-      const statusFilter = selectedStatConfig?.statusFilter;
+      const statusFilter =
+        selectedStatConfig?.statusFilter ||
+        selectedStatConfigInList?.statusFilter ||
+        (selectedStat !== "Total Order" ? selectedStat : null);
 
       // 2. Xây dựng Query Parameters
       const params = new URLSearchParams({
@@ -156,6 +169,11 @@ export default function ManageOrder() {
       if (statusFilter && selectedStat !== "Total Order") {
         params.append("status", statusFilter);
       }
+
+      if (searchTerm) params.append("search", searchTerm);
+      if (dateRange?.from)
+        params.append("fromDate", dateRange.from.toISOString());
+      if (dateRange?.to) params.append("toDate", dateRange.to.toISOString());
 
       const url = `https://localhost:7015/api/Seller?${params.toString()}`;
 
@@ -237,6 +255,7 @@ export default function ManageOrder() {
 
   // ✅ Dependency Array: Gọi lại fetchOrders khi bất kỳ tham số filter/pagination/sort nào thay đổi
   useEffect(() => {
+    fetchStats();
     fetchOrders();
   }, [page, itemsPerPage, searchTerm, selectedStat, sortColumn, sortDirection]);
 
@@ -346,6 +365,19 @@ export default function ManageOrder() {
     // </CHANGE>
   ];
 
+  const fetchStats = async () => {
+    try {
+      const res = await fetch("https://localhost:7015/api/Seller/stats", {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to fetch stats");
+      const data = await res.json();
+      setOrderStats(data);
+    } catch (error) {
+      console.error("Error fetching stats:", error);
+    }
+  };
+
   // ✅ Dùng useMemo để tính toán số lượng thống kê
   const statsWithCounts = useMemo(() => {
     let newStats = stats.map((stat) => ({
@@ -409,8 +441,10 @@ export default function ManageOrder() {
 
   // Giữ lại handleDateSelect, nhưng nó không ảnh hưởng đến fetchOrders hiện tại
   const handleDateSelect = (range) => {
-    setDateRange(range || { from: null, to: null });
-    setPage(1); // Mặc dù BE chưa hỗ trợ lọc theo ngày, giữ lại để FE reset state
+    setDateRange(range);
+    setPage(1);
+    fetchOrders(); // 🔁 tự reload lại khi đổi ngày
+    fetchStats(); // cập nhật lại thống kê
   };
 
   const handleOpenAssignPopup = async () => {
@@ -482,6 +516,7 @@ export default function ManageOrder() {
       // ✅ Reload lại dữ liệu sau 1.5s để cập nhật dữ liệu
       setTimeout(() => {
         fetchOrders(); // ✅ GỌI LẠI fetchOrders THAY CHO window.location.reload()
+        fetchStats();
         setSelectedOrders([]);
         setSelectAll(false);
       }, 1500);
@@ -631,6 +666,7 @@ export default function ManageOrder() {
 
         setResultMessage(result.message || "Delete Successfully");
         fetchOrders(); // ✅ Gọi lại fetchOrders để cập nhật danh sách và count
+        fetchStats();
       } else {
         setResultMessage(result.message || "Can't delete this order");
       }
@@ -640,6 +676,15 @@ export default function ManageOrder() {
     } finally {
       setShowResultDialog(true);
     }
+  };
+
+  const handleStatusClick = (status) => {
+    console.log("🔍 Clicked status:", status);
+    setSelectedStat(status); // Cập nhật selectedStat để biết đang chọn status nào
+    setSelectedStatConfig({ statusFilter: status }); // lưu lại status filter thực tế
+    setPage(1);
+    fetchOrders(); // load danh sách đơn theo status
+    fetchStats(); // load lại 4 cục
   };
 
   // const handleSelectAll = () => {
@@ -872,6 +917,7 @@ export default function ManageOrder() {
       // ✅ GỌI LẠI fetchOrders THAY CHO window.location.reload()
       setTimeout(() => {
         fetchOrders();
+        fetchStats();
       }, 1500);
     } catch (err) {
       console.error("[v0] Approve design failed:", err);
@@ -927,6 +973,7 @@ export default function ManageOrder() {
       // ✅ GỌI LẠI fetchOrders THAY CHO window.location.reload()
       setTimeout(() => {
         fetchOrders();
+        fetchStats();
       }, 1500);
     } catch (err) {
       console.error("[v0] Reject design failed:", err);
@@ -1074,6 +1121,7 @@ export default function ManageOrder() {
         setSelectedOrders([]);
         setSelectAll(false);
         fetchOrders();
+        fetchStats();
       } else {
         setCannotAssignMessage(
           `Failed to assign ${failedOrders.length} order(s) to staff. Please try again.`
@@ -1149,7 +1197,80 @@ export default function ManageOrder() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2 sm:gap-3">
+            {/* --- 4 BOX THỐNG KÊ --- */}
+            <div className="grid grid-cols-4 gap-4 mb-6">
+              <div className="bg-white shadow p-4 rounded-lg text-center">
+                <h3 className="text-gray-500 text-sm font-medium">Total</h3>
+                <p className="text-2xl font-bold">{orderStats.total}</p>
+              </div>
+
+              <div className="bg-yellow-50 shadow p-4 rounded-lg text-center">
+                <h3 className="text-yellow-700 text-sm font-medium">
+                  Need Action
+                </h3>
+                <p className="text-2xl font-bold text-yellow-600">
+                  {orderStats.needActionCount}
+                </p>
+              </div>
+
+              <div className="bg-red-50 shadow p-4 rounded-lg text-center">
+                <h3 className="text-red-700 text-sm font-medium">Urgent</h3>
+                <p className="text-2xl font-bold text-red-600">
+                  {orderStats.urgentCount}
+                </p>
+              </div>
+
+              <div className="bg-green-50 shadow p-4 rounded-lg text-center">
+                <h3 className="text-green-700 text-sm font-medium">
+                  Completed
+                </h3>
+                <p className="text-2xl font-bold text-green-600">
+                  {orderStats.completedCount}
+                </p>
+              </div>
+            </div>
+            {/* --- DROPDOWN GIAI ĐOẠN --- */}
+            <div className="flex flex-wrap justify-between gap-4 mb-8">
+              {Object.entries(orderStats.stageGroups || {}).map(
+                ([stageName, statusList]) => (
+                  <div
+                    key={stageName}
+                    className="flex-1 min-w-[240px] max-w-[300px] border rounded-lg bg-white shadow-sm transition-all duration-300 ease-in-out"
+                    style={{ alignSelf: "flex-start" }}
+                  >
+                    <details
+                      className="group w-full"
+                      onToggle={(e) => {
+                        // Ngăn các box khác bị reflow khi mở 1 box
+                        e.currentTarget.scrollIntoView({
+                          block: "nearest",
+                          behavior: "smooth",
+                        });
+                      }}
+                    >
+                      <summary className="cursor-pointer select-none py-2 px-4 font-semibold text-gray-700 bg-gray-50 rounded-t-lg hover:bg-gray-100 transition">
+                        {stageName}
+                      </summary>
+
+                      <div className="p-2 animate-fadeIn">
+                        {statusList.map((s) => (
+                          <button
+                            key={s.status}
+                            onClick={() => handleStatusClick(s.status)}
+                            className="flex justify-between w-full px-3 py-2 hover:bg-gray-100 text-sm text-gray-700 rounded-md"
+                          >
+                            <span>{s.status}</span>
+                            <span className="font-semibold">{s.count}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </details>
+                  </div>
+                )
+              )}
+            </div>
+
+            {/* <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2 sm:gap-3">
               {statsWithCounts.map((stat, index) => {
                 const IconComponent = stat.icon;
                 const isActive = selectedStat === stat.title;
@@ -1185,7 +1306,7 @@ export default function ManageOrder() {
                   </div>
                 );
               })}
-            </div>
+            </div> */}
 
             <div className="bg-blue-50 p-4 sm:p-6 rounded-lg shadow-sm border border-blue-100">
               {" "}
@@ -2459,7 +2580,7 @@ text-slate-500 font-medium"
                                             </div>
 
                                             {/* QR Code Section */}
-                                            <div
+                                            {/* <div
                                               className="bg-blue-50 p-4 rounded-lg border 
 border-blue-100"
                                             >
@@ -2471,7 +2592,7 @@ border-blue-100"
                                               <div className="w-32 h-32 bg-white border-2 border-blue-300 rounded flex items-center justify-center">
                                                 <QrCode className="h-16 w-16 text-indigo-400" />
                                               </div>
-                                            </div>
+                                            </div> */}
                                           </div>
                                         )}
 

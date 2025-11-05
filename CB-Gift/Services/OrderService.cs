@@ -38,6 +38,8 @@ namespace CB_Gift.Services
             string? searchTerm,
             string? sortColumn,
             string? sortDirection,
+            DateTime? fromDate,
+            DateTime? toDate,
             int page,
             int pageSize)
         {
@@ -67,6 +69,13 @@ namespace CB_Gift.Services
                 // o.OrderDetails.Any(od => od.ProductVariant != null && od.ProductVariant.VariantName.ToLower().Contains(term))
                 );
             }
+
+            if (fromDate.HasValue)
+                query = query.Where(o => o.OrderDate >= fromDate.Value);
+
+            if (toDate.HasValue)
+                query = query.Where(o => o.OrderDate <= toDate.Value);
+
 
             // 3. Đếm tổng số lượng (sau khi lọc, trước khi phân trang)
             var totalCount = await query.CountAsync();
@@ -878,5 +887,68 @@ namespace CB_Gift.Services
                 return new ApproveOrderResult { IsSuccess = false, ErrorMessage = "An unexpected error occurred." };
             }
         }
+
+        public async Task<OrderStatsDto> GetOrderStatsForSellerAsync(string sellerUserId)
+        {
+            var statusCounts = await _context.Orders
+                .AsNoTracking()
+                .Where(o => o.SellerUserId == sellerUserId)
+                .GroupBy(o => o.StatusOrderNavigation.NameVi)
+                .Select(g => new { Status = g.Key, Count = g.Count() })
+                .ToListAsync();
+
+            var dict = statusCounts
+                .Where(x => !string.IsNullOrEmpty(x.Status))
+                .ToDictionary(x => x.Status!, x => x.Count);
+
+            int total = dict.Values.Sum();
+
+            // --- Gom nhóm cho 4 cục lớn ---
+            var needActionStatuses = new[] { "Cần Design", "Cần Check Design" };
+            var urgentStatuses = new[] { "Thiết kế Lại (Design Lỗi)", "Sản xuất Lại", "Cancel", "Hoàn Hàng" };
+            var completedStatuses = new[] { "Sản xuất Xong", "Đã Kiểm tra Chất lượng", "Đã Ship" };
+
+            int needActionCount = needActionStatuses.Sum(s => dict.ContainsKey(s) ? dict[s] : 0);
+            int urgentCount = urgentStatuses.Sum(s => dict.ContainsKey(s) ? dict[s] : 0);
+            int completedCount = completedStatuses.Sum(s => dict.ContainsKey(s) ? dict[s] : 0);
+
+            // --- Gom theo từng giai đoạn dropdown ---
+            var designStage = new[] { "Cần Design", "Cần Check Design", "Thiết kế Lại (Design Lỗi)" };
+            var productionStage = new[] { "Sẵn sàng Sản xuất", "Đang Sản xuất", "Sản xuất Xong", "Sản xuất Lại", "Lỗi Sản xuất (Cần Rework)" };
+            var shippingStage = new[] { "Đang Đóng gói", "Đã Kiểm tra Chất lượng", "Đã Ship", "Hoàn Hàng" };
+            var otherStage = new[] { "Tạm Dừng/Chờ", "Cancel", "Draft (Nháp)" };
+
+            var stageGroups = new Dictionary<string, List<OrderStatsDto.StatusCountItem>>
+            {
+                ["Thiết kế"] = designStage
+                    .Where(s => dict.ContainsKey(s))
+                    .Select(s => new OrderStatsDto.StatusCountItem { Status = s, Count = dict[s] })
+                    .ToList(),
+                ["Sản xuất"] = productionStage
+                    .Where(s => dict.ContainsKey(s))
+                    .Select(s => new OrderStatsDto.StatusCountItem { Status = s, Count = dict[s] })
+                    .ToList(),
+                ["Giao hàng"] = shippingStage
+                    .Where(s => dict.ContainsKey(s))
+                    .Select(s => new OrderStatsDto.StatusCountItem { Status = s, Count = dict[s] })
+                    .ToList(),
+                ["Khác"] = otherStage
+                    .Where(s => dict.ContainsKey(s))
+                    .Select(s => new OrderStatsDto.StatusCountItem { Status = s, Count = dict[s] })
+                    .ToList(),
+            };
+
+            return new OrderStatsDto
+            {
+                Total = total,
+                StatusCounts = dict,
+                NeedActionCount = needActionCount,
+                UrgentCount = urgentCount,
+                CompletedCount = completedCount,
+                StageGroups = stageGroups
+            };
+        }
+
+
     }
 }
