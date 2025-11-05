@@ -40,6 +40,7 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
+import Swal from "sweetalert2";
 
 export default function StaffManageOrder() {
   const [currentPage, setCurrentPage] = useState("manage-order");
@@ -89,6 +90,7 @@ export default function StaffManageOrder() {
 
     fetchOrders();
   }, [page, itemsPerPage, sortDirection]);
+  
 
   const filteredOrders = orders.filter((order) => {
     const matchesSearch =
@@ -127,13 +129,14 @@ export default function StaffManageOrder() {
   const getStatusBadge = (order) => {
     const status = order.statusOderName || "";
     const statusMap = {
-      "Draft (Nháp)": "bg-gray-100 text-gray-800",
-      "Sẵn sàng Sản xuất": "bg-blue-100 text-blue-800",
-      "Chốt Đơn (Khóa Seller)": "bg-amber-100 text-amber-800",
-      "Đã Ship": "bg-green-100 text-green-800",
-      "Lỗi Sản xuất (Cần Rework)": "bg-yellow-100 text-yellow-800",
-      Cancel: "bg-red-100 text-red-800",
-      "Hoàn Hàng": "bg-orange-100 text-orange-800",
+      "DRAFT": "bg-gray-100 text-gray-800",
+      "READY_PROD": "bg-blue-100 text-blue-800",
+      "CONFIRMED": "bg-amber-100 text-amber-800",
+      "SHIPPED": "bg-green-100 text-green-800",
+      "PROD_REWORK": "bg-yellow-100 text-yellow-800",
+      "CANCELLED": "bg-red-100 text-red-800",
+      "REFUND": "bg-orange-100 text-orange-800",
+      "HOLD": "bg-yellow-100 text-yellow-800",
       Refund: "bg-orange-100 text-orange-800",
     };
     const className = statusMap[status] || "bg-gray-100 text-gray-800";
@@ -169,7 +172,109 @@ export default function StaffManageOrder() {
     }
     setSelectAll(!selectAll);
   };
+  const reviewCancellation = async (orderId, approved, rejectionReason = "") => {
+    try {
+      const res = await fetch(
+        `https://localhost:7015/api/order/${orderId}/review-cancellation`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            approved: approved,
+            rejectionReason: approved ? null : rejectionReason,
+          }),
+        }
+      );
 
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Lỗi không xác định!");
+
+      return { success: true, message: data.message };
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  };
+  const handleApproveCancel = async (orderId) => {
+  const confirm = await Swal.fire({
+    title: "Xác nhận!",
+    text: `Bạn chắc chắn chấp nhận hủy đơn #${orderId}?`,
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "Đồng ý",
+    cancelButtonText: "Hủy",
+    confirmButtonColor: "#16a34a",
+    cancelButtonColor: "#6b7280",
+  });
+
+  if (!confirm.isConfirmed) return;
+
+  Swal.showLoading();
+
+  const result = await reviewCancellation(orderId, true);
+  Swal.close();
+
+  if (result.success) {
+    Swal.fire({
+      icon: "success",
+      title: "Thành công!",
+      text: result.message,
+      timer: 2000,
+      showConfirmButton: false,
+    });
+    fetchOrders(); // Reload danh sách đơn hàng
+  } else {
+    Swal.fire({
+      icon: "error",
+      title: "Thất bại!",
+      text: result.message,
+    });
+  }
+  };
+  const handleRejectCancel = async (orderId) => {
+  const { value: reason } = await Swal.fire({
+    title: `Từ chối yêu cầu hủy #${orderId}`,
+    input: "textarea",
+    inputPlaceholder: "Nhập lý do từ chối (bắt buộc, tối thiểu 5 ký tự)...",
+    showCancelButton: true,
+    confirmButtonText: "Từ chối",
+    cancelButtonText: "Hủy",
+    confirmButtonColor: "#dc2626",
+    cancelButtonColor: "#6b7280",
+    preConfirm: (value) => {
+      if (!value || value.trim().length < 5) {
+        Swal.showValidationMessage("Lý do phải ít nhất 5 ký tự!");
+      }
+      return value;
+    },
+  });
+
+  if (!reason) return;
+
+  Swal.showLoading();
+
+  const result = await reviewCancellation(orderId, false, reason);
+  Swal.close();
+
+  if (result.success) {
+    Swal.fire({
+      icon: "success",
+      title: "Đã từ chối!",
+      text: result.message,
+      timer: 2000,
+      showConfirmButton: false,
+    });
+    fetchOrders();
+  } else {
+    Swal.fire({
+      icon: "error",
+      title: "Thất bại!",
+      text: result.message,
+    });
+  }
+  };
   const handleApproveRefundCancel = (orderId) => {
     console.log(`Approving refund/cancel for order ${orderId}`);
     setConfirmAction({
@@ -185,6 +290,145 @@ export default function StaffManageOrder() {
     setRejectingOrderId(orderId);
     setShowRejectDialog(true);
   };
+   // ✅ API approve/reject refund trực tiếp trong page.jsx
+  const reviewRefund = async (refundId, approved, rejectionReason = null) => {
+    const res = await fetch(`https://localhost:7015/api/orders/${refundId}/review-refund`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        approved: approved,
+        rejectionReason: rejectionReason,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.message || "Lỗi xử lý Refund");
+    }
+
+    return await res.json();
+  };
+  // ✅ DUYỆT REFUND
+  const handleApproveRefund = async (refundId) => {
+    console.log("🟡 Handling Refund ID:", refundId);
+  if (!refundId) return;
+  Swal.fire({
+    title: 'Approve Refund #${refundId}?',
+    icon: "question",
+    showCancelButton: true,
+    confirmButtonText: "Yes, approve",
+  }).then(async (res) => {
+    if (res.isConfirmed) {
+      try {
+        const response = await fetch(
+          `https://localhost:7015/api/Order/refund-requests/${refundId}/review`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ approved: true }),
+          }
+        );
+
+        if (!response.ok) throw new Error("Failed to approve refund!");
+
+        Swal.fire("✅ Approved!", "Refund has been approved.", "success");
+
+        // Nếu có fetchOrders thì dùng
+        if (typeof fetchOrders === "function") fetchOrders();
+        else window.location.reload();
+      } catch (err) {
+        Swal.fire("Error", err.message || "Approve refund failed", "error");
+      }
+    }
+  });
+  };
+
+  const handleRejectRefund = async (refundId) => {
+  const { value: reason } = await Swal.fire({
+    title: "Reject Refund - Enter reason:",
+    input: "text",
+    inputPlaceholder: "Reason is required...",
+    inputValidator: (value) => {
+      if (!value) return "You must enter a reason!";
+    },
+    showCancelButton: true,
+    confirmButtonText: "Reject",
+  });
+
+  if (!reason) return;
+
+  try {
+    const response = await fetch(
+      `https://localhost:7015/api/Order/refund-requests/${refundId}/review`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ approved: false, rejectionReason: reason }),
+      }
+    );
+
+    if (!response.ok) throw new Error("Failed to reject refund!");
+
+    Swal.fire("✅ Rejected!", "Refund has been rejected.", "success");
+
+    if (typeof fetchOrders === "function") fetchOrders();
+    else window.location.reload();
+  } catch (err) {
+    Swal.fire("Error", err.message || "Reject refund failed", "error");
+  }
+  };
+
+
+  // ✅ Xử lý click Approve / Reject Refund
+  const handleReviewRefund = async (refundId, approved) => {
+    if (!refundId) return;
+
+    if (!approved) {
+      const { value: reason } = await Swal.fire({
+        title: "Nhập lý do từ chối hoàn tiền",
+        input: "text",
+        inputPlaceholder: "Lý do từ chối...",
+        showCancelButton: true,
+        confirmButtonText: "Gửi",
+        cancelButtonText: "Hủy",
+      });
+
+      if (!reason) return;
+
+      try {
+        await reviewRefund(refundId, false, reason);
+        Swal.fire("Đã từ chối!", "Bạn đã từ chối yêu cầu hoàn tiền.", "success");
+        fetchOrders();
+      } catch (err) {
+        Swal.fire("Lỗi", err.message, "error");
+      }
+      return;
+    }
+
+    Swal.fire({
+      title: "Xác nhận hoàn tiền?",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Đồng ý",
+      cancelButtonText: "Hủy",
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        try {
+          await reviewRefund(refundId, true);
+          Swal.fire("Thành công!", "Yêu cầu hoàn tiền đã được chấp nhận.", "success");
+          fetchOrders();
+        } catch (err) {
+          Swal.fire("Lỗi", err.message, "error");
+        }
+      }
+    });
+  };
+
 
   const handleConfirmReject = () => {
     console.log(
@@ -478,7 +722,32 @@ export default function StaffManageOrder() {
                                 ${order.totalCost?.toFixed(2) || "0.00"}
                               </TableCell>
                               <TableCell className="whitespace-nowrap">
+                                {/* Hiển thị Status Badge */}
                                 {getStatusBadge(order)}
+
+                                 {(order.statusOrder === 17 || order.statusOrder === 18) ? (
+                                  order.reason && (
+                                    <div className="text-xs text-gray-600 mt-1">
+                                      <span className="font-medium text-gray-700">Reason:</span> {order.reason}
+                                    </div>
+                                  )
+                                ) : (
+                                  <>
+                                    {/* Các trạng thái khác thì hiển thị cả Reason nếu có */}
+                                    {order.reason && (
+                                      <div className="text-xs text-gray-600 mt-1">
+                                        <span className="font-medium text-gray-700">Reason:</span> {order.reason}
+                                      </div>
+                                    )}
+
+                                    {/* Và hiển thị RejectReason nếu có */}
+                                    {order.rejectionReason && (
+                                      <div className="text-xs text-red-600 mt-1">
+                                        <span className="font-medium">Rejected:</span> {order.rejectionReason}
+                                      </div>
+                                    )}
+                                  </>
+                                )}
                               </TableCell>
                               <TableCell className="whitespace-nowrap">
                                 <Badge
@@ -491,66 +760,28 @@ export default function StaffManageOrder() {
                                   {order.paymentStatus}
                                 </Badge>
                               </TableCell>
-                              <TableCell className="whitespace-nowrap">
+                             <TableCell className="whitespace-nowrap">
                                 <div className="flex items-center gap-2">
-                                  {order.statusOderName === "Refund" ||
-                                  order.statusOderName === "Cancel" ? (
-                                    <>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="bg-transparent hover:bg-green-50 text-green-600 hover:text-green-700 border-green-200"
-                                        onClick={() =>
-                                          handleApproveRefundCancel(
-                                            order.orderId
-                                          )
-                                        }
-                                        title="Approve"
-                                      >
-                                        ✓
-                                      </Button>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="bg-transparent hover:bg-red-50 text-red-600 hover:text-red-700 border-red-200"
-                                        onClick={() =>
-                                          handleRejectRefundCancel(
-                                            order.orderId
-                                          )
-                                        }
-                                        title="Reject"
-                                      >
-                                        ✕
-                                      </Button>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className={`bg-transparent hover:bg-blue-100 border-blue-200 transition-colors ${
-                                          expandedOrderId === order.orderId
-                                            ? "bg-blue-100"
-                                            : ""
-                                        }`}
-                                        onClick={() =>
-                                          setExpandedOrderId(
-                                            expandedOrderId === order.orderId
-                                              ? null
-                                              : order.orderId
-                                          )
-                                        }
-                                        title="Expand Details"
-                                      >
-                                        <ChevronDown
-                                          className={`h-4 w-4 transition-transform ${
-                                            expandedOrderId === order.orderId
-                                              ? "rotate-180"
-                                              : ""
-                                          }`}
-                                        />
-                                      </Button>
-
+                                  {/* ✅ Nút Expand luôn hiển thị */}
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className={`bg-transparent hover:bg-blue-100 border-blue-200 transition-colors ${
+                                      expandedOrderId === order.orderId ? "bg-blue-100" : ""
+                                    }`}
+                                    onClick={() =>
+                                      setExpandedOrderId(
+                                        expandedOrderId === order.orderId ? null : order.orderId
+                                      )
+                                    }
+                                    title="Expand Details"
+                                  >
+                                    <ChevronDown
+                                      className={`h-4 w-4 transition-transform ${
+                                        expandedOrderId === order.orderId ? "rotate-180" : ""
+                                      }`}
+                                    />
+                                  </Button>
                                       <Popover>
                                         <PopoverTrigger asChild>
                                           <Button
@@ -567,9 +798,7 @@ export default function StaffManageOrder() {
                                             <Button
                                               variant="ghost"
                                               size="sm"
-                                              onClick={() =>
-                                                handleViewDetails(order)
-                                              }
+                                              onClick={() => handleViewDetails(order)}
                                               className="justify-start"
                                             >
                                               <Eye className="h-4 w-4 mr-2 text-blue-600" />
@@ -578,8 +807,52 @@ export default function StaffManageOrder() {
                                           </div>
                                         </PopoverContent>
                                       </Popover>
+                                    
+                                  {/* ✅ Nếu đơn đang yêu cầu Cancel */}
+                                  {(order.statusOderName === "HOLD" || order.statusOderName === "Cancel") && !order.isRefundPending && (
+                                    <>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="bg-transparent hover:bg-green-50 text-green-600 hover:text-green-700 border-green-200"
+                                        onClick={() => handleApproveCancel(order.orderId)}
+                                      >
+                                        ✓ Approve Cancel
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="bg-transparent hover:bg-red-50 text-red-600 hover:text-red-700 border-red-200"
+                                        onClick={() => handleRejectCancel(order.orderId)}
+                                      >
+                                        ✕ Reject Cancel
+                                      </Button>
                                     </>
                                   )}
+
+                                  {/* ✅ Nếu đơn đang yêu cầu Refund */}
+                                  {order.isRefundPending && (
+                                    <>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="bg-transparent hover:bg-green-50 text-green-600 hover:text-green-700 border-green-200"
+                                        onClick={() => handleApproveRefund(order.latestRefundId)}
+                                      >
+                                        ✓ Approve Refund
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="bg-transparent hover:bg-red-50 text-red-600 hover:text-red-700 border-red-200"
+                                        onClick={() => handleRejectRefund(order.latestRefundId)}
+                                      >
+                                        ✕ Reject Refund
+                                      </Button>
+                                    </>
+                                  )}
+
+                                  
                                 </div>
                               </TableCell>
                             </TableRow>
