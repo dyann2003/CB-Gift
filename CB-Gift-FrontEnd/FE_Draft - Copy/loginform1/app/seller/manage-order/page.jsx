@@ -116,6 +116,8 @@ export default function ManageOrder() {
   const [showDesignCheckDialog, setShowDesignCheckDialog] = useState(false);
   const [designCheckAction, setDesignCheckAction] = useState(null); // 'approve' or 'reject'
   const [designCheckOrderId, setDesignCheckOrderId] = useState(null);
+  //Theo dõi trạng thái loading của từng chi tiết
+  const [isSubmittingDetail, setIsSubmittingDetail] = useState(null);
 
   const [expandedOrderId, setExpandedOrderId] = useState(null);
   const [successMessage, setSuccessMessage] = useState("");
@@ -698,27 +700,22 @@ export default function ManageOrder() {
   };
 
   // ✅ Cập nhật: Gọi API GET /api/Seller/{id} để lấy chi tiết 1 đơn hàng
-  const handleViewDetails = async (order) => {
+ const handleViewDetails = async (order) => {
     try {
       console.log("🧾 Selected order (before fetch):", order);
-
-      // ✅ Gọi API chi tiết đơn hàng
       const res = await fetch(`https://localhost:7015/api/Seller/${order.id}`, {
         credentials: "include",
       });
-
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
       const fullOrder = await res.json();
       console.log("✅ Full order fetched:", fullOrder);
-      console.log("🧩 Details inside order:", fullOrder?.details);
 
       if (!fullOrder) {
         alert("Không tìm thấy chi tiết đơn hàng này!");
         return;
       }
 
-      // Map data (giữ nguyên logic, đảm bảo lấy trường từ fullOrder)
+      // ⭐ SỬA LẠI MAPPING: Bổ sung orderDetailId và productionStatus
       const mappedOrder = {
         id: fullOrder.orderId,
         orderId: fullOrder.orderCode,
@@ -765,16 +762,17 @@ export default function ManageOrder() {
           price: detail.price,
           size: detail.size || "",
           accessory: detail.accessory || "",
-
           activeTTS: fullOrder.activeTts || false,
           linkFileDesign: detail.linkFileDesign,
           linkThanksCard: detail.linkThanksCard,
           linkImg: detail.linkImg,
+          // === BỔ SUNG TRƯỜNG CÒN THIẾU ===
+          orderDetailId: detail.orderDetailID,
+          productionStatus: detail.productionStatus 
         })),
       };
 
       console.log("🎯 Mapped order for modal:", mappedOrder);
-
       setEditedOrder(mappedOrder);
       setIsDialogOpen(true);
     } catch (err) {
@@ -934,6 +932,84 @@ export default function ManageOrder() {
       console.error("[v0] Reject design failed:", err);
       setErrorMessage(`❌ Failed to reject: ${err.message}`);
       setShowErrorDialog(true);
+    }
+  };
+  const handleApproveOrderDetail = async (orderDetailId) => {
+    setIsSubmittingDetail(orderDetailId); // Bật loading cho nút này
+    try {
+      const res = await fetch(
+        `https://localhost:7015/api/order/order-details/${orderDetailId}/design-status`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ 
+            productionStatus: "READY_PROD",
+            reason: null 
+          }), 
+        }
+      );
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || `HTTP ${res.status}`);
+      }
+      
+      setSuccessMessage(`✅ Đã duyệt thành công chi tiết #${orderDetailId}!`);
+      setShowSuccessDialog(true);
+      setIsDialogOpen(false); // Đóng modal
+
+      setTimeout(() => fetchOrders(), 1500);
+
+    } catch (err) {
+      console.error("Approve detail failed:", err);
+      setErrorMessage(`❌ Lỗi: ${err.message}`);
+      setShowErrorDialog(true);
+    } finally {
+      setIsSubmittingDetail(null); // Tắt loading
+    }
+  };
+
+  // === THÊM HÀM MỚI ===
+  const handleRejectOrderDetail = async (orderDetailId) => {
+    const reason = prompt("Vui lòng nhập lý do từ chối (ít nhất 10 ký tự):");
+    if (!reason || reason.trim().length < 10) {
+      alert("Bạn phải nhập lý do từ chối (ít nhất 10 ký tự) để tiếp tục.");
+      return;
+    }
+
+    setIsSubmittingDetail(orderDetailId); // Bật loading cho nút này
+    try {
+      const res = await fetch(
+        `https://localhost:7015/api/order/order-details/${orderDetailId}/design-status`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            productionStatus: "DESIGN_REDO",
+            reason: reason
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || `HTTP ${res.status}`);
+      }
+
+      setSuccessMessage(`✅ Đã gửi yêu cầu làm lại cho chi tiết #${orderDetailId}.`);
+      setShowSuccessDialog(true);
+      setIsDialogOpen(false); // Đóng modal
+
+      setTimeout(() => fetchOrders(), 1500);
+
+    } catch (err) {
+      console.error("Reject detail failed:", err);
+      setErrorMessage(`❌ Lỗi: ${err.message}`);
+      setShowErrorDialog(true);
+    } finally {
+      setIsSubmittingDetail(null); // Tắt loading
     }
   };
 

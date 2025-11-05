@@ -605,106 +605,132 @@ namespace CB_Gift.Services
             return true;
         }
         public async Task<bool> SellerApproveOrderDetailDesignAsync(
-        int orderDetailId,
-        ProductionStatus action,
-        string sellerId,
-        string? reason)
-        {
-            // 1. Tải OrderDetail và Order cha
-            var orderDetail = await _context.OrderDetails
-                .Include(od => od.Order)
-                .FirstOrDefaultAsync(od => od.OrderDetailId == orderDetailId);
-
-            if (orderDetail == null)
+            int orderDetailId,
+            ProductionStatus action,
+            string sellerId,
+            string? reason)
             {
-                return false;
-            }
-
-            var order = orderDetail.Order;
-
-            // 2. Kiểm tra Quyền
-            if (order.SellerUserId != sellerId)
-            {
-                throw new UnauthorizedAccessException($"Seller {sellerId} is not authorized to modify OrderDetail {orderDetailId}.");
-            }
-
-            // 3. Kiểm tra trạng thái hiện tại của OrderDetail
-            // Phải đang ở CHECK_DESIGN và cần thiết kế
-            if (orderDetail.ProductionStatus.GetValueOrDefault() != ProductionStatus.CHECK_DESIGN)
-            {
-                throw new InvalidOperationException($"OrderDetail {orderDetailId} is not in a modifiable state (Must be CHECK_DESIGN).");
-            }
-
-            // 4. Kiểm tra trạng thái đích hợp lệ
-            if (action != ProductionStatus.DESIGN_REDO && action != ProductionStatus.READY_PROD)
-            {
-                throw new InvalidOperationException($"Invalid action status {action}. Must be DESIGN_REDO or READY_PROD.");
-            }
-            string eventType;
-            string notificationMessage;
-
-            if (action == ProductionStatus.DESIGN_REDO)
-            {
-                eventType = "DESIGN_REJECTED";
-                notificationMessage = $"YÊU CẦU LÀM LẠI thiết kế cho mục #{orderDetailId}. Lý do: {reason}";
-            }
-            else // (action == ProductionStatus.READY_PROD)
-            {
-                eventType = "DESIGN_APPROVED";
-                notificationMessage = $"CHẤP NHẬN thiết kế cho mục #{orderDetailId}.";
-            }
-
-            // Tạo bản ghi log mới
-            var newLog = new OrderDetailLog
-            {
-                OrderDetailId = orderDetailId,
-                ActorUserId = sellerId,
-                EventType = eventType,
-                Reason = reason, // Sẽ là null nếu được chấp nhận, và có nội dung nếu bị từ chối
-                CreatedAt = DateTime.UtcNow
-            };
-            _context.OrderDetailLogs.Add(newLog);
-
-            // 5. Cập nhật ProductionStatus của OrderDetail
-            orderDetail.ProductionStatus = action;
-
-            // 6. Lưu thay đổi
-            // LƯU Ý: Không có logic cập nhật Order cha tại đây theo yêu cầu.
-
-
-            // ✅ BẮT ĐẦU GỬI THÔNG BÁO
+            using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                string actionText = (action == ProductionStatus.READY_PROD) ? "CHẤP NHẬN" : "YÊU CẦU LÀM LẠI";
-                string designerId = orderDetail.AssignedDesignerUserId;
-                int orderId = orderDetail.OrderId;
+                // 1. Tải Order cha và TẤT CẢ các OrderDetails của nó
+                // Chúng ta tìm Order chứa OrderDetailId được yêu cầu
+                var order = await _context.Orders
+                    .Include(o => o.OrderDetails) // Tải TẤT CẢ các order details liên quan
+                    .FirstOrDefaultAsync(o => o.OrderDetails.Any(od => od.OrderDetailId == orderDetailId));
 
-                // 1. Gửi thông báo đến Designer
-                if (!string.IsNullOrEmpty(designerId))
+                if (order == null)
                 {
-                    await _notificationService.CreateAndSendNotificationAsync(
-                        designerId,
-                        $"Seller đã {actionText} thiết kế cho mục #{orderDetailId} (Đơn hàng #{orderId}).",
-                        $"/designer/tasks"
-                    );
+                    return false; // Không tìm thấy Order chứa OrderDetailId này
                 }
 
-                // 2. Gửi cập nhật trạng thái real-time
-                var orderGroupName = $"order_{orderId}";
-                await _hubContext.Clients.Group(orderGroupName).SendAsync(
-                    "OrderStatusChanged",
-                    new { orderId = orderId, orderDetailId = orderDetailId, newStatus = action.ToString() }
-                );
+                // Lấy ra OrderDetail cụ thể mà chúng ta đang hành động
+                var orderDetail = order.OrderDetails.First(od => od.OrderDetailId == orderDetailId);
+
+                // 2. Kiểm tra Quyền
+                if (order.SellerUserId != sellerId)
+                {
+                    throw new UnauthorizedAccessException($"Seller {sellerId} is not authorized to modify OrderDetail {orderDetailId}.");
+                }
+
+                // 3. Kiểm tra trạng thái hiện tại của OrderDetail
+                if (orderDetail.ProductionStatus.GetValueOrDefault() != ProductionStatus.CHECK_DESIGN)
+                {
+                    throw new InvalidOperationException($"OrderDetail {orderDetailId} is not in a modifiable state (Must be CHECK_DESIGN).");
+                }
+
+                // 4. Kiểm tra trạng thái đích hợp lệ (Đã có ở Controller, nhưng kiểm tra lại ở Service vẫn tốt)
+                if (action != ProductionStatus.DESIGN_REDO && action != ProductionStatus.READY_PROD)
+                {
+                    throw new InvalidOperationException($"Invalid action status {action}. Must be DESIGN_REDO or READY_PROD.");
+                }
+
+                // 5. Ghi Log hành động (từ Kịch bản 1 của bạn)
+                string eventType;
+                string notificationMessage;
+
+                if (action == ProductionStatus.DESIGN_REDO)
+                {
+                    eventType = "DESIGN_REJECTED";
+                    notificationMessage = $"YÊU CẦU LÀM LẠI thiết kế cho mục #{orderDetailId}. Lý do: {reason}";
+                }
+                else // (action == ProductionStatus.READY_PROD)
+                {
+                    eventType = "DESIGN_APPROVED";
+                    notificationMessage = $"CHẤP NHẬN thiết kế cho mục #{orderDetailId}.";
+                }
+
+                var newLog = new OrderDetailLog
+                {
+                    OrderDetailId = orderDetailId,
+                    ActorUserId = sellerId,
+                    EventType = eventType,
+                    Reason = reason,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.OrderDetailLogs.Add(newLog);
+
+                // 6. Cập nhật ProductionStatus của OrderDetail
+                orderDetail.ProductionStatus = action;
+
+                // 7. KIỂM TRA TẤT CẢ ANH EM VÀ CẬP NHẬT ORDER CHA ⭐
+                // Kiểm tra xem TẤT CẢ các OrderDetail trong đơn hàng này có cùng trạng thái 'action' hay không
+                bool allDetailsMatch = order.OrderDetails.All(od => od.ProductionStatus == action);
+
+                if (allDetailsMatch)
+                {
+                    if (action == ProductionStatus.DESIGN_REDO)
+                    {
+                        order.StatusOrder = 6; // 6 = DESIGN_REDO
+                    }
+                    else if (action == ProductionStatus.READY_PROD)
+                    {
+                        order.StatusOrder = 7; // 7 = CONFIRMED (Chốt Đơn)
+                    }
+                }
+                // Nếu không phải tất cả đều khớp, trạng thái của Order cha sẽ không thay đổi.
+
+                try
+                {
+                    string designerId = orderDetail.AssignedDesignerUserId;
+
+                    if (!string.IsNullOrEmpty(designerId))
+                    {
+                        await _notificationService.CreateAndSendNotificationAsync(
+                            designerId,
+                            $"Seller đã {notificationMessage}", // Dùng nội dung thông báo mới
+                            $"/designer/tasks"
+                        );
+                    }
+
+                    var orderGroupName = $"order_{order.OrderId}";
+                    await _hubContext.Clients.Group(orderGroupName).SendAsync(
+                        "OrderStatusChanged",
+                        new
+                        {
+                            orderId = order.OrderId,
+                            orderDetailId = orderDetailId,
+                            newStatus = action.ToString(),
+                            newOrderStatus = order.StatusOrder // Gửi kèm trạng thái tổng của Order
+                        }
+                    );
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho SellerApproveOrderDetailDesignAsync");
+                }
+
+                // 9. Lưu tất cả thay đổi và commit transaction
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return true;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho SellerApproveOrderDetailDesignAsync");
+                await transaction.RollbackAsync(); // Rất quan trọng: Hoàn tác nếu có lỗi
+                throw; // Ném lại lỗi để controller xử lý
             }
-            // ✅ KẾT THÚC GỬI THÔNG BÁO
-
-            await _context.SaveChangesAsync();
-
-            return true;
         }
         public async Task<bool> SendOrderToReadyProdAsync(int orderId, string sellerId)
         {

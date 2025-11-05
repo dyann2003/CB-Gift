@@ -1,4 +1,5 @@
 ﻿using CB_Gift.Data;
+using CB_Gift.DTOs;
 using CB_Gift.Models;
 using CB_Gift.Models.Enums;
 using CB_Gift.Services.IService;
@@ -25,39 +26,26 @@ namespace CB_Gift.Services
 
         public async Task<OrderDetail?> AcceptOrderDetailAsync(int orderDetailId)
         {
-            return await UpdateProductionStatusAsync(orderDetailId, 9);
+            return await UpdateProductionStatusAsync(orderDetailId, 9, null, null);
         }
 
-        public async Task<OrderDetail?> RejectOrderDetailAsync(int orderDetailId)
+        // ⭐ THAY ĐỔI: Triển khai hàm Reject mới
+        public async Task<OrderDetail?> RejectOrderDetailAsync(int orderDetailId, QcRejectRequestDto request, string qcUserId)
         {
-            return await UpdateProductionStatusAsync(orderDetailId, 11);
+            return await UpdateProductionStatusAsync(orderDetailId, 11, qcUserId, request.Reason);
         }
-        /* private async Task<OrderDetail?> UpdateProductionStatusAsync(int orderDetailId, int newStatus)
-         {
-             var orderDetail = await _context.OrderDetails.FindAsync(orderDetailId);
 
-             if (orderDetail == null)
-             {
-                 return null;
-             }
-
-             orderDetail.ProductionStatus = (ProductionStatus)newStatus;
-
-             await _context.SaveChangesAsync();
-
-             return orderDetail;
-         }*/
-        private async Task<OrderDetail?> UpdateProductionStatusAsync(int orderDetailId, int newStatus)
+        // ⭐ THAY ĐỔI: Nâng cấp hàm private này
+        private async Task<OrderDetail?> UpdateProductionStatusAsync(
+            int orderDetailId,
+            int newStatus,
+            string? actorUserId, // Thêm Actor
+            string? reason) // Thêm Reason
         {
-            // Bắt đầu một Transaction để đảm bảo tính nhất quán của dữ liệu
             using var transaction = await _context.Database.BeginTransactionAsync();
-
             try
             {
-                // 1. Cập nhật ProductionStatus của OrderDetail hiện tại
-                // Phải tải OrderDetail mà không cần Include Order ở đây
                 var orderDetail = await _context.OrderDetails.FindAsync(orderDetailId);
-
                 if (orderDetail == null)
                 {
                     await transaction.RollbackAsync();
@@ -67,9 +55,27 @@ namespace CB_Gift.Services
                 var newProductionStatus = (ProductionStatus)newStatus;
                 orderDetail.ProductionStatus = newProductionStatus;
 
+                // ⭐ 1. LOGIC MỚI: GHI LOG NẾU CÓ
+                if (!string.IsNullOrEmpty(actorUserId) && !string.IsNullOrEmpty(reason))
+                {
+                    string eventType = (newProductionStatus == ProductionStatus.PROD_REWORK)
+                        ? "QC_REJECTED"
+                        : "STATUS_UPDATED";
+
+                    var newLog = new OrderDetailLog
+                    {
+                        OrderDetailId = orderDetailId,
+                        ActorUserId = actorUserId,
+                        EventType = eventType,
+                        Reason = reason,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    _context.OrderDetailLogs.Add(newLog);
+                }
+
                 // 2. Tải Order cha CÙNG VỚI TẤT CẢ OrderDetails
                 var order = await _context.Orders
-                    .Include(o => o.OrderDetails) // Quan trọng: Phải Include tất cả OrderDetails
+                    .Include(o => o.OrderDetails)
                     .FirstOrDefaultAsync(o => o.OrderId == orderDetail.OrderId);
 
                 if (order == null)
@@ -78,27 +84,19 @@ namespace CB_Gift.Services
                     return null;
                 }
 
-                // 3. CẬP NHẬT ORDER CHA: Dựa trên trạng thái ProductionStatus thấp nhất
+                // 3. CẬP NHẬT ORDER CHA (Logic cũ của bạn)
                 var allOrderDetails = order.OrderDetails.ToList();
-
-                // Chỉ xử lý nếu có chi tiết đơn hàng
                 if (allOrderDetails.Any())
                 {
-                    // Tìm trạng thái ProductionStatus thấp nhất (giá trị int nhỏ nhất)
-                    // Giá trị 1 (CREATED) được sử dụng làm giá trị mặc định an toàn
                     var minProductionStatusValue = allOrderDetails
                         .Min(od => (int)od.ProductionStatus.GetValueOrDefault((ProductionStatus)1));
 
                     var minProductionStatus = (ProductionStatus)minProductionStatusValue;
-
-                    // Ánh xạ trạng thái thấp nhất này sang StatusOrder
                     var newOrderStatus = MapProductionStatusToOrderStatus(minProductionStatus);
-
-                    // Cập nhật StatusOrder của Order cha
                     order.StatusOrder = newOrderStatus;
                 }
 
-                // 4. Lưu thay đổi và Commit Transaction
+                // 4. Lưu thay đổi và Commit
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
@@ -106,12 +104,11 @@ namespace CB_Gift.Services
             }
             catch (Exception)
             {
-                // Ghi log lỗi ở đây
                 await transaction.RollbackAsync();
-                // Ném lại lỗi nếu bạn muốn Controller xử lý
                 throw;
             }
         }
+
         private int MapProductionStatusToOrderStatus(ProductionStatus productionStatus)
         {
             return productionStatus switch
