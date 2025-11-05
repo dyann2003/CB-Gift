@@ -25,13 +25,42 @@ namespace CB_Gift.Controllers
             _designerSellerservice = designerSellerservice;
         }
 
+        // ----------------------------------------------------------------------
+        // ✅ API ĐÃ SỬA: Hỗ trợ Phân trang, Lọc, Tìm kiếm, Sắp xếp (DÙNG SERVICE MỚI)
+        // ----------------------------------------------------------------------
         [HttpGet]
-        public async Task<IActionResult> GetMyOrders()
+        public async Task<IActionResult> GetMyOrders(
+            [FromQuery] string? status = null,
+            [FromQuery] string? searchTerm = null,
+            [FromQuery] string? sortColumn = null,
+            [FromQuery] string? sortDirection = "desc",
+            [FromQuery] DateTime? fromDate = null,
+            [FromQuery] DateTime? toDate = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10)
         {
             string sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var orders = await _orderService.GetOrdersAndOrderDetailForSellerAsync(sellerId);
-            return Ok(orders);
+
+            try
+            {
+                // ✅ Gọi Service mới đã được tối ưu hóa
+                var (orders, total) = await _orderService.GetFilteredAndPagedOrdersForSellerAsync(
+                    sellerId, status, searchTerm, sortColumn, sortDirection, fromDate, toDate, page, pageSize);
+
+                // ✅ Trả về tổng số lượng và dữ liệu của trang hiện tại
+                return Ok(new { total, orders });
+            }
+            catch (Exception ex)
+            {
+                // Có thể log lỗi ở đây
+                return StatusCode(500, new { message = "Đã xảy ra lỗi khi lấy danh sách đơn hàng.", detail = ex.Message });
+            }
         }
+
+        // ----------------------------------------------------------------------
+        // Giữ nguyên các API khác
+        // ----------------------------------------------------------------------
+
         [HttpPost]
         public async Task<IActionResult> CreateOrder([FromBody] OrderCreateRequest request)
         {
@@ -45,6 +74,7 @@ namespace CB_Gift.Controllers
         public async Task<IActionResult> GetOrderDetail(int id)
         {
             string sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            // ✅ Đảm bảo gọi API chi tiết đơn hàng riêng biệt
             var result = await _orderService.GetOrderDetailAsync(id, sellerId);
             return result == null ? NotFound() : Ok(result);
         }
@@ -194,8 +224,8 @@ namespace CB_Gift.Controllers
                 if (success)
                 {
                     var actionText = action == ProductionStatus.READY_PROD
-                                     ? "CONFIRMED (Chốt Đơn)"
-                                     : "DESIGN_REDO (Thiết Kế Lại)";
+                                        ? "CONFIRMED (Chốt Đơn)"
+                                        : "DESIGN_REDO (Thiết Kế Lại)";
 
                     return Ok(new { message = $"Order {orderId} design successfully updated to {actionText}." });
                 }
@@ -219,17 +249,15 @@ namespace CB_Gift.Controllers
         }
         [HttpPut("order/order-details/{orderDetailId}/design-status")]
         public async Task<IActionResult> UpdateDesignOrderDetailStatus(
-        int orderDetailId,
-        [FromBody] UpdateStatusRequest request)
+    int orderDetailId,
+    [FromBody] UpdateStatusRequest request)
         {
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
             }
 
-            // LẤY SELLER ID
             var sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
             if (string.IsNullOrEmpty(sellerId))
             {
                 return Unauthorized("User is not authenticated or Seller ID missing.");
@@ -237,19 +265,25 @@ namespace CB_Gift.Controllers
 
             var action = request.ProductionStatus;
 
-            // Kiểm tra tính hợp lệ của Action (phải là DESIGN_REDO hoặc READY_PROD)
+            // Kiểm tra tính hợp lệ của Action
             if (action != ProductionStatus.DESIGN_REDO && action != ProductionStatus.READY_PROD)
             {
                 return BadRequest($"Invalid action. Must be {ProductionStatus.DESIGN_REDO} or {ProductionStatus.READY_PROD}.");
             }
 
+            // Nếu hành động là "Làm lại" (DESIGN_REDO), thì BẮT BUỘC phải có lý do
+            if (action == ProductionStatus.DESIGN_REDO && string.IsNullOrWhiteSpace(request.Reason))
+            {
+                return BadRequest(new { message = "A reason is required when rejecting a design (DESIGN_REDO)." });
+            }
+
             try
             {
-                // GỌI SERVICE
                 bool success = await _orderService.SellerApproveOrderDetailDesignAsync(
                     orderDetailId,
                     action,
-                    sellerId
+                    sellerId,
+                    request.Reason
                 );
 
                 if (success)
@@ -302,5 +336,18 @@ namespace CB_Gift.Controllers
                 return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn khi gửi đơn hàng." });
             }
         }
+
+        [HttpGet("stats")]
+        public async Task<IActionResult> GetMyOrderStats()
+        {
+            var sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(sellerId))
+                return Unauthorized();
+
+            var stats = await _orderService.GetOrderStatsForSellerAsync(sellerId);
+            return Ok(stats);
+        }
+
+
     }
 }

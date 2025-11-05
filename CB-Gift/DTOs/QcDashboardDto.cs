@@ -1,4 +1,6 @@
-﻿namespace CB_Gift.DTOs
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace CB_Gift.DTOs
 {
     public class QcDashboardDto
     {
@@ -20,5 +22,10 @@
         public string Staff { get; set; }
         public DateTime DateManufactured { get; set; }
         public string Status { get; set; }
+    }
+    public class QcRejectRequestDto
+    {
+        [Required]
+        public string Reason { get; set; }
     }
 }

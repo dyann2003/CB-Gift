@@ -139,7 +139,8 @@ builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IHuggingFaceService, HuggingFaceService>();
 builder.Services.AddScoped<IAiStudioService, AiStudioService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
-
+builder.Services.AddScoped<ICancellationService, CancellationService>();
+builder.Services.AddScoped<IRefundService, RefundService>();
 // --- Quartz ---
 builder.Services.AddQuartz(q =>
 {
