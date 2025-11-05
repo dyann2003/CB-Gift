@@ -34,6 +34,8 @@ namespace CB_Gift.Controllers
             [FromQuery] string? searchTerm = null,
             [FromQuery] string? sortColumn = null,
             [FromQuery] string? sortDirection = "desc",
+            [FromQuery] DateTime? fromDate = null,
+            [FromQuery] DateTime? toDate = null,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 10)
         {
@@ -43,7 +45,7 @@ namespace CB_Gift.Controllers
             {
                 // ✅ Gọi Service mới đã được tối ưu hóa
                 var (orders, total) = await _orderService.GetFilteredAndPagedOrdersForSellerAsync(
-                    sellerId, status, searchTerm, sortColumn, sortDirection, page, pageSize);
+                    sellerId, status, searchTerm, sortColumn, sortDirection, fromDate, toDate, page, pageSize);
 
                 // ✅ Trả về tổng số lượng và dữ liệu của trang hiện tại
                 return Ok(new { total, orders });
@@ -330,5 +332,18 @@ namespace CB_Gift.Controllers
                 return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn khi gửi đơn hàng." });
             }
         }
+
+        [HttpGet("stats")]
+        public async Task<IActionResult> GetMyOrderStats()
+        {
+            var sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(sellerId))
+                return Unauthorized();
+
+            var stats = await _orderService.GetOrderStatsForSellerAsync(sellerId);
+            return Ok(stats);
+        }
+
+
     }
 }

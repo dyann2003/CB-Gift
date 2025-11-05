@@ -15,6 +15,8 @@ namespace CB_Gift.Services.IService
             string? searchTerm,
             string? sortColumn,
             string? sortDirection,
+            DateTime? fromDate,
+            DateTime? toDate,
             int page,
             int pageSize);
 
@@ -38,6 +40,9 @@ namespace CB_Gift.Services.IService
         //Create Order: Gửi tổng Json: Customer,Order,OrderDetail.
         Task<MakeOrderResponse> MakeOrder(MakeOrderDto request, string sellerUserId);
         Task<MakeOrderResponse> UpdateOrderAsync(int orderId, OrderUpdateDto request, string sellerUserId);
+
+        Task<OrderStatsDto> GetOrderStatsForSellerAsync(string sellerUserId);
+
         Task<bool> DeleteOrderAsync(int orderId, string sellerUserId);
         Task<bool> SellerApproveOrderDesignAsync(int orderId, ProductionStatus action, string sellerId); // chuyển status order
         Task<bool> SellerApproveOrderDetailDesignAsync(int orderDetailId, ProductionStatus action, string sellerId); // chuyển status orderDetail
