@@ -45,7 +45,7 @@ namespace CB_Gift.Services
             // 1. Các trạng thái được phép yêu cầu hủy
             // 7 = CONFIRMED (Chưa sản xuất)
             // 9-15 = Các trạng thái ĐÃ VÀO SẢN XUẤT (INPROD, FINISHED, QC_DONE, QC_FAIL, PACKING, PROD_REWORK)
-            var allowedStatuses = new[] { 7,8, 9, 10, 11, 12, 13, 15 };
+            var allowedStatuses = new[] {2,3,4,5,6, 7,8, 9, 10, 11, 12, 13, 15 };
 
             if (!allowedStatuses.Contains(order.StatusOrder))
             {
