@@ -163,7 +163,18 @@ namespace CB_Gift.Services
                                 ProductionFileUrl = pd.OrderDetail.LinkFileDesign,
                                 ThankYouCardUrl = pd.OrderDetail.LinkThanksCard,
                                 Quantity = pd.OrderDetail.Quantity,
-                                StatusOrder = pd.OrderDetail.ProductionStatus
+                                StatusOrder = pd.OrderDetail.ProductionStatus,
+                                Reason = (
+                                        pd.OrderDetail.ProductionStatus == ProductionStatus.PROD_REWORK ||
+                                        pd.OrderDetail.ProductionStatus == ProductionStatus.QC_FAIL
+                                    )
+                                    ? (from log in _context.OrderDetailLogs
+                                       where log.OrderDetailId == pd.OrderDetailId &&
+                                             log.EventType == "QC_REJECTED"
+                                       orderby log.CreatedAt descending
+                                       select log.Reason
+                                      ).FirstOrDefault()
+                                    : null
                             }).ToList()
                         }).ToList()
                 })
