@@ -23,11 +23,34 @@ namespace CB_Gift.Controllers
         }
 
         [HttpGet("GetAllOrders")]
-        public async Task<IActionResult> GetAllOrders()
+        public async Task<IActionResult> GetAllOrders(
+    [FromQuery] string? status = null,
+    [FromQuery] string? searchTerm = null,
+    [FromQuery] string? sortColumn = null,
+    [FromQuery] string? sortDirection = "desc",
+    [FromQuery] DateTime? fromDate = null,
+    [FromQuery] DateTime? toDate = null,
+    [FromQuery] int page = 1,
+    [FromQuery] int pageSize = 10)
         {
-            var orders = await _orderService.GetAllOrders();
-            return Ok(orders);
+            try
+            {
+                var (orders, total) = await _orderService.GetFilteredAndPagedOrdersAsync(
+                    status, searchTerm, sortColumn, sortDirection, fromDate, toDate, page, pageSize);
+
+                return Ok(new { total, orders });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    message = "Đã xảy ra lỗi khi lấy danh sách đơn hàng.",
+                    detail = ex.Message
+                });
+            }
         }
+
+
 
         [HttpGet("{orderId}")]
         public async Task<IActionResult> GetOrderWithDetails(int orderId)

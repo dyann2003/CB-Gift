@@ -100,6 +100,8 @@ export default function ManageOrder() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [dateRange, setDateRange] = useState({ from: null, to: null });
 
+  const [isDateFilterOpen, setIsDateFilterOpen] = useState(false);
+
   // ✅ Cập nhật state Sắp xếp
   const [sortColumn, setSortColumn] = useState("orderDate"); // Mặc định sắp xếp theo ngày
   const [sortDirection, setSortDirection] = useState("desc"); // Mặc định giảm dần
@@ -125,6 +127,8 @@ export default function ManageOrder() {
   const [errorMessage, setErrorMessage] = useState("");
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [showErrorDialog, setShowErrorDialog] = useState(false);
+
+  const [selectedDateOption, setSelectedDateOption] = useState("day"); // giá trị mặc định
 
   const [orderStats, setOrderStats] = useState({
     total: 0,
@@ -193,6 +197,8 @@ export default function ManageOrder() {
 
   const [selectedStatConfig, setSelectedStatConfig] = useState(null);
 
+  const toggleDateFilter = () => setIsDateFilterOpen(!isDateFilterOpen);
+
   const openRefundPopup = (order) => {
     const reason = prompt(`Nhập lý do hoàn tiền cho đơn ${order.orderId}:`);
     if (!reason || reason.trim().length < 5) {
@@ -211,6 +217,35 @@ export default function ManageOrder() {
     }
     // Gọi API cancel tại đây
     console.log("Cancel order:", order.id, "Reason:", reason);
+  };
+
+  const handleDateFilterChange = (option) => {
+    setSelectedDateOption(option);
+    setIsDateFilterOpen(false);
+
+    // Tính toán range tự động
+    const now = new Date();
+    let from = null,
+      to = now;
+
+    if (option === "day") {
+      from = new Date(now.setHours(0, 0, 0, 0));
+    } else if (option === "week") {
+      const firstDay = new Date(now);
+      firstDay.setDate(now.getDate() - 7);
+      from = firstDay;
+    } else if (option === "month") {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      from = firstDay;
+    } else if (option === "year") {
+      const firstDay = new Date(now.getFullYear(), 0, 1);
+      from = firstDay;
+    }
+
+    setDateRange({ from, to });
+
+    // 🔁 Gọi hàm fetchOrders hoặc filterOrders tại đây nếu có
+    fetchOrders({ from, to });
   };
 
   // ✅ STATE MỚI: Lưu tổng số lượng đơn hàng (từ BE)

@@ -40,6 +40,17 @@ namespace CB_Gift.Services.IService
         //Create Order: Gửi tổng Json: Customer,Order,OrderDetail.
         Task<MakeOrderResponse> MakeOrder(MakeOrderDto request, string sellerUserId);
         Task<MakeOrderResponse> UpdateOrderAsync(int orderId, OrderUpdateDto request, string sellerUserId);
+        Task<(IEnumerable<OrderDto> Orders, int Total)> GetFilteredAndPagedOrdersAsync(
+     string? status,
+     string? searchTerm,
+     string? sortColumn,
+     string? sortDirection,
+     DateTime? fromDate,
+     DateTime? toDate,
+     int page,
+     int pageSize);
+
+
 
         Task<OrderStatsDto> GetOrderStatsForSellerAsync(string sellerUserId);
 
@@ -48,5 +59,7 @@ namespace CB_Gift.Services.IService
         Task<bool> SellerApproveOrderDetailDesignAsync(int orderDetailId, ProductionStatus action, string sellerId, string? reason); // chuyển status orderDetail
         Task<bool> SendOrderToReadyProdAsync(int orderId, string sellerId);// bắn thẳng sang staff, không qua designer
         Task<ApproveOrderResult> ApproveOrderForShippingAsync(int orderId);
+
+
     }
 }

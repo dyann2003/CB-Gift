@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import RoleSidebar from "@/components/layout/shared/role-sidebar";
+import { useState, useEffect } from "react";
+import StaffSidebar from "@/components/layout/staff/sidebar";
 import SellerHeader from "@/components/layout/seller/header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,12 +21,25 @@ import {
   Send,
   Eye,
   X,
-  QrCode,
-  Download,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  MoreVertical,
+  Loader,
 } from "lucide-react";
-import ImageIcon from "@/components/ui/image-icon";
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from "@/components/ui/table";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
 
 export default function StaffManageOrder() {
   const [currentPage, setCurrentPage] = useState("manage-order");
@@ -40,514 +53,56 @@ export default function StaffManageOrder() {
   const [dateFilter, setDateFilter] = useState("");
   const [page, setPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [expandedOrderId, setExpandedOrderId] = useState(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [rejectingOrderId, setRejectingOrderId] = useState(null);
 
-  const orders = [
-    {
-      id: "ORD-001",
-      customer: "John Doe",
-      products: [
-        {
-          name: "Acrylic Keychain",
-          quantity: 50,
-          size: "5x5cm",
-          accessory: "Key Ring",
-        },
-        {
-          name: "Acrylic Stand",
-          quantity: 25,
-          size: "10x15cm",
-          accessory: "None",
-        },
-      ],
-      designer: "Alice Smith",
-      dateApproved: "2024-01-15",
-      status: "qc_approved",
-      priority: "high",
-      qrCode: "QR-ORD-001-2024",
-      customerEmail: "john.doe@email.com",
-      customerPhone: "+1234567890",
-      specifications:
-        "5cm x 3cm keychain with transparent acrylic and full color print, 10x15cm stand with clear acrylic",
-      specialInstructions:
-        "Please ensure colors are vibrant and stand has stable base",
-      deliveryDate: "2024-01-25",
-      designFiles: [
-        {
-          name: "keychain-final-design.png",
-          url: "/acrylic-keychain.jpg",
-          type: "image",
-        },
-        {
-          name: "stand-final-design.png",
-          url: "/acrylic-stand.jpg",
-          type: "image",
-        },
-        { name: "design-specs.pdf", url: "#", type: "pdf" },
-      ],
-      originalFiles: [
-        {
-          name: "customer-reference.jpg",
-          url: "/acrylic-keychain.jpg",
-          type: "image",
-        },
-        { name: "logo-file.png", url: "/acrylic-stand.jpg", type: "image" },
-      ],
-    },
-    {
-      id: "ORD-002",
-      customer: "Jane Smith",
-      products: [
-        {
-          name: "Acrylic Stand",
-          quantity: 25,
-          size: "10x15cm",
-          accessory: "None",
-        },
-        {
-          name: "Acrylic Charm",
-          quantity: 100,
-          size: "3x3cm",
-          accessory: "Phone Strap",
-        },
-      ],
-      designer: "Bob Johnson",
-      dateApproved: "2024-01-14",
-      status: "in_production",
-      priority: "medium",
-      qrCode: "QR-ORD-002-2024",
-      customerEmail: "jane.smith@email.com",
-      customerPhone: "+1234567891",
-      specifications:
-        "10cm x 15cm clear acrylic stand with logo, 3cm diameter double-sided charm",
-      specialInstructions:
-        "Ensure stable base for stand, cute design for charm",
-      deliveryDate: "2024-01-28",
-      designFiles: [
-        { name: "stand-design.png", url: "/acrylic-stand.jpg", type: "image" },
-        { name: "charm-design.png", url: "/acrylic-charm.jpg", type: "image" },
-      ],
-      originalFiles: [
-        { name: "logo-file.png", url: "/acrylic-stand.jpg", type: "image" },
-        {
-          name: "charm-reference.jpg",
-          url: "/acrylic-charm.jpg",
-          type: "image",
-        },
-      ],
-    },
-    {
-      id: "ORD-003",
-      customer: "Mike Brown",
-      products: [
-        {
-          name: "Acrylic Charm",
-          quantity: 100,
-          size: "3x3cm",
-          accessory: "Phone Strap",
-        },
-        {
-          name: "Acrylic Keychain",
-          quantity: 75,
-          size: "4x6cm",
-          accessory: "Key Ring",
-        },
-        {
-          name: "Acrylic Stand",
-          quantity: 50,
-          size: "8x12cm",
-          accessory: "None",
-        },
-      ],
-      designer: "Alice Smith",
-      dateApproved: "2024-01-13",
-      status: "production_complete",
-      priority: "low",
-      qrCode: "QR-ORD-003-2024",
-      customerEmail: "mike.brown@email.com",
-      customerPhone: "+1234567892",
-      specifications:
-        "3cm diameter double-sided charm, 4x6cm keychain with UV print, 8x12cm display stand",
-      specialInstructions:
-        "Pack individually, handle with care - delicate designs",
-      deliveryDate: "2024-01-30",
-      designFiles: [
-        {
-          name: "charm-design-front.png",
-          url: "/acrylic-keychain.jpg",
-          type: "image",
-        },
-        {
-          name: "charm-design-back.png",
-          url: "/acrylic-keychain.jpg",
-          type: "image",
-        },
-        {
-          name: "keychain-design.png",
-          url: "/acrylic-keychain.jpg",
-          type: "image",
-        },
-        { name: "stand-design.png", url: "/acrylic-stand.jpg", type: "image" },
-      ],
-      originalFiles: [
-        { name: "artwork.ai", url: "#", type: "file" },
-        { name: "reference-images.zip", url: "#", type: "file" },
-      ],
-    },
-    {
-      id: "ORD-004",
-      customer: "Sarah Wilson",
-      products: [
-        {
-          name: "Acrylic Keychain",
-          quantity: 75,
-          size: "4x6cm",
-          accessory: "Key Ring",
-        },
-      ],
-      designer: "Bob Johnson",
-      dateApproved: "2024-01-12",
-      status: "qc_approved",
-      priority: "high",
-      qrCode: "QR-ORD-004-2024",
-      customerEmail: "sarah.wilson@email.com",
-      customerPhone: "+1234567893",
-      specifications: "4cm x 6cm, frosted acrylic with UV print",
-      specialInstructions: "Handle with care - delicate design",
-      deliveryDate: "2024-01-26",
-      designFiles: [
-        {
-          name: "keychain-final.png",
-          url: "/acrylic-keychain.jpg",
-          type: "image",
-        },
-      ],
-      originalFiles: [
-        {
-          name: "photo-reference.jpg",
-          url: "/acrylic-keychain.jpg",
-          type: "image",
-        },
-      ],
-    },
-    {
-      id: "ORD-005",
-      customer: "David Lee",
-      products: [
-        {
-          name: "Acrylic Stand",
-          quantity: 30,
-          size: "12x18cm",
-          accessory: "None",
-        },
-      ],
-      designer: "Alice Smith",
-      dateApproved: "2024-01-11",
-      status: "in_production",
-      priority: "medium",
-      qrCode: "QR-ORD-005-2024",
-      customerEmail: "david.lee@email.com",
-      customerPhone: "+1234567894",
-      specifications: "12cm x 18cm premium acrylic stand with UV print",
-      specialInstructions: "Ensure high quality finish",
-      deliveryDate: "2024-01-27",
-      designFiles: [
-        { name: "stand-premium.png", url: "/acrylic-stand.jpg", type: "image" },
-      ],
-      originalFiles: [
-        { name: "artwork.png", url: "/acrylic-stand.jpg", type: "image" },
-      ],
-    },
-    {
-      id: "ORD-006",
-      customer: "Emily Chen",
-      products: [
-        {
-          name: "Acrylic Charm",
-          quantity: 150,
-          size: "4x4cm",
-          accessory: "Phone Strap",
-        },
-        {
-          name: "Acrylic Keychain",
-          quantity: 100,
-          size: "5x7cm",
-          accessory: "Key Ring",
-        },
-      ],
-      designer: "Bob Johnson",
-      dateApproved: "2024-01-10",
-      status: "production_complete",
-      priority: "high",
-      qrCode: "QR-ORD-006-2024",
-      customerEmail: "emily.chen@email.com",
-      customerPhone: "+1234567895",
-      specifications:
-        "4cm charm with double-sided print, 5x7cm keychain with holographic effect",
-      specialInstructions: "Pack separately by product type",
-      deliveryDate: "2024-01-24",
-      designFiles: [
-        { name: "charm-design.png", url: "/acrylic-charm.jpg", type: "image" },
-        {
-          name: "keychain-holo.png",
-          url: "/acrylic-keychain.jpg",
-          type: "image",
-        },
-      ],
-      originalFiles: [
-        { name: "reference.jpg", url: "/acrylic-charm.jpg", type: "image" },
-        { name: "logo.png", url: "/acrylic-keychain.jpg", type: "image" },
-      ],
-    },
-    {
-      id: "ORD-007",
-      customer: "Robert Taylor",
-      products: [
-        {
-          name: "Acrylic Stand",
-          quantity: 40,
-          size: "15x20cm",
-          accessory: "None",
-        },
-      ],
-      designer: "Alice Smith",
-      dateApproved: "2024-01-09",
-      status: "qc_approved",
-      priority: "low",
-      qrCode: "QR-ORD-007-2024",
-      customerEmail: "robert.taylor@email.com",
-      customerPhone: "+1234567896",
-      specifications: "15x20cm large display stand with clear acrylic",
-      specialInstructions: "Extra padding for shipping",
-      deliveryDate: "2024-01-29",
-      designFiles: [
-        { name: "large-stand.png", url: "/acrylic-stand.jpg", type: "image" },
-      ],
-      originalFiles: [{ name: "design-file.ai", url: "#", type: "file" }],
-    },
-    {
-      id: "ORD-008",
-      customer: "Lisa Anderson",
-      products: [
-        {
-          name: "Acrylic Keychain",
-          quantity: 200,
-          size: "6x8cm",
-          accessory: "Key Ring",
-        },
-        {
-          name: "Acrylic Charm",
-          quantity: 200,
-          size: "3x3cm",
-          accessory: "Phone Strap",
-        },
-        {
-          name: "Acrylic Stand",
-          quantity: 100,
-          size: "10x15cm",
-          accessory: "None",
-        },
-      ],
-      designer: "Bob Johnson",
-      dateApproved: "2024-01-08",
-      status: "in_production",
-      priority: "high",
-      qrCode: "QR-ORD-008-2024",
-      customerEmail: "lisa.anderson@email.com",
-      customerPhone: "+1234567897",
-      specifications: "Bulk order with custom designs for each product type",
-      specialInstructions: "Quality check each piece individually",
-      deliveryDate: "2024-01-23",
-      designFiles: [
-        {
-          name: "keychain-bulk.png",
-          url: "/acrylic-keychain.jpg",
-          type: "image",
-        },
-        { name: "charm-bulk.png", url: "/acrylic-charm.jpg", type: "image" },
-        { name: "stand-bulk.png", url: "/acrylic-stand.jpg", type: "image" },
-      ],
-      originalFiles: [
-        { name: "designs.zip", url: "#", type: "file" },
-        { name: "specifications.pdf", url: "#", type: "file" },
-      ],
-    },
-    {
-      id: "ORD-009",
-      customer: "Michael White",
-      products: [
-        {
-          name: "Acrylic Charm",
-          quantity: 80,
-          size: "3.5x3.5cm",
-          accessory: "Phone Strap",
-        },
-      ],
-      designer: "Alice Smith",
-      dateApproved: "2024-01-07",
-      status: "production_complete",
-      priority: "medium",
-      qrCode: "QR-ORD-009-2024",
-      customerEmail: "michael.white@email.com",
-      customerPhone: "+1234567898",
-      specifications: "3.5cm square charm with gradient print",
-      specialInstructions: "Ensure color accuracy",
-      deliveryDate: "2024-01-26",
-      designFiles: [
-        {
-          name: "gradient-charm.png",
-          url: "/acrylic-charm.jpg",
-          type: "image",
-        },
-      ],
-      originalFiles: [
-        {
-          name: "color-reference.jpg",
-          url: "/acrylic-charm.jpg",
-          type: "image",
-        },
-      ],
-    },
-    {
-      id: "ORD-010",
-      customer: "Jennifer Martinez",
-      products: [
-        {
-          name: "Acrylic Keychain",
-          quantity: 120,
-          size: "5x5cm",
-          accessory: "Key Ring",
-        },
-        {
-          name: "Acrylic Stand",
-          quantity: 60,
-          size: "8x12cm",
-          accessory: "None",
-        },
-      ],
-      designer: "Bob Johnson",
-      dateApproved: "2024-01-06",
-      status: "qc_approved",
-      priority: "high",
-      qrCode: "QR-ORD-010-2024",
-      customerEmail: "jennifer.martinez@email.com",
-      customerPhone: "+1234567899",
-      specifications:
-        "5cm keychain with metallic finish, 8x12cm stand with matte coating",
-      specialInstructions: "Test metallic finish quality",
-      deliveryDate: "2024-01-25",
-      designFiles: [
-        {
-          name: "metallic-keychain.png",
-          url: "/acrylic-keychain.jpg",
-          type: "image",
-        },
-        { name: "matte-stand.png", url: "/acrylic-stand.jpg", type: "image" },
-      ],
-      originalFiles: [
-        { name: "design-v1.png", url: "/acrylic-keychain.jpg", type: "image" },
-        { name: "design-v2.png", url: "/acrylic-stand.jpg", type: "image" },
-      ],
-    },
-    {
-      id: "ORD-011",
-      customer: "Christopher Garcia",
-      products: [
-        {
-          name: "Acrylic Stand",
-          quantity: 45,
-          size: "10x15cm",
-          accessory: "None",
-        },
-      ],
-      designer: "Alice Smith",
-      dateApproved: "2024-01-05",
-      status: "in_production",
-      priority: "low",
-      qrCode: "QR-ORD-011-2024",
-      customerEmail: "christopher.garcia@email.com",
-      customerPhone: "+1234567800",
-      specifications: "Standard 10x15cm stand with glossy finish",
-      specialInstructions: "Standard packaging",
-      deliveryDate: "2024-01-28",
-      designFiles: [
-        {
-          name: "standard-stand.png",
-          url: "/acrylic-stand.jpg",
-          type: "image",
-        },
-      ],
-      originalFiles: [
-        { name: "artwork.png", url: "/acrylic-stand.jpg", type: "image" },
-      ],
-    },
-    {
-      id: "ORD-012",
-      customer: "Amanda Rodriguez",
-      products: [
-        {
-          name: "Acrylic Charm",
-          quantity: 180,
-          size: "4x4cm",
-          accessory: "Phone Strap",
-        },
-        {
-          name: "Acrylic Keychain",
-          quantity: 90,
-          size: "6x6cm",
-          accessory: "Key Ring",
-        },
-      ],
-      designer: "Bob Johnson",
-      dateApproved: "2024-01-04",
-      status: "production_complete",
-      priority: "medium",
-      qrCode: "QR-ORD-012-2024",
-      customerEmail: "amanda.rodriguez@email.com",
-      customerPhone: "+1234567801",
-      specifications:
-        "4cm charm with glitter effect, 6cm keychain with UV coating",
-      specialInstructions: "Handle glitter pieces with care",
-      deliveryDate: "2024-01-27",
-      designFiles: [
-        { name: "glitter-charm.png", url: "/acrylic-charm.jpg", type: "image" },
-        {
-          name: "uv-keychain.png",
-          url: "/acrylic-keychain.jpg",
-          type: "image",
-        },
-      ],
-      originalFiles: [
-        {
-          name: "reference-charm.jpg",
-          url: "/acrylic-charm.jpg",
-          type: "image",
-        },
-        {
-          name: "reference-keychain.jpg",
-          url: "/acrylic-keychain.jpg",
-          type: "image",
-        },
-      ],
-    },
-  ];
+  const [orders, setOrders] = useState([]);
+  const [totalOrders, setTotalOrders] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [sortDirection, setSortDirection] = useState("desc");
+
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const response = await fetch(
+          `https://localhost:7015/api/Order/GetAllOrders?sortDirection=${sortDirection}&page=${page}&pageSize=${itemsPerPage}`
+        );
+        if (!response.ok) {
+          throw new Error(`Failed to fetch orders: ${response.statusText}`);
+        }
+        const data = await response.json();
+        console.log("[v0] API Response:", data);
+        setOrders(data.orders || []);
+        setTotalOrders(data.total || 0);
+      } catch (err) {
+        console.error("[v0] Error fetching orders:", err);
+        setError(err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchOrders();
+  }, [page, itemsPerPage, sortDirection]);
 
   const filteredOrders = orders.filter((order) => {
     const matchesSearch =
-      order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.products.some((product) =>
-        product.name.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    const matchesFilter =
-      filterStatus === "all" || order.status === filterStatus;
-    const matchesDate = !dateFilter || order.dateApproved === dateFilter;
-    return matchesSearch && matchesFilter && matchesDate;
+      order.orderCode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      false ||
+      order.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      false;
+
+    return matchesSearch;
   });
 
-  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+  const totalPages = Math.ceil(totalOrders / itemsPerPage);
   const startIndex = (page - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
 
   const handleSearchChange = (value) => {
     setSearchTerm(value);
@@ -569,25 +124,20 @@ export default function StaffManageOrder() {
     setPage(1);
   };
 
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case "qc_approved":
-        return (
-          <Badge className="bg-green-100 text-green-800">QC Approved</Badge>
-        );
-      case "in_production":
-        return (
-          <Badge className="bg-blue-100 text-blue-800">In Production</Badge>
-        );
-      case "production_complete":
-        return (
-          <Badge className="bg-purple-100 text-purple-800">
-            Production Complete
-          </Badge>
-        );
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
-    }
+  const getStatusBadge = (order) => {
+    const status = order.statusOderName || "";
+    const statusMap = {
+      "Draft (Nháp)": "bg-gray-100 text-gray-800",
+      "Sẵn sàng Sản xuất": "bg-blue-100 text-blue-800",
+      "Chốt Đơn (Khóa Seller)": "bg-amber-100 text-amber-800",
+      "Đã Ship": "bg-green-100 text-green-800",
+      "Lỗi Sản xuất (Cần Rework)": "bg-yellow-100 text-yellow-800",
+      Cancel: "bg-red-100 text-red-800",
+      "Hoàn Hàng": "bg-orange-100 text-orange-800",
+      Refund: "bg-orange-100 text-orange-800",
+    };
+    const className = statusMap[status] || "bg-gray-100 text-gray-800";
+    return <Badge className={className}>{status}</Badge>;
   };
 
   const getPriorityBadge = (priority) => {
@@ -615,9 +165,34 @@ export default function StaffManageOrder() {
     if (selectAll) {
       setSelectedOrders([]);
     } else {
-      setSelectedOrders(paginatedOrders.map((order) => order.id));
+      setSelectedOrders(filteredOrders.map((order) => order.orderId));
     }
     setSelectAll(!selectAll);
+  };
+
+  const handleApproveRefundCancel = (orderId) => {
+    console.log(`Approving refund/cancel for order ${orderId}`);
+    setConfirmAction({
+      type: "approve_refund",
+      title: "Approve Refund/Cancel",
+      message: `Approve this refund/cancel request?`,
+      orderId,
+    });
+    setShowConfirmDialog(true);
+  };
+
+  const handleRejectRefundCancel = (orderId) => {
+    setRejectingOrderId(orderId);
+    setShowRejectDialog(true);
+  };
+
+  const handleConfirmReject = () => {
+    console.log(
+      `Rejecting refund/cancel for order ${rejectingOrderId} with reason: ${rejectReason}`
+    );
+    setShowRejectDialog(false);
+    setRejectReason("");
+    setRejectingOrderId(null);
   };
 
   const handleStartProduction = () => {
@@ -630,31 +205,14 @@ export default function StaffManageOrder() {
       setShowConfirmDialog(true);
       return;
     }
-    const selectedOrdersData = orders.filter((order) =>
-      selectedOrders.includes(order.id)
-    );
-    const eligibleOrders = selectedOrdersData.filter(
-      (order) => order.status === "qc_approved"
-    );
-
-    if (eligibleOrders.length === 0) {
-      setConfirmAction({
-        type: "error",
-        title: "No Eligible Orders",
-        message:
-          "No eligible orders selected. Only QC Approved orders can be moved to production.",
-      });
-      setShowConfirmDialog(true);
-      return;
-    }
 
     setConfirmAction({
       type: "start_production",
       title: "Start Production",
-      message: `Start production for ${eligibleOrders.length} order${
-        eligibleOrders.length > 1 ? "s" : ""
+      message: `Start production for ${selectedOrders.length} order${
+        selectedOrders.length > 1 ? "s" : ""
       }?`,
-      count: eligibleOrders.length,
+      count: selectedOrders.length,
     });
     setShowConfirmDialog(true);
   };
@@ -669,31 +227,14 @@ export default function StaffManageOrder() {
       setShowConfirmDialog(true);
       return;
     }
-    const selectedOrdersData = orders.filter((order) =>
-      selectedOrders.includes(order.id)
-    );
-    const eligibleOrders = selectedOrdersData.filter(
-      (order) => order.status === "in_production"
-    );
-
-    if (eligibleOrders.length === 0) {
-      setConfirmAction({
-        type: "error",
-        title: "No Eligible Orders",
-        message:
-          "No eligible orders selected. Only In Production orders can be marked as done.",
-      });
-      setShowConfirmDialog(true);
-      return;
-    }
 
     setConfirmAction({
       type: "mark_done",
       title: "Mark as Done",
-      message: `Mark ${eligibleOrders.length} order${
-        eligibleOrders.length > 1 ? "s" : ""
+      message: `Mark ${selectedOrders.length} order${
+        selectedOrders.length > 1 ? "s" : ""
       } as production complete?`,
-      count: eligibleOrders.length,
+      count: selectedOrders.length,
     });
     setShowConfirmDialog(true);
   };
@@ -708,31 +249,14 @@ export default function StaffManageOrder() {
       setShowConfirmDialog(true);
       return;
     }
-    const selectedOrdersData = orders.filter((order) =>
-      selectedOrders.includes(order.id)
-    );
-    const eligibleOrders = selectedOrdersData.filter(
-      (order) => order.status === "production_complete"
-    );
-
-    if (eligibleOrders.length === 0) {
-      setConfirmAction({
-        type: "error",
-        title: "No Eligible Orders",
-        message:
-          "No eligible orders selected. Only Production Complete orders can be assigned to QC.",
-      });
-      setShowConfirmDialog(true);
-      return;
-    }
 
     setConfirmAction({
       type: "assign_qc",
       title: "Assign to QC",
-      message: `Assign ${eligibleOrders.length} order${
-        eligibleOrders.length > 1 ? "s" : ""
+      message: `Assign ${selectedOrders.length} order${
+        selectedOrders.length > 1 ? "s" : ""
       } to QC for final inspection?`,
-      count: eligibleOrders.length,
+      count: selectedOrders.length,
     });
     setShowConfirmDialog(true);
   };
@@ -746,6 +270,8 @@ export default function StaffManageOrder() {
       );
     } else if (confirmAction?.type === "assign_qc") {
       console.log(`Assigning ${confirmAction.count} orders to QC`);
+    } else if (confirmAction?.type === "approve_refund") {
+      console.log(`Approved refund/cancel for order ${confirmAction.orderId}`);
     }
 
     setSelectedOrders([]);
@@ -764,13 +290,13 @@ export default function StaffManageOrder() {
     document.body.removeChild(link);
   };
 
+  const handleViewDetails = (order) => {
+    setSelectedOrderDetails(order);
+  };
+
   return (
     <div className="flex h-screen bg-gray-50">
-      <RoleSidebar
-        currentRole="staff"
-        currentPage={currentPage}
-        setCurrentPage={setCurrentPage}
-      />
+      <StaffSidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <SellerHeader />
         <main className="flex-1 overflow-y-auto p-4 md:p-6">
@@ -784,6 +310,14 @@ export default function StaffManageOrder() {
                 Manage production orders and status updates
               </p>
             </div>
+
+            {/* Error Message */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-lg">
+                <p className="font-medium">Error loading orders:</p>
+                <p className="text-sm">{error}</p>
+              </div>
+            )}
 
             {/* Search and Filter */}
             <div className="bg-white p-4 rounded-lg shadow">
@@ -803,11 +337,6 @@ export default function StaffManageOrder() {
                   className="px-3 py-2 border border-gray-300 rounded-md w-full md:w-auto"
                 >
                   <option value="all">All Status</option>
-                  <option value="qc_approved">QC Approved</option>
-                  <option value="in_production">In Production</option>
-                  <option value="production_complete">
-                    Production Complete
-                  </option>
                 </select>
                 <Input
                   type="date"
@@ -854,176 +383,348 @@ export default function StaffManageOrder() {
             {/* Orders Table */}
             <div className="bg-white rounded-lg shadow overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 md:px-6 py-3 text-left">
-                        <Checkbox
-                          checked={selectAll}
-                          onCheckedChange={handleSelectAll}
-                          aria-label="Select all orders"
-                        />
-                      </th>
-                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                        Order ID
-                      </th>
-                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                        Customer
-                      </th>
-                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                        Products
-                      </th>
-                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                        Designer
-                      </th>
-                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                        Date Approved
-                      </th>
-                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                        Priority
-                      </th>
-                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                        Status
-                      </th>
-                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {paginatedOrders.map((order) => (
-                      <tr key={order.id} className="hover:bg-gray-50">
-                        <td className="px-4 md:px-6 py-4 whitespace-nowrap">
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader className="h-6 w-6 text-blue-600 animate-spin mr-2" />
+                    <span className="text-gray-600">Loading orders...</span>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-blue-100 hover:bg-blue-100">
+                        <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
                           <Checkbox
-                            checked={selectedOrders.includes(order.id)}
-                            onCheckedChange={() => handleSelectOrder(order.id)}
-                            aria-label={`Select order ${order.id}`}
+                            checked={selectAll}
+                            onCheckedChange={handleSelectAll}
+                            aria-label="Select all orders"
                           />
-                        </td>
-                        <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {order.id}
-                        </td>
-                        <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {order.customer}
-                        </td>
-                        <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <div className="max-w-xs truncate">
-                            {order.products
-                              .map((product) => product.name)
-                              .join(", ")}
-                          </div>
-                        </td>
-                        <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {order.designer}
-                        </td>
-                        <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {order.dateApproved}
-                        </td>
-                        <td className="px-4 md:px-6 py-4 whitespace-nowrap">
-                          {getPriorityBadge(order.priority)}
-                        </td>
-                        <td className="px-4 md:px-6 py-4 whitespace-nowrap">
-                          {getStatusBadge(order.status)}
-                        </td>
-                        <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setSelectedOrderDetails(order)}
+                        </TableHead>
+                        <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
+                          Order ID
+                        </TableHead>
+                        <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
+                          Order Code
+                        </TableHead>
+                        <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
+                          Customer
+                        </TableHead>
+                        <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
+                          Email
+                        </TableHead>
+                        <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
+                          Total Cost
+                        </TableHead>
+                        <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
+                          Status
+                        </TableHead>
+                        <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
+                          Payment Status
+                        </TableHead>
+                        <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
+                          Actions
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredOrders.length === 0 ? (
+                        <TableRow>
+                          <TableCell
+                            colSpan={9}
+                            className="text-center py-8 text-slate-500"
                           >
-                            <Eye className="h-4 w-4 mr-1" />
-                            <span className="hidden sm:inline">
-                              View Details
-                            </span>
-                            <span className="sm:hidden">View</span>
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                            No orders found
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredOrders.map((order) => (
+                          <>
+                            <TableRow
+                              key={order.orderId}
+                              className="hover:bg-blue-50 transition-colors"
+                            >
+                              <TableCell>
+                                <Checkbox
+                                  checked={selectedOrders.includes(
+                                    order.orderId
+                                  )}
+                                  onCheckedChange={() =>
+                                    handleSelectOrder(order.orderId)
+                                  }
+                                  aria-label={`Select order ${order.orderId}`}
+                                />
+                              </TableCell>
+                              <TableCell className="font-medium text-slate-900 whitespace-nowrap">
+                                {order.orderId}
+                              </TableCell>
+                              <TableCell className="font-medium text-slate-900 whitespace-nowrap">
+                                {order.orderCode}
+                              </TableCell>
+                              <TableCell className="min-w-[150px]">
+                                <div>
+                                  <div className="font-medium text-slate-900">
+                                    {order.customerName}
+                                  </div>
+                                  {order.phone && (
+                                    <div className="text-sm text-slate-500">
+                                      {order.phone}
+                                    </div>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-sm text-gray-500 min-w-[200px]">
+                                {order.email}
+                              </TableCell>
+                              <TableCell className="text-slate-900 font-semibold whitespace-nowrap">
+                                ${order.totalCost?.toFixed(2) || "0.00"}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                {getStatusBadge(order)}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                <Badge
+                                  className={
+                                    order.paymentStatus === "Paid"
+                                      ? "bg-green-100 text-green-800"
+                                      : "bg-yellow-100 text-yellow-800"
+                                  }
+                                >
+                                  {order.paymentStatus}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                <div className="flex items-center gap-2">
+                                  {order.statusOderName === "Refund" ||
+                                  order.statusOderName === "Cancel" ? (
+                                    <>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="bg-transparent hover:bg-green-50 text-green-600 hover:text-green-700 border-green-200"
+                                        onClick={() =>
+                                          handleApproveRefundCancel(
+                                            order.orderId
+                                          )
+                                        }
+                                        title="Approve"
+                                      >
+                                        ✓
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="bg-transparent hover:bg-red-50 text-red-600 hover:text-red-700 border-red-200"
+                                        onClick={() =>
+                                          handleRejectRefundCancel(
+                                            order.orderId
+                                          )
+                                        }
+                                        title="Reject"
+                                      >
+                                        ✕
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className={`bg-transparent hover:bg-blue-100 border-blue-200 transition-colors ${
+                                          expandedOrderId === order.orderId
+                                            ? "bg-blue-100"
+                                            : ""
+                                        }`}
+                                        onClick={() =>
+                                          setExpandedOrderId(
+                                            expandedOrderId === order.orderId
+                                              ? null
+                                              : order.orderId
+                                          )
+                                        }
+                                        title="Expand Details"
+                                      >
+                                        <ChevronDown
+                                          className={`h-4 w-4 transition-transform ${
+                                            expandedOrderId === order.orderId
+                                              ? "rotate-180"
+                                              : ""
+                                          }`}
+                                        />
+                                      </Button>
+
+                                      <Popover>
+                                        <PopoverTrigger asChild>
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="bg-transparent hover:bg-blue-100 border-blue-200"
+                                            title="More actions"
+                                          >
+                                            <MoreVertical className="h-4 w-4" />
+                                          </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-40 p-2">
+                                          <div className="flex flex-col gap-2">
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() =>
+                                                handleViewDetails(order)
+                                              }
+                                              className="justify-start"
+                                            >
+                                              <Eye className="h-4 w-4 mr-2 text-blue-600" />
+                                              View Details
+                                            </Button>
+                                          </div>
+                                        </PopoverContent>
+                                      </Popover>
+                                    </>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+
+                            {expandedOrderId === order.orderId && (
+                              <TableRow className="bg-blue-100">
+                                <TableCell colSpan={9} className="p-4">
+                                  <div className="space-y-3">
+                                    <h4 className="font-semibold text-slate-900 text-sm">
+                                      Order Information:
+                                    </h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                      <div className="bg-white p-3 rounded border border-blue-200">
+                                        <span className="text-slate-600 font-medium">
+                                          Order Date:
+                                        </span>
+                                        <p className="text-slate-900">
+                                          {new Date(
+                                            order.orderDate
+                                          ).toLocaleDateString("vi-VN")}
+                                        </p>
+                                      </div>
+                                      <div className="bg-white p-3 rounded border border-blue-200">
+                                        <span className="text-slate-600 font-medium">
+                                          Delivery Address:
+                                        </span>
+                                        <p className="text-slate-900">
+                                          {order.address}
+                                        </p>
+                                      </div>
+                                      <div className="bg-white p-3 rounded border border-blue-200">
+                                        <span className="text-slate-600 font-medium">
+                                          Production Status:
+                                        </span>
+                                        <p className="text-slate-900">
+                                          {order.productionStatus}
+                                        </p>
+                                      </div>
+                                      <div className="bg-white p-3 rounded border border-blue-200">
+                                        <span className="text-slate-600 font-medium">
+                                          Tracking:
+                                        </span>
+                                        <p className="text-slate-900">
+                                          {order.tracking || "N/A"}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                )}
               </div>
 
-              <div className="bg-gray-50 px-4 py-3 border-t border-gray-200 sm:px-6">
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-700">Show</span>
-                    <select
-                      value={itemsPerPage}
-                      onChange={(e) => handleItemsPerPageChange(e.target.value)}
-                      className="px-2 py-1 border border-gray-300 rounded-md text-sm"
-                    >
-                      <option value="5">5</option>
-                      <option value="10">10</option>
-                      <option value="20">20</option>
-                      <option value="50">50</option>
-                    </select>
-                    <span className="text-sm text-gray-700">per page</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-700">
-                      Showing {startIndex + 1} to{" "}
-                      {Math.min(endIndex, filteredOrders.length)} of{" "}
-                      {filteredOrders.length} results
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage(page - 1)}
-                      disabled={page === 1}
-                      className="disabled:opacity-50"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                      <span className="hidden sm:inline ml-1">Previous</span>
-                    </Button>
-
-                    <div className="flex items-center gap-1">
-                      {Array.from(
-                        { length: Math.min(5, totalPages) },
-                        (_, i) => {
-                          let pageNum;
-                          if (totalPages <= 5) {
-                            pageNum = i + 1;
-                          } else if (page <= 3) {
-                            pageNum = i + 1;
-                          } else if (page >= totalPages - 2) {
-                            pageNum = totalPages - 4 + i;
-                          } else {
-                            pageNum = page - 2 + i;
-                          }
-
-                          return (
-                            <Button
-                              key={pageNum}
-                              variant={page === pageNum ? "default" : "outline"}
-                              size="sm"
-                              onClick={() => setPage(pageNum)}
-                              className="w-8 h-8 p-0"
-                            >
-                              {pageNum}
-                            </Button>
-                          );
+              {!isLoading && (
+                <div className="bg-gray-50 px-4 py-3 border-t border-gray-200 sm:px-6">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-700">Show</span>
+                      <select
+                        value={itemsPerPage}
+                        onChange={(e) =>
+                          handleItemsPerPageChange(e.target.value)
                         }
-                      )}
+                        className="px-2 py-1 border border-gray-300 rounded-md text-sm"
+                      >
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                      </select>
+                      <span className="text-sm text-gray-700">per page</span>
                     </div>
 
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage(page + 1)}
-                      disabled={page === totalPages}
-                      className="disabled:opacity-50"
-                    >
-                      <span className="hidden sm:inline mr-1">Next</span>
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-700">
+                        Showing {startIndex + 1} to{" "}
+                        {Math.min(endIndex, totalOrders)} of {totalOrders}{" "}
+                        results
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPage(page - 1)}
+                        disabled={page === 1}
+                        className="disabled:opacity-50"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        <span className="hidden sm:inline ml-1">Previous</span>
+                      </Button>
+
+                      <div className="flex items-center gap-1">
+                        {Array.from(
+                          { length: Math.min(5, totalPages) },
+                          (_, i) => {
+                            let pageNum;
+                            if (totalPages <= 5) {
+                              pageNum = i + 1;
+                            } else if (page <= 3) {
+                              pageNum = i + 1;
+                            } else if (page >= totalPages - 2) {
+                              pageNum = totalPages - 4 + i;
+                            } else {
+                              pageNum = page - 2 + i;
+                            }
+
+                            return (
+                              <Button
+                                key={pageNum}
+                                variant={
+                                  page === pageNum ? "default" : "outline"
+                                }
+                                size="sm"
+                                onClick={() => setPage(pageNum)}
+                                className="w-8 h-8 p-0"
+                              >
+                                {pageNum}
+                              </Button>
+                            );
+                          }
+                        )}
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPage(page + 1)}
+                        disabled={page === totalPages}
+                        className="disabled:opacity-50"
+                      >
+                        <span className="hidden sm:inline mr-1">Next</span>
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </main>
@@ -1032,11 +733,11 @@ export default function StaffManageOrder() {
       {/* Order Details Modal */}
       {selectedOrderDetails && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-4 md:p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl md:text-2xl font-semibold">
-                  Order Details - {selectedOrderDetails.id}
+                  Order Details - {selectedOrderDetails.orderCode}
                 </h2>
                 <Button
                   variant="ghost"
@@ -1059,19 +760,25 @@ export default function StaffManageOrder() {
                       <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
                         <span className="text-gray-600">Name:</span>
                         <span className="font-medium">
-                          {selectedOrderDetails.customer}
+                          {selectedOrderDetails.customerName}
                         </span>
                       </div>
                       <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
                         <span className="text-gray-600">Email:</span>
                         <span className="font-medium break-all">
-                          {selectedOrderDetails.customerEmail}
+                          {selectedOrderDetails.email}
                         </span>
                       </div>
                       <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
                         <span className="text-gray-600">Phone:</span>
                         <span className="font-medium">
-                          {selectedOrderDetails.customerPhone}
+                          {selectedOrderDetails.phone}
+                        </span>
+                      </div>
+                      <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                        <span className="text-gray-600">Address:</span>
+                        <span className="font-medium text-right">
+                          {selectedOrderDetails.address}
                         </span>
                       </div>
                     </div>
@@ -1084,156 +791,74 @@ export default function StaffManageOrder() {
                     </h3>
                     <div className="space-y-2">
                       <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
-                        <span className="text-gray-600">Products:</span>
-                        <div className="sm:text-right">
-                          {selectedOrderDetails.products.map(
-                            (product, index) => (
-                              <div key={index} className="font-medium">
-                                {product.name} (x{product.quantity})
-                              </div>
-                            )
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
-                        <span className="text-gray-600">Designer:</span>
+                        <span className="text-gray-600">Order ID:</span>
                         <span className="font-medium">
-                          {selectedOrderDetails.designer}
+                          {selectedOrderDetails.orderId}
                         </span>
                       </div>
                       <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
-                        <span className="text-gray-600">Priority:</span>
-                        <span>
-                          {getPriorityBadge(selectedOrderDetails.priority)}
+                        <span className="text-gray-600">Order Code:</span>
+                        <span className="font-medium">
+                          {selectedOrderDetails.orderCode}
+                        </span>
+                      </div>
+                      <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                        <span className="text-gray-600">Order Date:</span>
+                        <span className="font-medium">
+                          {new Date(
+                            selectedOrderDetails.orderDate
+                          ).toLocaleDateString("vi-VN")}
                         </span>
                       </div>
                       <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
                         <span className="text-gray-600">Status:</span>
-                        <span>
-                          {getStatusBadge(selectedOrderDetails.status)}
-                        </span>
+                        <span>{getStatusBadge(selectedOrderDetails)}</span>
                       </div>
                       <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
-                        <span className="text-gray-600">Delivery Date:</span>
-                        <span className="font-medium">
-                          {selectedOrderDetails.deliveryDate}
+                        <span className="text-gray-600">Total Cost:</span>
+                        <span className="font-semibold">
+                          $
+                          {selectedOrderDetails.totalCost?.toFixed(2) || "0.00"}
                         </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Specifications */}
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <h3 className="font-semibold text-lg mb-3">
-                      Specifications
-                    </h3>
-                    <p className="text-gray-700">
-                      {selectedOrderDetails.specifications}
-                    </p>
-                    {selectedOrderDetails.specialInstructions && (
-                      <div className="mt-3">
-                        <h4 className="font-medium text-gray-800">
-                          Special Instructions:
-                        </h4>
-                        <p className="text-gray-700 italic">
-                          {selectedOrderDetails.specialInstructions}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* QR Code section */}
-                  <div className="bg-purple-50 p-4 rounded-lg">
-                    <h3 className="font-semibold text-lg mb-3 flex items-center">
-                      <QrCode className="h-5 w-5 mr-2" />
-                      QR Code for QC
-                    </h3>
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-600">QR Code:</p>
-                        <p className="font-mono text-base md:text-lg break-all">
-                          {selectedOrderDetails.qrCode}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Scan this code during QC product check
-                        </p>
-                      </div>
-                      <div className="w-20 h-20 md:w-24 md:h-24 bg-white border-2 border-gray-300 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <QrCode className="h-10 w-10 md:h-12 md:w-12 text-gray-400" />
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Right Column - Files */}
+                {/* Right Column - Production Information */}
                 <div className="space-y-6">
-                  {/* Design Files */}
-                  <div>
-                    <h3 className="font-semibold text-lg mb-3">Design Files</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {selectedOrderDetails.designFiles.map((file, index) => (
-                        <div key={index} className="border rounded-lg p-3">
-                          {file.type === "image" ? (
-                            <img
-                              src={file.url || "/placeholder.svg"}
-                              alt={file.name}
-                              className="w-full h-32 object-cover rounded mb-2"
-                            />
-                          ) : (
-                            <div className="w-full h-32 bg-gray-100 rounded mb-2 flex items-center justify-center">
-                              <ImageIcon className="h-8 w-8 text-gray-400" />
-                            </div>
-                          )}
-                          <p className="text-sm text-gray-600 truncate">
-                            {file.name}
-                          </p>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="mt-2 w-full bg-transparent"
-                            onClick={() => handleDownload(file.url, file.name)}
-                          >
-                            <Download className="h-4 w-4 mr-2" />
-                            Download
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Original Customer Files */}
-                  <div>
+                  {/* Production Status */}
+                  <div className="bg-green-50 p-4 rounded-lg">
                     <h3 className="font-semibold text-lg mb-3">
-                      Original Customer Files
+                      Production Status
                     </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {selectedOrderDetails.originalFiles.map((file, index) => (
-                        <div key={index} className="border rounded-lg p-3">
-                          {file.type === "image" ? (
-                            <img
-                              src={file.url || "/placeholder.svg"}
-                              alt={file.name}
-                              className="w-full h-32 object-cover rounded mb-2"
-                            />
-                          ) : (
-                            <div className="w-full h-32 bg-gray-100 rounded mb-2 flex items-center justify-center">
-                              <ImageIcon className="h-8 w-8 text-gray-400" />
-                            </div>
-                          )}
-                          <p className="text-sm text-gray-600 truncate">
-                            {file.name}
-                          </p>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="mt-2 w-full bg-transparent"
-                            onClick={() => handleDownload(file.url, file.name)}
-                          >
-                            <Download className="h-4 w-4 mr-2" />
-                            Download
-                          </Button>
-                        </div>
-                      ))}
+                    <div className="space-y-2">
+                      <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                        <span className="text-gray-600">
+                          Production Status:
+                        </span>
+                        <span className="font-medium">
+                          {selectedOrderDetails.productionStatus}
+                        </span>
+                      </div>
+                      <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                        <span className="text-gray-600">Payment Status:</span>
+                        <span className="font-medium">
+                          {selectedOrderDetails.paymentStatus}
+                        </span>
+                      </div>
+                      <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                        <span className="text-gray-600">Tracking:</span>
+                        <span className="font-medium">
+                          {selectedOrderDetails.tracking || "N/A"}
+                        </span>
+                      </div>
+                      <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                        <span className="text-gray-600">Active TTS:</span>
+                        <span className="font-medium">
+                          {selectedOrderDetails.activeTTS ? "Yes" : "No"}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1251,6 +876,45 @@ export default function StaffManageOrder() {
           </div>
         </div>
       )}
+
+      {/* Reject Reason Dialog */}
+      <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject Refund/Cancel Request</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-gray-600 mb-4">
+              Please provide a reason for rejecting this request:
+            </p>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              rows="4"
+              placeholder="Enter rejection reason..."
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowRejectDialog(false);
+                setRejectReason("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmReject}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={!rejectReason.trim()}
+            >
+              Submit Rejection
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Confirmation Dialog */}
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
@@ -1278,6 +942,8 @@ export default function StaffManageOrder() {
                     ? "bg-green-600 hover:bg-green-700"
                     : confirmAction?.type === "assign_qc"
                     ? "bg-purple-600 hover:bg-purple-700"
+                    : confirmAction?.type === "approve_refund"
+                    ? "bg-green-600 hover:bg-green-700"
                     : "bg-gray-600 hover:bg-gray-700"
                 }
               >
@@ -1287,6 +953,8 @@ export default function StaffManageOrder() {
                   ? "Mark as Done"
                   : confirmAction?.type === "assign_qc"
                   ? "Assign to QC"
+                  : confirmAction?.type === "approve_refund"
+                  ? "Approve"
                   : "Confirm"}
               </Button>
             )}
