@@ -7,7 +7,7 @@ import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import React from "react";
 import { RotateCcw, XCircle, MoreVertical } from "lucide-react";
-
+import Swal from "sweetalert2";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -192,27 +192,195 @@ export default function ManageOrder() {
   const [error, setError] = useState(null);
 
   const [selectedStatConfig, setSelectedStatConfig] = useState(null);
+const uploadImage = async (file) => {
+    const formData = new FormData();
+    formData.append("File", file);
 
-  const openRefundPopup = (order) => {
-    const reason = prompt(`Nhập lý do hoàn tiền cho đơn ${order.orderId}:`);
-    if (!reason || reason.trim().length < 5) {
-      alert("Vui lòng nhập lý do hợp lệ (tối thiểu 5 ký tự).");
-      return;
+    try {
+      const res = await fetch("https://localhost:7015/api/images/upload", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Upload failed: ${res.status} - ${errText}`);
+      }
+
+      const data = await res.json();
+      console.log("Upload success:", data);
+      return data.url || data.secureUrl || data.path || null;
+    } catch (err) {
+      console.error("Upload error:", err);
+      setErrorMessage("Upload failed: " + err.message);
+      setShowErrorDialog(true);
+      return null;
     }
-    // Gọi API refund tại đây
-    console.log("Refund order:", order.id, "Reason:", reason);
   };
 
-  const openCancelPopup = (order) => {
-    const reason = prompt(`Nhập lý do hủy đơn ${order.orderId}:`);
-    if (!reason || reason.trim().length < 5) {
-      alert("Vui lòng nhập lý do hợp lệ (tối thiểu 5 ký tự).");
-      return;
-    }
-    // Gọi API cancel tại đây
-    console.log("Cancel order:", order.id, "Reason:", reason);
-  };
+  const openRefundPopup = async (order) => {
+  let proofUrl = null;
 
+  const { value: reason } = await Swal.fire({
+    title: `Hoàn tiền đơn #${order.orderId}`,
+    html: `
+      <textarea id="refundReason" class="swal2-textarea" placeholder="Nhập lý do hoàn tiền (tối thiểu 5 ký tự)"></textarea>
+      <input type="file" id="refundImageInput" accept="image/*" style="margin-top: 10px;" />
+      <div id="uploadStatus" style="margin-top:10px; display:none;">
+        <div class="swal2-loader" style="display:inline-block;"></div>
+        <span>Đang tải ảnh...</span>
+      </div>
+      <img id="refundImagePreview" style="display:none; margin-top: 10px; max-width:100%; max-height:150px; border-radius: 5px;" />
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Gửi yêu cầu",
+    cancelButtonText: "Hủy",
+    confirmButtonColor: "#d97706",
+    cancelButtonColor: "#6b7280",
+
+    didOpen: () => {
+      const fileInput = document.getElementById("refundImageInput");
+      const preview = document.getElementById("refundImagePreview");
+      const uploadStatus = document.getElementById("uploadStatus");
+
+      fileInput.addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // ✅ Hiển thị loading icon
+        uploadStatus.style.display = "block";
+        preview.style.display = "none";
+
+        // ✅ Gọi hàm upload ảnh có sẵn
+        const uploadedUrl = await uploadImage(file);
+
+        // ✅ Tắt loading icon
+        uploadStatus.style.display = "none";
+
+        if (uploadedUrl) {
+          proofUrl = uploadedUrl;
+          preview.src = proofUrl;
+          preview.style.display = "block";
+        } else {
+          Swal.fire({
+            icon: "error",
+            title: "Upload thất bại",
+            text: "Không thể upload ảnh. Vui lòng thử lại.",
+          });
+        }
+      });
+    },
+
+    preConfirm: () => {
+      const reasonValue = document.getElementById("refundReason").value;
+      if (!reasonValue || reasonValue.trim().length < 5) {
+        Swal.showValidationMessage("Lý do hoàn tiền phải ít nhất 5 ký tự!");
+        return false;
+      }
+      return reasonValue;
+    },
+  });
+
+  if (!reason) return;
+
+  try {
+    const response = await fetch(
+      `https://localhost:7015/api/order/${order.id}/request-refund`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ reason, proofUrl }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || "Không thể gửi yêu cầu hoàn tiền.");
+    }
+
+    Swal.fire({
+      icon: "success",
+      title: "Thành công!",
+      text: "Yêu cầu hoàn tiền đã được gửi!",
+      timer: 2000,
+      showConfirmButton: false,
+    });
+
+  } catch (err) {
+    Swal.fire({
+      icon: "error",
+      title: "Lỗi!",
+      text: err.message,
+    });
+  }
+};
+
+const openCancelPopup = async (order) => {
+  const { value: reason } = await Swal.fire({
+    title: `Hủy đơn #${order.orderId}`,
+    input: "text",
+    inputLabel: "Nhập lý do hủy đơn",
+    inputPlaceholder: "Ví dụ: Khách đổi ý, sai thông tin...",
+    inputAttributes: { maxlength: 200, autocapitalize: "off", autocorrect: "off" },
+    showCancelButton: true,
+    confirmButtonText: "Gửi yêu cầu",
+    cancelButtonText: "Hủy",
+    confirmButtonColor: "#d33",
+    cancelButtonColor: "#3085d6",
+    preConfirm: (value) => {
+      if (!value || value.trim().length < 5) {
+        Swal.showValidationMessage("Lý do phải có ít nhất 5 ký tự!");
+        return false;
+      }
+      return value;
+    }
+  });
+
+  // Nếu nhấn Cancel
+  if (!reason) return;
+
+  // Gọi API
+  try {
+    const response = await fetch(
+      `https://localhost:7015/api/Order/${order.id}/request-cancellation`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ reason }),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      return Swal.fire({
+        icon: "error",
+        title: "Oops...",
+        text: error.message || "Có lỗi xảy ra khi gửi yêu cầu!"
+      });
+    }
+
+    // Thành công
+    Swal.fire({
+      icon: "success",
+      title: "Thành công!",
+      text: "Yêu cầu hủy đã được gửi.",
+      timer: 2000,
+      showConfirmButton: false,
+    });
+
+  } catch (err) {
+    console.error(err);
+    Swal.fire({
+      icon: "error",
+      title: "Lỗi kết nối!",
+      text: "Không thể kết nối tới server."
+    });
+  }
+};
   // ✅ STATE MỚI: Lưu tổng số lượng đơn hàng (từ BE)
   const [totalOrdersCount, setTotalOrdersCount] = useState(0);
 
@@ -273,6 +441,7 @@ export default function ManageOrder() {
         customerName: order.customerName,
         phone: order.phone || "",
         email: order.email || "",
+        paymentStatus: order.paymentStatus || "",
         products: order.details.map((detail) => ({
           name: detail.productName || `Product ${detail.productVariantID}`,
           quantity: detail.quantity,
@@ -635,7 +804,7 @@ export default function ManageOrder() {
           Quantity: p.quantity || 0,
           Price: p.price || 0,
           Accessory: p.accessory || "",
-
+          PaymentStatus: p.paymentStatus || "" ,
           Note: order.orderNotes || "",
           LinkImg: order.uploadedFiles?.linkImg?.url || "",
           LinkThanksCard: order.uploadedFiles?.linkThanksCard?.url || "",
@@ -1100,54 +1269,82 @@ export default function ManageOrder() {
     }
   };
 
-  const handleRejectOrderDetail = async (orderDetailId) => {
-    const reason = prompt("Vui lòng nhập lý do từ chối (ít nhất 10 ký tự):");
-    if (!reason || reason.trim().length < 10) {
-      alert("Bạn phải nhập lý do từ chối (ít nhất 10 ký tự) để tiếp tục.");
-      return;
-    }
+ const handleRejectOrderDetail = async (orderDetailId) => {
+  // Hiển thị modal nhập lý do từ chối
+  const { value: reason } = await Swal.fire({
+    title: `Từ chối chi tiết đơn `,
+    input: "textarea",
+    inputPlaceholder: "Nhập lý do từ chối (ít nhất 10 ký tự)...",
+    inputAttributes: {
+      "aria-label": "Reason",
+    },
+    showCancelButton: true,
+    confirmButtonText: "Gửi yêu cầu",
+    cancelButtonText: "Hủy",
+    confirmButtonColor: "#d33",
+    cancelButtonColor: "#6c757d",
+    preConfirm: (value) => {
+      if (!value || value.trim().length < 10) {
+        Swal.showValidationMessage("Lý do từ chối phải từ 10 ký tự trở lên!");
+        return false;
+      }
+      return value;
+    },
+  });
 
-    setIsSubmittingDetail(orderDetailId);
+  // Nếu user bấm "Hủy" thì thoát
+  if (!reason) return;
+
+  setIsSubmittingDetail(orderDetailId);
+
+  try {
+    const res = await fetch(
+      `https://localhost:7015/api/Seller/order/order-details/${orderDetailId}/design-status`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          productionStatus: 5,
+          reason: reason,
+        }),
+      }
+    );
+
+    const text = await res.text();
+    let data = {};
     try {
-      const res = await fetch(
-        `https://localhost:7015/api/Seller/order/order-details/${orderDetailId}/design-status`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            productionStatus: 5,
-            reason: reason,
-          }),
-        }
-      );
-
-      const text = await res.text();
-      let data = {};
-      try {
-        data = text ? JSON.parse(text) : {};
-      } catch {
-        data = { message: text };
-      }
-
-      if (!res.ok) {
-        throw new Error(data.message || `HTTP ${res.status}`);
-      }
-
-      setSuccessMessage(
-        `✅ Đã gửi yêu cầu làm lại cho chi tiết #${orderDetailId}.`
-      );
-      setShowSuccessDialog(true);
-      setIsDialogOpen(false);
-      setTimeout(() => fetchOrders(), 1500);
-    } catch (err) {
-      console.error("Reject detail failed:", err);
-      setErrorMessage(`❌ Lỗi: ${err.message}`);
-      setShowErrorDialog(true);
-    } finally {
-      setIsSubmittingDetail(null);
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      data = { message: text };
     }
-  };
+
+    if (!res.ok) {
+      throw new Error(data.message || `HTTP ${res.status}`);
+    }
+
+    // ✅ Thành công
+    await Swal.fire({
+      icon: "success",
+      title: "Đã gửi yêu cầu!",
+      text: `Yêu cầu làm lại chi tiết #${orderDetailId} đã được gửi thành công.`,
+      timer: 2000,
+      showConfirmButton: false,
+    });
+
+    setTimeout(() => fetchOrders(), 1000);
+  } catch (err) {
+    console.error("Reject detail failed:", err);
+    Swal.fire({
+      icon: "error",
+      title: "Lỗi!",
+      text: err.message || "Có lỗi xảy ra khi gửi yêu cầu.",
+    });
+  } finally {
+    setIsSubmittingDetail(null);
+  }
+};
+
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -1644,7 +1841,10 @@ export default function ManageOrder() {
                             Customer {renderSortIcon("customerName")}
                           </TableHead>
                           <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
-                            Status
+                            Status 
+                          </TableHead>
+                          <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
+                            Payment Status
                           </TableHead>
                           <TableHead
                             className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap cursor-pointer hover:bg-blue-200 transition-colors"
@@ -1708,6 +1908,9 @@ whitespace-nowrap"
                                 </TableCell>
                                 <TableCell className="whitespace-nowrap">
                                   {getStatusBadge(order.status)}
+                                </TableCell>
+                                <TableCell className="text-slate-600 whitespace-nowrap">
+                                  {order.paymentStatus}
                                 </TableCell>
                                 <TableCell className="font-medium text-slate-900 whitespace-nowrap">
                                   {order.totalAmount}
