@@ -1,187 +1,281 @@
-"use client";
+"use client"
 
-import React, { useState } from "react";
+import { useState, useRef } from "react"
+import { Upload, Download, Sparkles, AlertCircle } from "lucide-react"
 
-function ChibiGeneration() {
-  const [promptText, setPromptText] = useState(""); // cho mode text
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [mode, setMode] = useState("text");
-  const [imageUrl, setImageUrl] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+export default function Home() {
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [previewUrl, setPreviewUrl] = useState("")
+  const [generatedImageUrl, setGeneratedImageUrl] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
+  const [promptText, setPromptText] = useState("")
+  const fileInputRef = useRef(null)
 
-  // Gọi API tạo ảnh từ text
-  const generateFromText = async (prompt) => {
-    const res = await fetch("https://localhost:7015/api/HuggingFace/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt }),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-    return res.json();
-  };
+  const handleFileSelect = (file) => {
+    if (!file.type.startsWith("image/")) {
+      setError("Vui lòng chọn một tệp hình ảnh hợp lệ.")
+      return
+    }
 
-  // Gọi API tạo ảnh từ image (prompt mặc định ở backend)
-  const generateFromImage = async (file) => {
-    const formData = new FormData();
-    formData.append("ImageFile", file);
+    setSelectedFile(file)
+    setError("")
+    setGeneratedImageUrl("")
 
-    const res = await fetch("https://localhost:7015/api/AiStudio/generate-chibi", {
-      method: "POST",
-      body: formData,
-    });
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      setPreviewUrl(e.target.result)
+    }
+    reader.readAsDataURL(file)
+  }
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-    return res.json();
-  };
+  const handleDragOver = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError("");
-    setImageUrl("");
+  const handleDrop = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const files = e.dataTransfer.files
+    if (files.length > 0) {
+      handleFileSelect(files[0])
+    }
+  }
+
+  const handleFileInputChange = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleFileSelect(e.target.files[0])
+    }
+  }
+
+  const handleGenerateImage = async (e) => {
+    e.preventDefault()
+
+    if (!selectedFile) {
+      setError("Vui lòng chọn một hình ảnh.")
+      return
+    }
+
+    setIsLoading(true)
+    setError("")
 
     try {
-      const data =
-        mode === "text"
-          ? await generateFromText(promptText)
-          : await generateFromImage(selectedFile);
+      const formData = new FormData()
+      formData.append("ImageFile", selectedFile)
+      formData.append("Prompt", promptText)
 
-      setImageUrl(data?.image || data?.imageUrl || "");
+      const response = await fetch("https://localhost:7015/api/AiStudio/generate", {
+        method: "POST",
+        body: formData,
+      })
+
+      // 🔒 Xử lý các lỗi Authentication đặc biệt
+      if (response.status === 401 || response.status === 403) {
+        throw new Error(
+          "Hệ thống AI hiện không thể xử lý yêu cầu. Có thể API key đã hết hạn hoặc vượt giới hạn. Vui lòng thử lại sau hoặc liên hệ quản trị viên."
+        )
+      }
+
+      if (!response.ok) {
+        // Nếu Backend trả về lỗi có message
+        const errData = await response.json().catch(() => null)
+        if (errData?.message) throw new Error(errData.message)
+        throw new Error(`Lỗi API: ${response.status}`)
+      }
+
+      const data = await response.json()
+      const imageUrl = data?.image || data?.imageUrl
+
+      if (!imageUrl) {
+        throw new Error("Không nhận được kết quả từ server.")
+      }
+
+      setGeneratedImageUrl(imageUrl)
     } catch (err) {
-      setError(err.message || "Có lỗi xảy ra khi tạo ảnh.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Đã xảy ra lỗi không xác định khi tạo hình ảnh Chibi."
+      )
+      setGeneratedImageUrl("")
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
+
+  const handleDownload = async () => {
+    if (!generatedImageUrl) return
+
+    try {
+      const response = await fetch(generatedImageUrl)
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "chibi-image.png"
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch {
+      setError("Không thể tải xuống hình ảnh.")
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-6 font-sans">
-      <div className="bg-white shadow-xl rounded-2xl p-8 w-full max-w-xl">
-        <h2 className="text-3xl font-bold text-center text-indigo-600 mb-6">
-          🎨 Chibi Generator
-        </h2>
-
-        {/* Mode switch */}
-        <div className="flex justify-center gap-2 mb-6 p-1 bg-gray-200 rounded-lg">
-          <button
-            onClick={() => { setMode("text"); setError(""); setImageUrl(""); }}
-            className={`w-1/2 px-4 py-2 rounded-md font-semibold transition-all ${
-              mode === "text" ? "bg-white text-indigo-600 shadow" : "bg-transparent text-gray-600 hover:bg-gray-300"
-            }`}
-          >
-            Văn Bản
-          </button>
-          <button
-            onClick={() => { setMode("image"); setError(""); setImageUrl(""); }}
-            className={`w-1/2 px-4 py-2 rounded-md font-semibold transition-all ${
-              mode === "image" ? "bg-white text-indigo-600 shadow" : "bg-transparent text-gray-600 hover:bg-gray-300"
-            }`}
-          >
-            Hình Ảnh
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {mode === "text" ? (
-            <div>
-              <label className="block font-semibold text-gray-700">Mô tả Chibi:</label>
-              <textarea
-                value={promptText}
-                onChange={(e) => setPromptText(e.target.value)}
-                placeholder="Một cô gái anime tóc tím, phong cách chibi, mắt to, cầm một cây kem..."
-                required
-                rows={3}
-                className="border w-full p-3 rounded-md mt-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition"
-              />
+    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
+      <div className="w-full py-8 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 mb-4">
+              <Sparkles className="w-8 h-8 text-blue-600" />
             </div>
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <label className="block font-semibold text-gray-700">Tải ảnh gốc:</label>
-                <input
-                  type="file"
-                  accept="image/png, image/jpeg"
-                  onChange={(e) => setSelectedFile(e.target.files[0])}
-                  required
-                  className="mt-2 text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100"
-                />
+            <h1 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-3">
+              Chibi Generator
+            </h1>
+            <p className="text-lg text-slate-600 max-w-2xl mx-auto">
+              Biến ảnh của bạn thành nhân vật chibi xinh xắn với AI. Tải lên, thêm mô tả, và nhận kết quả trong vài giây.
+            </p>
+          </div>
+
+          {/* Main Content */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+            {/* Upload Section */}
+            <div className="space-y-6">
+              <form onSubmit={handleGenerateImage} className="space-y-6">
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-900">
+                    Tải lên hình ảnh của bạn
+                  </label>
+                  <div
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="relative border-2 border-dashed border-blue-200 rounded-lg p-8 text-center cursor-pointer transition-all hover:border-blue-400 hover:bg-blue-50/50"
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileInputChange}
+                      className="hidden"
+                    />
+                    <div className="flex flex-col items-center justify-center">
+                      <Upload className="w-10 h-10 text-blue-500 mb-3" />
+                      <p className="text-sm font-medium text-slate-900 mb-1">
+                        Kéo thả hình ảnh hoặc nhấp để chọn
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Hỗ trợ JPG, PNG, WEBP, GIF, BMP, TIFF (tối đa 50MB)
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Prompt Input */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-900">
+                    Mô tả (Tùy chọn)
+                  </label>
+                  <textarea
+                    value={promptText}
+                    onChange={(e) => setPromptText(e.target.value)}
+                    placeholder="Ví dụ: Một cô gái tóc tím với đôi mắt to, phong cách chibi..."
+                    rows={4}
+                    className="w-full px-4 py-3 border border-slate-200 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition resize-none"
+                  />
+                  <p className="text-xs text-slate-500">
+                    Thêm mô tả chi tiết để cải thiện kết quả của bạn.
+                  </p>
+                </div>
+
+                {/* Error Message */}
+                {error && (
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
+                    <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-red-700">{error}</p>
+                  </div>
+                )}
+
+                {/* Generate Button */}
+                <button
+                  type="submit"
+                  disabled={!selectedFile || isLoading}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-100 flex items-center justify-center gap-2"
+                >
+                  {isLoading ? (
+                    <>
+                      <div className="animate-spin">
+                        <Sparkles className="w-5 h-5" />
+                      </div>
+                      <span>Đang tạo...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-5 h-5" />
+                      <span>Tạo Chibi</span>
+                    </>
+                  )}
+                </button>
+              </form>
+
+              {/* Preview Section */}
+              {previewUrl && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-slate-900">Hình ảnh gốc</h3>
+                  <div className="relative w-full aspect-square rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
+                    <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Result Section */}
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-slate-900">Kết quả Chibi</h3>
+
+                {isLoading ? (
+                  <div className="relative w-full aspect-square rounded-lg overflow-hidden border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-slate-50 flex items-center justify-center">
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="relative w-16 h-16">
+                        <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-blue-600 rounded-full animate-spin" />
+                        <div className="absolute inset-1 bg-gradient-to-br from-blue-50 to-slate-50 rounded-full" />
+                        <Sparkles className="absolute inset-0 m-auto w-6 h-6 text-blue-600" />
+                      </div>
+                      <p className="text-sm font-medium text-slate-600">Đang tạo chibi xinh của bạn...</p>
+                    </div>
+                  </div>
+                ) : generatedImageUrl ? (
+                  <div className="space-y-4">
+                    <div className="relative w-full aspect-square rounded-lg overflow-hidden border-2 border-blue-200 bg-white shadow-lg">
+                      <img src={generatedImageUrl} alt="Generated Chibi" className="w-full h-full object-cover" />
+                    </div>
+                    <button
+                      onClick={handleDownload}
+                      className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-100 flex items-center justify-center gap-2"
+                    >
+                      <Download className="w-5 h-5" />
+                      <span>Tải xuống hình ảnh</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative w-full aspect-square rounded-lg overflow-hidden border-2 border-dashed border-slate-300 bg-slate-50/50 flex items-center justify-center">
+                    <div className="text-center">
+                      <Sparkles className="w-12 h-12 text-slate-300 mx-auto mb-2" />
+                      <p className="text-sm font-medium text-slate-600">Kết quả sẽ xuất hiện ở đây</p>
+                      <p className="text-xs text-slate-500 mt-1">Tải lên hình ảnh và nhấp “Tạo Chibi”</p>
+                    </div>
+                  </div>
+                )}
               </div>
-              <p className="text-gray-500 text-sm">
-                (Prompt sẽ được tự động thêm để tạo line art/Chibi, bạn không cần nhập)
-              </p>
             </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold text-lg hover:bg-indigo-700 transition transform hover:scale-105 active:scale-100 disabled:bg-gray-400 disabled:cursor-not-allowed"
-          >
-            {isLoading ? "Đang tạo..." : "✨ Tạo ảnh"}
-          </button>
-        </form>
-
-        <div className="mt-6 min-h-[350px] w-full flex flex-col items-center justify-center bg-gray-50 rounded-lg p-4 border border-dashed">
-          {isLoading && (
-            <div className="flex flex-col items-center text-indigo-600">
-              <svg 
-                className="animate-spin h-10 w-10 text-indigo-500" 
-                xmlns="http://www.w3.org/2000/svg" 
-                fill="none" 
-                viewBox="0 0 24 24"
-              >
-                <circle 
-                  className="opacity-25" 
-                  cx="12" 
-                  cy="12" 
-                  r="10" 
-                  stroke="currentColor" 
-                  strokeWidth="4"
-                ></circle>
-                <path 
-                  className="opacity-75" 
-                  fill="currentColor" 
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
-              </svg>
-              <p className="mt-3 font-medium text-gray-600">Đang tạo kiệt tác chibi...</p>
-            </div>
-          )}
-
-          {error && !isLoading && (
-            <div className="text-center text-red-600">
-              <span className="text-3xl">⚠️</span>
-              <p className="font-bold mt-2">Đã xảy ra lỗi</p>
-              <p className="text-sm text-gray-500 mt-1 max-w-md">{error}</p>
-            </div>
-          )}
-
-          {imageUrl && !isLoading && (
-            <div className="flex flex-col items-center w-full">
-              <h3 className="font-semibold text-lg text-gray-800 mb-3">Kết quả của bạn:</h3>
-              <img
-                src={imageUrl}
-                alt="Generated Chibi"
-                className="w-full max-w-sm h-auto object-contain rounded-lg shadow-md border"
-              />
-              <a
-                href={imageUrl}
-                download="chibi_image.png"
-                className="mt-5 px-6 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition transform hover:scale-105"
-              >
-                Tải ảnh về
-              </a>
-            </div>
-          )}
-
-          {!isLoading && !error && !imageUrl && (
-            <p className="text-gray-500 text-center">Nhập mô tả hoặc tải ảnh lên để bắt đầu!</p>
-          )}
+          </div>
         </div>
       </div>
-    </div>
-  );
+    </main>
+  )
 }
-
-export default ChibiGeneration;

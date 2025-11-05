@@ -2,6 +2,6 @@
 {
     public interface IAiStudioService
     {
-        Task<string> GenerateLineArtFromChibiAsync(string base64Image);
+        Task<string> GenerateLineArtFromChibiAsync(string base64Image, string userPrompt);
     }
 }
