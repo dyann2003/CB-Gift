@@ -1,14 +1,15 @@
-using CB_Gift.Data;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using CB_Gift.Data;
 using CB_Gift.DTOs;
-using CB_Gift.Models;
-using CB_Gift.Services.IService;
-using Microsoft.EntityFrameworkCore;
-using CB_Gift.Models.Enums;
-using System.Linq; // Cần thiết cho các thao tác LINQ
 using CB_Gift.Hubs;
+using CB_Gift.Models;
+using CB_Gift.Models.Enums;
+using CB_Gift.Services.IService;
+using CloudinaryDotNet.Core;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
+using System.Linq; // Cần thiết cho các thao tác LINQ
 
 namespace CB_Gift.Services
 {
@@ -948,6 +949,95 @@ namespace CB_Gift.Services
                 StageGroups = stageGroups
             };
         }
+
+        public async Task<(IEnumerable<OrderDto> Orders, int Total)> GetFilteredAndPagedOrdersAsync(
+     string? status,
+     string? searchTerm,
+     string? sortColumn,
+     string? sortDirection,
+     DateTime? fromDate,
+     DateTime? toDate,
+     int page,
+     int pageSize)
+        {
+            var query = _context.Orders
+                .Include(o => o.EndCustomer) // khách hàng
+                .Include(o => o.StatusOrderNavigation) // trạng thái đơn hàng
+                .AsQueryable();
+
+            // ✅ Lọc theo trạng thái nếu có
+            if (!string.IsNullOrEmpty(status))
+                query = query.Where(o => o.StatusOrderNavigation.NameVi == status);
+
+            // ✅ Lọc theo từ khóa tìm kiếm (OrderCode hoặc Tên khách)
+            if (!string.IsNullOrEmpty(searchTerm))
+                query = query.Where(o =>
+                    o.OrderCode.Contains(searchTerm) ||
+                    o.EndCustomer.Name.Contains(searchTerm));
+
+            // ✅ Lọc theo khoảng thời gian
+            if (fromDate.HasValue && toDate.HasValue)
+                query = query.Where(o => o.OrderDate >= fromDate && o.OrderDate <= toDate);
+
+            // ✅ Sắp xếp linh hoạt, không dùng OrderByDynamic
+            query = sortColumn?.ToLower() switch
+            {
+                "ordercode" => sortDirection == "asc"
+                    ? query.OrderBy(o => o.OrderCode)
+                    : query.OrderByDescending(o => o.OrderCode),
+
+                "orderdate" => sortDirection == "asc"
+                    ? query.OrderBy(o => o.OrderDate)
+                    : query.OrderByDescending(o => o.OrderDate),
+
+                "totalcost" => sortDirection == "asc"
+                    ? query.OrderBy(o => o.TotalCost)
+                    : query.OrderByDescending(o => o.TotalCost),
+
+                "status" => sortDirection == "asc"
+                    ? query.OrderBy(o => o.StatusOrderNavigation.NameVi)
+                    : query.OrderByDescending(o => o.StatusOrderNavigation.NameVi),
+
+                _ => query.OrderByDescending(o => o.CreationDate)
+            };
+
+            // ✅ Tổng số bản ghi trước khi phân trang
+            int total = await query.CountAsync();
+
+            // ✅ Lấy dữ liệu trang hiện tại và map sang DTO
+            var orders = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(o => new OrderDto
+                {
+                    OrderId = o.OrderId,
+                    OrderCode = o.OrderCode,
+                    OrderDate = o.OrderDate,
+                    CustomerId = o.EndCustomerId,
+                    CustomerName = o.EndCustomer.Name,
+                    Phone = o.EndCustomer.Phone,
+                    Email = o.EndCustomer.Email,
+                    Address = o.EndCustomer.Address,
+                    SellerId = o.SellerUserId,
+                    CreationDate = o.CreationDate ?? o.OrderDate,
+                    TotalCost = o.TotalCost,
+                    PaymentStatus = o.PaymentStatus,
+                    ProductionStatus = o.ProductionStatus,
+                    ActiveTTS = o.ActiveTts,
+                    Tracking = o.Tracking,
+                    StatusOrder = o.StatusOrder,
+                    StatusOderName = o.StatusOrderNavigation.NameVi
+                })
+                .ToListAsync();
+
+            return (orders, total);
+        }
+
+
+
+
+
+
 
 
     }

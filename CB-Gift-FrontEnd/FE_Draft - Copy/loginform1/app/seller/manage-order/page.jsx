@@ -100,6 +100,8 @@ export default function ManageOrder() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [dateRange, setDateRange] = useState({ from: null, to: null });
 
+  const [isDateFilterOpen, setIsDateFilterOpen] = useState(false);
+
   // ✅ Cập nhật state Sắp xếp
   const [sortColumn, setSortColumn] = useState("orderDate"); // Mặc định sắp xếp theo ngày
   const [sortDirection, setSortDirection] = useState("desc"); // Mặc định giảm dần
@@ -125,6 +127,8 @@ export default function ManageOrder() {
   const [errorMessage, setErrorMessage] = useState("");
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [showErrorDialog, setShowErrorDialog] = useState(false);
+
+  const [selectedDateOption, setSelectedDateOption] = useState("day"); // giá trị mặc định
 
   const [orderStats, setOrderStats] = useState({
     total: 0,
@@ -192,10 +196,11 @@ export default function ManageOrder() {
   const [error, setError] = useState(null);
 
   const [selectedStatConfig, setSelectedStatConfig] = useState(null);
-const uploadImage = async (file) => {
+  const toggleDateFilter = () => setIsDateFilterOpen(!isDateFilterOpen);
+  // thiếu cái filter Date
+  const uploadImage = async (file) => {
     const formData = new FormData();
     formData.append("File", file);
-
     try {
       const res = await fetch("https://localhost:7015/api/images/upload", {
         method: "POST",
@@ -300,7 +305,6 @@ const uploadImage = async (file) => {
     if (!response.ok) {
       throw new Error(data.message || "Không thể gửi yêu cầu hoàn tiền.");
     }
-
     Swal.fire({
       icon: "success",
       title: "Thành công!",

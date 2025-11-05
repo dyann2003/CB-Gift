@@ -9,6 +9,7 @@ export default function StaffSidebar() {
 
   const menuItems = [
     { id: "dashboard", label: "Dashboard", path: "/staff/dashboard" },
+    { id: "ManageOrder", label: "ManageOrder", path: "/staff/manage-order" },
     {
       id: "needs-production",
       label: "Needs Production",
