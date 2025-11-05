@@ -921,19 +921,19 @@ namespace CB_Gift.Services
 
             var stageGroups = new Dictionary<string, List<OrderStatsDto.StatusCountItem>>
             {
-                ["Thiết kế"] = designStage
+                ["Design Phase"] = designStage
                     .Where(s => dict.ContainsKey(s))
                     .Select(s => new OrderStatsDto.StatusCountItem { Status = s, Count = dict[s] })
                     .ToList(),
-                ["Sản xuất"] = productionStage
+                ["Manufacture Phase"] = productionStage
                     .Where(s => dict.ContainsKey(s))
                     .Select(s => new OrderStatsDto.StatusCountItem { Status = s, Count = dict[s] })
                     .ToList(),
-                ["Giao hàng"] = shippingStage
+                ["Delivery Phase"] = shippingStage
                     .Where(s => dict.ContainsKey(s))
                     .Select(s => new OrderStatsDto.StatusCountItem { Status = s, Count = dict[s] })
                     .ToList(),
-                ["Khác"] = otherStage
+                ["Ohters"] = otherStage
                     .Where(s => dict.ContainsKey(s))
                     .Select(s => new OrderStatsDto.StatusCountItem { Status = s, Count = dict[s] })
                     .ToList(),

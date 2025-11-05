@@ -460,6 +460,7 @@ export default function MakeManualModal({ isOpen, onClose }) {
     };
 
     console.log("Sending order payload:", orderPayload);
+    console.log(JSON.stringify(orderPayload, null, 2));
 
     try {
       const res = await fetch("https://localhost:7015/api/Order/make-order", {
@@ -687,10 +688,11 @@ export default function MakeManualModal({ isOpen, onClose }) {
             return (
               <div
                 key={p.productId}
-                className={`border rounded-lg p-4 cursor-pointer hover:border-blue-500 hover:shadow-md transition-all ${currentProduct?.productId === p.productId
+                className={`border rounded-lg p-4 cursor-pointer hover:border-blue-500 hover:shadow-md transition-all ${
+                  currentProduct?.productId === p.productId
                     ? "ring-2 ring-blue-500"
                     : ""
-                  }`}
+                }`}
                 onClick={() => {
                   setCurrentProduct(p);
                   setCurrentStep(3);
@@ -827,29 +829,29 @@ export default function MakeManualModal({ isOpen, onClose }) {
               {(currentProductConfig.linkImg.endsWith(".png") ||
                 currentProductConfig.linkImg.endsWith(".jpg") ||
                 currentProductConfig.linkImg.endsWith(".jpeg")) && (
-                  <div className="relative inline-block">
-                    <img
-                      src={currentProductConfig.linkImg || "/placeholder.svg"}
-                      alt="Uploaded Image Preview"
-                      className="w-20 h-20 object-cover rounded border border-gray-300 shadow-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCurrentProductConfig((prev) => ({
-                          ...prev,
-                          linkImg: null,
-                        }));
-                        if (linkImgRef.current) {
-                          linkImgRef.current.value = "";
-                        }
-                      }}
-                      className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600 translate-x-1 -translate-y-1"
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
+                <div className="relative inline-block">
+                  <img
+                    src={currentProductConfig.linkImg || "/placeholder.svg"}
+                    alt="Uploaded Image Preview"
+                    className="w-20 h-20 object-cover rounded border border-gray-300 shadow-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentProductConfig((prev) => ({
+                        ...prev,
+                        linkImg: null,
+                      }));
+                      if (linkImgRef.current) {
+                        linkImgRef.current.value = "";
+                      }
+                    }}
+                    className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600 translate-x-1 -translate-y-1"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -882,31 +884,31 @@ export default function MakeManualModal({ isOpen, onClose }) {
               {(currentProductConfig.linkThanksCard.endsWith(".png") ||
                 currentProductConfig.linkThanksCard.endsWith(".jpg") ||
                 currentProductConfig.linkThanksCard.endsWith(".jpeg")) && (
-                  <div className="relative inline-block">
-                    <img
-                      src={
-                        currentProductConfig.linkThanksCard || "/placeholder.svg"
+                <div className="relative inline-block">
+                  <img
+                    src={
+                      currentProductConfig.linkThanksCard || "/placeholder.svg"
+                    }
+                    alt="Thanks Card Preview"
+                    className="w-20 h-20 object-cover rounded border border-gray-300 shadow-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentProductConfig((prev) => ({
+                        ...prev,
+                        linkThanksCard: null,
+                      }));
+                      if (linkThanksCardRef.current) {
+                        linkThanksCardRef.current.value = "";
                       }
-                      alt="Thanks Card Preview"
-                      className="w-20 h-20 object-cover rounded border border-gray-300 shadow-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCurrentProductConfig((prev) => ({
-                          ...prev,
-                          linkThanksCard: null,
-                        }));
-                        if (linkThanksCardRef.current) {
-                          linkThanksCardRef.current.value = "";
-                        }
-                      }}
-                      className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600 translate-x-1 -translate-y-1"
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
+                    }}
+                    className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600 translate-x-1 -translate-y-1"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -939,31 +941,31 @@ export default function MakeManualModal({ isOpen, onClose }) {
               {(currentProductConfig.linkFileDesign.endsWith(".png") ||
                 currentProductConfig.linkFileDesign.endsWith(".jpg") ||
                 currentProductConfig.linkFileDesign.endsWith(".jpeg")) && (
-                  <div className="relative inline-block">
-                    <img
-                      src={
-                        currentProductConfig.linkFileDesign || "/placeholder.svg"
+                <div className="relative inline-block">
+                  <img
+                    src={
+                      currentProductConfig.linkFileDesign || "/placeholder.svg"
+                    }
+                    alt="Design File Preview"
+                    className="w-20 h-20 object-cover rounded border border-gray-300 shadow-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentProductConfig((prev) => ({
+                        ...prev,
+                        linkFileDesign: null,
+                      }));
+                      if (linkFileDesignRef.current) {
+                        linkFileDesignRef.current.value = "";
                       }
-                      alt="Design File Preview"
-                      className="w-20 h-20 object-cover rounded border border-gray-300 shadow-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCurrentProductConfig((prev) => ({
-                          ...prev,
-                          linkFileDesign: null,
-                        }));
-                        if (linkFileDesignRef.current) {
-                          linkFileDesignRef.current.value = "";
-                        }
-                      }}
-                      className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600 translate-x-1 -translate-y-1"
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
+                    }}
+                    className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600 translate-x-1 -translate-y-1"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -980,7 +982,11 @@ export default function MakeManualModal({ isOpen, onClose }) {
               const val = e.target.value;
               if (/^\d*$/.test(val)) {
                 const num = Number.parseInt(val, 10);
-                if (isNaN(num) || num < 1 || num >100) return;
+                if (isNaN(num) || num < 1 || num > 20) {
+                  alert("Quantity cannot be more than 20.");
+                  return;
+                }
+
                 setCurrentProductConfig((prev) => ({
                   ...prev,
                   quantity: num,
@@ -1016,11 +1022,10 @@ export default function MakeManualModal({ isOpen, onClose }) {
           <div className="bg-blue-50 p-4 rounded-lg">
             <Label className="text-lg font-semibold">
               Product Price: $
-              {Number(calculateProductPrice())
-                .toLocaleString("en-US", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2
-                })}
+              {Number(calculateProductPrice()).toLocaleString("en-US", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </Label>
           </div>
         </div>
@@ -1185,12 +1190,12 @@ export default function MakeManualModal({ isOpen, onClose }) {
                             {(item.config.linkFileDesign.endsWith(".jpg") ||
                               item.config.linkFileDesign.endsWith(".png") ||
                               item.config.linkFileDesign.endsWith(".jpeg")) && (
-                                <img
-                                  src={item.config.linkFileDesign}
-                                  alt="File Design"
-                                  className="w-24 h-24 object-cover rounded border"
-                                />
-                              )}
+                              <img
+                                src={item.config.linkFileDesign}
+                                alt="File Design"
+                                className="w-24 h-24 object-cover rounded border"
+                              />
+                            )}
                           </div>
                         ) : (
                           <p className="text-gray-500 text-sm">
@@ -1262,17 +1267,19 @@ export default function MakeManualModal({ isOpen, onClose }) {
               {[1, 2, 3].map((step) => (
                 <div key={step} className="flex items-center">
                   <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${step <= currentStep
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                      step <= currentStep
                         ? "bg-blue-600 text-white"
                         : "bg-gray-200 text-gray-600"
-                      }`}
+                    }`}
                   >
                     {step}
                   </div>
                   {step < 3 && (
                     <div
-                      className={`w-16 h-1 mx-2 ${step < currentStep ? "bg-blue-600" : "bg-gray-200"
-                        }`}
+                      className={`w-16 h-1 mx-2 ${
+                        step < currentStep ? "bg-blue-600" : "bg-gray-200"
+                      }`}
                     />
                   )}
                 </div>
