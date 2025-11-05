@@ -7,6 +7,8 @@ using CB_Gift.Services.IService;
 using Microsoft.EntityFrameworkCore;
 using CB_Gift.Models.Enums;
 using System.Linq; // Cần thiết cho các thao tác LINQ
+using CB_Gift.Hubs;
+using Microsoft.AspNetCore.SignalR;
 
 namespace CB_Gift.Services
 {
@@ -15,11 +17,16 @@ namespace CB_Gift.Services
         private readonly CBGiftDbContext _context;
         private readonly ILogger<OrderService> _logger;
         private readonly IMapper _mapper;
-        public OrderService(CBGiftDbContext context, IMapper mapper, ILogger<OrderService> logger)
+        private readonly INotificationService _notificationService;
+        private readonly IHubContext<NotificationHub> _hubContext;
+        public OrderService(CBGiftDbContext context, IMapper mapper, ILogger<OrderService> logger,
+            INotificationService notificationService, IHubContext<NotificationHub> hubContext)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
             _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _notificationService = notificationService;
+            _hubContext = hubContext;
         }
 
         // ----------------------------------------------------------------------
@@ -491,9 +498,9 @@ namespace CB_Gift.Services
             return true;
         }
         public async Task<bool> SellerApproveOrderDesignAsync(  // update status order
-        int orderId,
-        ProductionStatus action,
-        string sellerId)
+         int orderId,
+         ProductionStatus action,
+         string sellerId)
         {
             // 1. Tải Order cha và TẤT CẢ OrderDetail cần design
             var order = await _context.Orders
@@ -533,18 +540,24 @@ namespace CB_Gift.Services
             // 5. Xác định trạng thái đích cho Order và OrderDetails
             int newOrderStatus;
             ProductionStatus newProductionStatus;
+            // thêm message để làm thông báo tới designer
+            string designerMessage;
+            // lấy DesignerID để gửi thông báo đến
+            string designerId = order.OrderDetails.FirstOrDefault()?.AssignedDesignerUserId; // Lấy ID designer
 
             if (action == ProductionStatus.DESIGN_REDO)
             {
                 // Thiết kế lại (Reject)
                 newOrderStatus = 6; // Giả định 6 là Order Status cho DESIGN_REDO
                 newProductionStatus = ProductionStatus.DESIGN_REDO; // Trạng thái mới cho OrderDetail
+                designerMessage = $"Seller has REQUESTED to REDO the design for the order #{orderId}.";
             }
             else if (action == ProductionStatus.READY_PROD)
             {
                 // Chốt Đơn (Confirm)
                 newOrderStatus = 7; // Giả định 7 là Order Status cho CONFIRMED/READY_PROD
                 newProductionStatus = ProductionStatus.READY_PROD; // Trạng thái cuối cho OrderDetail
+                designerMessage = $"Seller has ACCEPTED the design for the order #{orderId}.";
             }
             else
             {
@@ -560,6 +573,31 @@ namespace CB_Gift.Services
             {
                 detail.ProductionStatus = newProductionStatus;
             }
+            // ✅ BẮT ĐẦU GỬI THÔNG BÁO
+            try
+            {
+                // 1. Gửi thông báo đến Designer
+                if (!string.IsNullOrEmpty(designerId))
+                {
+                    await _notificationService.CreateAndSendNotificationAsync(
+                        designerId,
+                        designerMessage,
+                        $"/designer/tasks" // Hoặc link chi tiết đơn hàng
+                    );
+                }
+
+                // 2. Gửi cập nhật trạng thái real-time cho group của đơn hàng
+                var orderGroupName = $"order_{orderId}";
+                await _hubContext.Clients.Group(orderGroupName).SendAsync(
+                    "OrderStatusChanged",
+                    new { orderId = orderId, newStatus = newProductionStatus.ToString() }
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho SellerApproveOrderDesignAsync");
+            }
+            // ✅ KẾT THÚC GỬI THÔNG BÁO
 
             // 8. Lưu thay đổi
             await _context.SaveChangesAsync();
@@ -569,7 +607,8 @@ namespace CB_Gift.Services
         public async Task<bool> SellerApproveOrderDetailDesignAsync(
         int orderDetailId,
         ProductionStatus action,
-        string sellerId)
+        string sellerId,
+        string? reason)
         {
             // 1. Tải OrderDetail và Order cha
             var orderDetail = await _context.OrderDetails
@@ -601,12 +640,68 @@ namespace CB_Gift.Services
             {
                 throw new InvalidOperationException($"Invalid action status {action}. Must be DESIGN_REDO or READY_PROD.");
             }
+            string eventType;
+            string notificationMessage;
 
-            // 5. Cập nhật ProductionStatus của OrderDetail duy nhất
+            if (action == ProductionStatus.DESIGN_REDO)
+            {
+                eventType = "DESIGN_REJECTED";
+                notificationMessage = $"YÊU CẦU LÀM LẠI thiết kế cho mục #{orderDetailId}. Lý do: {reason}";
+            }
+            else // (action == ProductionStatus.READY_PROD)
+            {
+                eventType = "DESIGN_APPROVED";
+                notificationMessage = $"CHẤP NHẬN thiết kế cho mục #{orderDetailId}.";
+            }
+
+            // Tạo bản ghi log mới
+            var newLog = new OrderDetailLog
+            {
+                OrderDetailId = orderDetailId,
+                ActorUserId = sellerId,
+                EventType = eventType,
+                Reason = reason, // Sẽ là null nếu được chấp nhận, và có nội dung nếu bị từ chối
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.OrderDetailLogs.Add(newLog);
+
+            // 5. Cập nhật ProductionStatus của OrderDetail
             orderDetail.ProductionStatus = action;
 
             // 6. Lưu thay đổi
             // LƯU Ý: Không có logic cập nhật Order cha tại đây theo yêu cầu.
+
+
+            // ✅ BẮT ĐẦU GỬI THÔNG BÁO
+            try
+            {
+                string actionText = (action == ProductionStatus.READY_PROD) ? "CHẤP NHẬN" : "YÊU CẦU LÀM LẠI";
+                string designerId = orderDetail.AssignedDesignerUserId;
+                int orderId = orderDetail.OrderId;
+
+                // 1. Gửi thông báo đến Designer
+                if (!string.IsNullOrEmpty(designerId))
+                {
+                    await _notificationService.CreateAndSendNotificationAsync(
+                        designerId,
+                        $"Seller đã {actionText} thiết kế cho mục #{orderDetailId} (Đơn hàng #{orderId}).",
+                        $"/designer/tasks"
+                    );
+                }
+
+                // 2. Gửi cập nhật trạng thái real-time
+                var orderGroupName = $"order_{orderId}";
+                await _hubContext.Clients.Group(orderGroupName).SendAsync(
+                    "OrderStatusChanged",
+                    new { orderId = orderId, orderDetailId = orderDetailId, newStatus = action.ToString() }
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho SellerApproveOrderDetailDesignAsync");
+            }
+            // ✅ KẾT THÚC GỬI THÔNG BÁO
+
             await _context.SaveChangesAsync();
 
             return true;
@@ -654,7 +749,22 @@ namespace CB_Gift.Services
                     // Nếu có trường liên quan đến việc chốt file thiết kế (như IsFinal), bạn cần xử lý tại đây.
                     // Ví dụ: detail.LinkFileDesign = detail.LinkImg; // Giả định dùng ảnh gốc làm file thiết kế
                 }
-
+                // ✅ BẮT ĐẦU GỬI THÔNG BÁO
+                // Không cần gửi notification (chuông) vì seller là người thực hiện
+                // Chỉ cần gửi cập nhật real-time cho ai đang xem
+                try
+                {
+                    var orderGroupName = $"order_{orderId}";
+                    await _hubContext.Clients.Group(orderGroupName).SendAsync(
+                        "OrderStatusChanged",
+                        new { orderId = orderId, newStatus = ProductionStatus.READY_PROD.ToString() }
+                    );
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho SendOrderToReadyProdAsync");
+                }
+                // ✅ KẾT THÚC GỬI THÔNG BÁO
                 // 5. Lưu thay đổi và Commit Transaction
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -672,8 +782,8 @@ namespace CB_Gift.Services
         public async Task<ApproveOrderResult> ApproveOrderForShippingAsync(int orderId)
         {
             var order = await _context.Orders
-                                    .Include(o => o.OrderDetails)
-                                    .FirstOrDefaultAsync(o => o.OrderId == orderId);
+                                      .Include(o => o.OrderDetails)
+                                      .FirstOrDefaultAsync(o => o.OrderId == orderId);
 
             if (order == null)
             {
@@ -709,6 +819,28 @@ namespace CB_Gift.Services
             {
                 _context.Orders.Update(order);
                 await _context.SaveChangesAsync();
+                // ✅ BẮT ĐẦU GỬI THÔNG BÁO
+                try
+                {
+                    // 1. Gửi thông báo (chuông) cho Seller
+                    await _notificationService.CreateAndSendNotificationAsync(
+                        order.SellerUserId,
+                        $"Đơn hàng #{orderId} của bạn đã được giao.",
+                        $"/seller/orders/{orderId}"
+                    );
+
+                    // 2. Gửi cập nhật real-time
+                    var orderGroupName = $"order_{orderId}";
+                    await _hubContext.Clients.Group(orderGroupName).SendAsync(
+                        "OrderStatusChanged",
+                        new { orderId = orderId, newStatus = "SHIPPED" } // Giả sử 14 là Shipped
+                    );
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho ApproveOrderForShippingAsync");
+                }
+                // ✅ KẾT THÚC GỬI THÔNG BÁO
                 return new ApproveOrderResult { IsSuccess = true };
             }
             catch (DbUpdateException ex)

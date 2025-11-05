@@ -40,7 +40,7 @@ namespace CB_Gift.Services.IService
         Task<MakeOrderResponse> UpdateOrderAsync(int orderId, OrderUpdateDto request, string sellerUserId);
         Task<bool> DeleteOrderAsync(int orderId, string sellerUserId);
         Task<bool> SellerApproveOrderDesignAsync(int orderId, ProductionStatus action, string sellerId); // chuyển status order
-        Task<bool> SellerApproveOrderDetailDesignAsync(int orderDetailId, ProductionStatus action, string sellerId); // chuyển status orderDetail
+        Task<bool> SellerApproveOrderDetailDesignAsync(int orderDetailId, ProductionStatus action, string sellerId, string? reason); // chuyển status orderDetail
         Task<bool> SendOrderToReadyProdAsync(int orderId, string sellerId);// bắn thẳng sang staff, không qua designer
         Task<ApproveOrderResult> ApproveOrderForShippingAsync(int orderId);
     }
