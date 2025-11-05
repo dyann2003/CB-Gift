@@ -247,17 +247,15 @@ namespace CB_Gift.Controllers
         }
         [HttpPut("order/order-details/{orderDetailId}/design-status")]
         public async Task<IActionResult> UpdateDesignOrderDetailStatus(
-        int orderDetailId,
-        [FromBody] UpdateStatusRequest request)
+    int orderDetailId,
+    [FromBody] UpdateStatusRequest request)
         {
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
             }
 
-            // LẤY SELLER ID
             var sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
             if (string.IsNullOrEmpty(sellerId))
             {
                 return Unauthorized("User is not authenticated or Seller ID missing.");
@@ -265,19 +263,25 @@ namespace CB_Gift.Controllers
 
             var action = request.ProductionStatus;
 
-            // Kiểm tra tính hợp lệ của Action (phải là DESIGN_REDO hoặc READY_PROD)
+            // Kiểm tra tính hợp lệ của Action
             if (action != ProductionStatus.DESIGN_REDO && action != ProductionStatus.READY_PROD)
             {
                 return BadRequest($"Invalid action. Must be {ProductionStatus.DESIGN_REDO} or {ProductionStatus.READY_PROD}.");
             }
 
+            // Nếu hành động là "Làm lại" (DESIGN_REDO), thì BẮT BUỘC phải có lý do
+            if (action == ProductionStatus.DESIGN_REDO && string.IsNullOrWhiteSpace(request.Reason))
+            {
+                return BadRequest(new { message = "A reason is required when rejecting a design (DESIGN_REDO)." });
+            }
+
             try
             {
-                // GỌI SERVICE
                 bool success = await _orderService.SellerApproveOrderDetailDesignAsync(
                     orderDetailId,
                     action,
-                    sellerId
+                    sellerId,
+                    request.Reason
                 );
 
                 if (success)
