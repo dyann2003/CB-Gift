@@ -4,7 +4,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -18,7 +17,7 @@ namespace CB_Gift.Tests.Services
 {
     public class AiStudioServiceTests
     {
-        // --- Test HttpMessageHandler để bắt & kiểm tra request ---
+        // --- HttpMessageHandler để bắt & kiểm tra request ---
         private sealed class CapturingHandler : HttpMessageHandler
         {
             public HttpRequestMessage? LastRequest { get; private set; }
@@ -49,17 +48,46 @@ namespace CB_Gift.Tests.Services
                 .Build();
         }
 
+        /// <summary>
+        /// Tạo service dưới test. Nếu AiStudioService có ctor (IConfiguration, ILogger, HttpClient)
+        /// thì dùng luôn. Nếu không, tạo bản mặc định rồi inject HttpClient qua reflection (fallback).
+        /// </summary>
         private static (AiStudioService svc, CapturingHandler handler) MakeServiceUnderTest(
             Func<HttpRequestMessage, HttpResponseMessage> responder,
-            string stabilityKey = "sk_test_123"
-        )
+            string stabilityKey = "sk_test_123")
         {
             var handler = new CapturingHandler(responder);
             var httpClient = new HttpClient(handler);
             var config = MakeConfig(stabilityKey);
             ILogger<AiStudioService> logger = NullLogger<AiStudioService>.Instance;
 
-            var svc = new AiStudioService(config, logger, httpClient);
+            AiStudioService svc;
+
+            // Ưu tiên ctor có HttpClient (nếu bạn đã thêm overload)
+            var ctorWithHttp =
+                typeof(AiStudioService).GetConstructor(new[] {
+                    typeof(IConfiguration), typeof(ILogger<AiStudioService>), typeof(HttpClient)
+                });
+
+            if (ctorWithHttp != null)
+            {
+                svc = (AiStudioService)ctorWithHttp.Invoke(new object[] { config, logger, httpClient });
+            }
+            else
+            {
+                // Fallback: dùng ctor mặc định rồi "nhét" _httpClient qua reflection
+                svc = new AiStudioService(config, logger);
+
+                var httpField = typeof(AiStudioService).GetField("_httpClient",
+                    BindingFlags.NonPublic | BindingFlags.Instance);
+
+                if (httpField == null)
+                    throw new InvalidOperationException("Không tìm thấy field _httpClient trong AiStudioService.");
+
+                // Bỏ readonly bằng cách thao tác trên handle runtime (chấp nhận cho mục đích unit test)
+                httpField.SetValue(svc, httpClient);
+            }
+
             return (svc, handler);
         }
 
@@ -76,14 +104,14 @@ namespace CB_Gift.Tests.Services
         }
 
         [Fact]
-        public async Task GenerateLineArt_Success_Returns_DataUrlPng()
+        public async Task GenerateLineArt_Success_Returns_DataUrlPng_And_Uses_StaticInstructions_When_UserPrompt_Empty()
         {
             // Arrange: giả lập Stability trả ảnh PNG
             var fakeOut = Convert.FromBase64String(
                 "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAADUlEQVR4nGP8z/D/PwAHxAKm3f7KswAAAABJRU5ErkJggg=="
             );
 
-            var (svc, handler) = MakeServiceUnderTest(req =>
+            var (svc, _) = MakeServiceUnderTest(req =>
             {
                 // Đảm bảo URL đúng
                 Assert.Equal("https://api.stability.ai/v2beta/stable-image/control/sketch", req.RequestUri!.ToString());
@@ -91,7 +119,7 @@ namespace CB_Gift.Tests.Services
 
                 // Header: Authorization, Accept
                 Assert.True(req.Headers.Authorization?.Scheme == "Bearer");
-                Assert.True(!string.IsNullOrEmpty(req.Headers.Authorization?.Parameter));
+                Assert.False(string.IsNullOrEmpty(req.Headers.Authorization?.Parameter));
                 Assert.Contains(req.Headers.Accept, h => h.MediaType == "image/*");
                 Assert.Contains(req.Headers.Accept, h => h.MediaType == "application/json");
 
@@ -130,10 +158,11 @@ namespace CB_Gift.Tests.Services
 
                 Assert.NotNull(promptPart);
 
-                // (Tuỳ chọn) Kiểm tra đúng chuỗi hướng dẫn private qua reflection
+                // Kiểm tra rơi về staticInstructions khi userPrompt = "" (trống/whitespace)
                 var staticInstr = typeof(AiStudioService)
                     .GetField("staticInstructions", BindingFlags.NonPublic | BindingFlags.Static)!
                     .GetRawConstantValue() as string;
+
                 var prompt = promptPart!.ReadAsStringAsync().Result;
                 Assert.False(string.IsNullOrWhiteSpace(prompt));
                 Assert.Equal(staticInstr, prompt);
@@ -149,14 +178,48 @@ namespace CB_Gift.Tests.Services
 
             var input = MakeValidInputBase64();
 
-            // Act
-            var result = await svc.GenerateLineArtFromChibiAsync(input);
+            // Act (userPrompt rỗng -> dùng staticInstructions)
+            var result = await svc.GenerateLineArtFromChibiAsync(input, "");
 
             // Assert: phải là data URL + base64
             Assert.StartsWith("data:image/png;base64,", result);
             var b64 = result.Substring("data:image/png;base64,".Length);
             var bytes = Convert.FromBase64String(b64);
             Assert.Equal(fakeOut, bytes);
+        }
+
+        [Fact]
+        public async Task GenerateLineArt_Uses_UserPrompt_When_Provided()
+        {
+            var userPrompt = "Draw only clean black single-weight lines, no fills.";
+            var (svc, _) = MakeServiceUnderTest(req =>
+            {
+                Assert.Equal("https://api.stability.ai/v2beta/stable-image/control/sketch", req.RequestUri!.ToString());
+                Assert.IsType<MultipartFormDataContent>(req.Content);
+                var mp = (MultipartFormDataContent)req.Content;
+
+                HttpContent? promptPart = null;
+                foreach (var part in mp)
+                {
+                    var name = part.Headers.ContentDisposition?.Name?.Trim('"');
+                    if (name == "prompt") { promptPart = part; break; }
+                }
+                Assert.NotNull(promptPart);
+                var prompt = promptPart!.ReadAsStringAsync().Result;
+                Assert.Equal(userPrompt, prompt);
+
+                var ok = new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(new byte[] { 1, 2, 3 })
+                };
+                ok.Content.Headers.ContentType = new MediaTypeHeaderValue("image/png");
+                return ok;
+            });
+
+            var input = MakeValidInputBase64();
+
+            var result = await svc.GenerateLineArtFromChibiAsync(input, userPrompt);
+            Assert.StartsWith("data:image/png;base64,", result);
         }
 
         [Fact]
@@ -171,7 +234,7 @@ namespace CB_Gift.Tests.Services
             // Sai base64 (ký tự lạ)
             var bad = "data:image/png;base64,@@@@";
 
-            var ex = await Assert.ThrowsAsync<Exception>(() => svc.GenerateLineArtFromChibiAsync(bad));
+            var ex = await Assert.ThrowsAsync<Exception>(() => svc.GenerateLineArtFromChibiAsync(bad, ""));
             Assert.Contains("Invalid Base64 image string.", ex.Message);
         }
 
@@ -183,7 +246,7 @@ namespace CB_Gift.Tests.Services
             // Chuỗi empty sau khi tách prefix
             var empty = "data:image/png;base64,";
 
-            var ex = await Assert.ThrowsAsync<Exception>(() => svc.GenerateLineArtFromChibiAsync(empty));
+            var ex = await Assert.ThrowsAsync<Exception>(() => svc.GenerateLineArtFromChibiAsync(empty, ""));
             Assert.Contains("Invalid Base64 image string.", ex.Message);
         }
 
@@ -201,7 +264,7 @@ namespace CB_Gift.Tests.Services
 
             var input = MakeValidInputBase64();
 
-            var ex = await Assert.ThrowsAsync<Exception>(() => svc.GenerateLineArtFromChibiAsync(input));
+            var ex = await Assert.ThrowsAsync<Exception>(() => svc.GenerateLineArtFromChibiAsync(input, ""));
             Assert.Contains("Stability AI error", ex.Message);
             Assert.Contains("bad input", ex.Message);
         }
@@ -209,11 +272,11 @@ namespace CB_Gift.Tests.Services
         [Fact]
         public async Task GenerateLineArt_SetsAuthHeader_FromConfigKey()
         {
-            var (svc, handler) = MakeServiceUnderTest(req =>
+            var (svc, _) = MakeServiceUnderTest(req =>
             {
                 Assert.Equal("Bearer", req.Headers.Authorization?.Scheme);
                 Assert.Equal("live_key_999", req.Headers.Authorization?.Parameter);
-                // Trả OK tối thiểu
+
                 var ok = new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new ByteArrayContent(new byte[] { 1, 2, 3 })
@@ -223,8 +286,7 @@ namespace CB_Gift.Tests.Services
             }, stabilityKey: "live_key_999");
 
             var input = MakeValidInputBase64();
-            var result = await svc.GenerateLineArtFromChibiAsync(input);
-
+            var result = await svc.GenerateLineArtFromChibiAsync(input, "");
             Assert.StartsWith("data:image/png;base64,", result);
         }
     }
