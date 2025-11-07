@@ -5,9 +5,9 @@ using CB_Gift.Data;
 using CB_Gift.Models;
 using CB_Gift.Models.Enums;
 using CB_Gift.Services;
+using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using FluentAssertions;
 using Xunit;
 
 namespace CB_Gift.Tests.Services
@@ -39,7 +39,6 @@ namespace CB_Gift.Tests.Services
                 NameVi = "Đơn mới tạo"
             };
 
-
             var order = new Order
             {
                 OrderId = 100,
@@ -66,7 +65,7 @@ namespace CB_Gift.Tests.Services
                 ProductVariantId = 10,
                 ProductVariant = variant,
                 Quantity = 1,
-                ProductionStatus = ProductionStatus.CREATED
+                ProductionStatus = ProductionStatus.CREATED // 2
             };
 
             var odB = new OrderDetail
@@ -77,7 +76,7 @@ namespace CB_Gift.Tests.Services
                 ProductVariantId = 10,
                 ProductVariant = variant,
                 Quantity = 1,
-                ProductionStatus = ProductionStatus.DESIGNING
+                ProductionStatus = ProductionStatus.DESIGNING // 4
             };
 
             db.EndCustomers.Add(endCustomer);
@@ -109,29 +108,51 @@ namespace CB_Gift.Tests.Services
         {
             var (db, svc, od1, od2, orderId) = await SeedAsync();
 
-            // Gọi Accept (set ProductionStatus = IN_PROD = 9)
+            // Act: Accept (đặt ProductionStatus = IN_PROD = 9) cho od2
             var updated = await svc.AcceptOrderDetailAsync(od2);
 
+            // Assert
             updated.Should().NotBeNull();
-            updated!.ProductionStatus.Should().Be(ProductionStatus.QC_DONE);
+            updated!.ProductionStatus.Should().Be(ProductionStatus.IN_PROD);
 
-            // min( CREATED=2 , IN_PROD=9 ) => map => StatusOrder = 2
+            // Sau khi cập nhật: min(CREATED=2, IN_PROD=9) => 2 => map StatusOrder = 2
             var order = await db.Orders.Include(o => o.OrderDetails).FirstAsync(o => o.OrderId == orderId);
             order.StatusOrder.Should().Be(2);
         }
 
         [Fact]
-        public async Task RejectOrderDetailAsync_Sets_QC_DONE_And_Updates_OrderStatus()
+        public async Task RejectOrderDetailAsync_Sets_QC_DONE_Logs_StatusUpdated_And_Updates_OrderStatus()
         {
-            var (db, svc, od1, _, orderId) = await SeedAsync();
+            var (db, svc, od1, od2, orderId) = await SeedAsync();
 
-            // Gọi Reject (set ProductionStatus = QC_DONE = 11)
-            var updated = await svc.RejectOrderDetailAsync(od1);
+            // Arrange: chuẩn bị DTO reject + actor
+            var request = new CB_Gift.DTOs.QcRejectRequestDto
+            {
+                Reason = "Misaligned print area"
+            };
+            var qcUserId = "qc-user-01";
 
+            // Act: Reject od1 -> đặt ProductionStatus = QC_DONE (11)
+            var updated = await svc.RejectOrderDetailAsync(od1, request, qcUserId);
+
+            // Assert 1: trạng thái dòng
             updated.Should().NotBeNull();
-            updated!.ProductionStatus.Should().Be(ProductionStatus.PROD_REWORK);
+            updated!.ProductionStatus.Should().Be(ProductionStatus.QC_DONE);
 
-            // min( QC_DONE=11 , DESIGNING=4 ) => map => StatusOrder = 5 (CHECK_DESIGN)
+            // Assert 2: log được ghi với STATUS_UPDATED (vì không phải PROD_REWORK)
+            var logs = await db.OrderDetailLogs
+                .Where(l => l.OrderDetailId == od1)
+                .OrderByDescending(l => l.CreatedAt)
+                .ToListAsync();
+
+            logs.Should().NotBeEmpty();
+            var log = logs.First();
+            log.ActorUserId.Should().Be(qcUserId);
+            log.Reason.Should().Be("Misaligned print area");
+            log.EventType.Should().Be("STATUS_UPDATED");
+
+            // Assert 3: cập nhật order theo min status sau reject
+            // od1 = QC_DONE (11), od2 = DESIGNING (4) => min = 4 => map StatusOrder = 4
             var order = await db.Orders.Include(o => o.OrderDetails).FirstAsync(o => o.OrderId == orderId);
             order.StatusOrder.Should().Be(4);
         }
@@ -142,6 +163,16 @@ namespace CB_Gift.Tests.Services
             var (db, svc, _, _, _) = await SeedAsync();
 
             var result = await svc.AcceptOrderDetailAsync(99999);
+            result.Should().BeNull();
+        }
+
+        [Fact]
+        public async Task RejectOrderDetailAsync_Returns_Null_When_NotFound()
+        {
+            var (db, svc, _, _, _) = await SeedAsync();
+
+            var dto = new CB_Gift.DTOs.QcRejectRequestDto { Reason = "Invalid artwork" };
+            var result = await svc.RejectOrderDetailAsync(99999, dto, "qc-123");
             result.Should().BeNull();
         }
     }
