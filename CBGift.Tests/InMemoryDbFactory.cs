@@ -1,7 +1,7 @@
-﻿// Tests/Utils/InMemoryDbFactory.cs
-using System;
-using CB_Gift.Data;
+﻿using System;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using CB_Gift.Data;
 
 namespace CB_Gift.Tests.Utils
 {
@@ -10,13 +10,15 @@ namespace CB_Gift.Tests.Utils
         public static CBGiftDbContext CreateContext(string? dbName = null)
         {
             dbName ??= $"CBGift_Tests_{Guid.NewGuid()}";
+
             var options = new DbContextOptionsBuilder<CBGiftDbContext>()
                 .UseInMemoryDatabase(dbName)
+             
+                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
                 .EnableSensitiveDataLogging()
                 .Options;
 
-            var ctx = new CBGiftDbContext(options);
-            return ctx;
+            return new CBGiftDbContext(options);
         }
     }
 }
