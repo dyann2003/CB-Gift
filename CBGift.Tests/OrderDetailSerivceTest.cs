@@ -28,16 +28,11 @@ namespace CB_Gift.Tests.Services
         {
             var db = NewDb();
 
-            // Seed dữ liệu bắt buộc
+            // Seed
             var endCustomer = new EndCustomer { CustId = 1, Name = "Customer A" };
             var product = new Product { ProductId = 1, ProductName = "Mug" };
             var variant = new ProductVariant { ProductVariantId = 10, ProductId = 1, Product = product, Sku = "MUG-RED" };
-            var orderStatus = new OrderStatus
-            {
-                StatusId = 1,
-                Code = "CREATED",
-                NameVi = "Đơn mới tạo"
-            };
+            var orderStatus = new OrderStatus { StatusId = 1, Code = "CREATED", NameVi = "Đơn mới tạo" };
 
             var order = new Order
             {
@@ -65,7 +60,7 @@ namespace CB_Gift.Tests.Services
                 ProductVariantId = 10,
                 ProductVariant = variant,
                 Quantity = 1,
-                ProductionStatus = ProductionStatus.CREATED // 2
+                ProductionStatus = ProductionStatus.CREATED // 1
             };
 
             var odB = new OrderDetail
@@ -76,7 +71,7 @@ namespace CB_Gift.Tests.Services
                 ProductVariantId = 10,
                 ProductVariant = variant,
                 Quantity = 1,
-                ProductionStatus = ProductionStatus.DESIGNING // 4
+                ProductionStatus = ProductionStatus.DESIGNING // 3
             };
 
             db.EndCustomers.Add(endCustomer);
@@ -104,7 +99,7 @@ namespace CB_Gift.Tests.Services
         }
 
         [Fact]
-        public async Task AcceptOrderDetailAsync_Sets_IN_PROD_And_Updates_OrderStatus_By_MinDetailStatus()
+        public async Task AcceptOrderDetailAsync_Sets_QC_Done_And_Updates_OrderStatus_By_MinDetailStatus()
         {
             var (db, svc, od1, od2, orderId) = await SeedAsync();
 
@@ -113,7 +108,7 @@ namespace CB_Gift.Tests.Services
 
             // Assert
             updated.Should().NotBeNull();
-            updated!.ProductionStatus.Should().Be(ProductionStatus.IN_PROD);
+            updated!.ProductionStatus.Should().Be(ProductionStatus.QC_DONE);
 
             // Sau khi cập nhật: min(CREATED=2, IN_PROD=9) => 2 => map StatusOrder = 2
             var order = await db.Orders.Include(o => o.OrderDetails).FirstAsync(o => o.OrderId == orderId);
@@ -121,25 +116,21 @@ namespace CB_Gift.Tests.Services
         }
 
         [Fact]
-        public async Task RejectOrderDetailAsync_Sets_QC_DONE_Logs_StatusUpdated_And_Updates_OrderStatus()
+        public async Task RejectOrderDetailAsync_Sets_PROD_REWORK_Logs_QC_REJECTED_And_Updates_OrderStatus()
         {
             var (db, svc, od1, od2, orderId) = await SeedAsync();
 
-            // Arrange: chuẩn bị DTO reject + actor
-            var request = new CB_Gift.DTOs.QcRejectRequestDto
-            {
-                Reason = "Misaligned print area"
-            };
+            var request = new CB_Gift.DTOs.QcRejectRequestDto { Reason = "Misaligned print area" };
             var qcUserId = "qc-user-01";
 
-            // Act: Reject od1 -> đặt ProductionStatus = QC_DONE (11)
+            // Service hiện đang set 11 => PROD_REWORK
             var updated = await svc.RejectOrderDetailAsync(od1, request, qcUserId);
 
-            // Assert 1: trạng thái dòng
+            // 1) Trạng thái dòng
             updated.Should().NotBeNull();
-            updated!.ProductionStatus.Should().Be(ProductionStatus.QC_DONE);
+            updated!.ProductionStatus.Should().Be(ProductionStatus.PROD_REWORK);
 
-            // Assert 2: log được ghi với STATUS_UPDATED (vì không phải PROD_REWORK)
+            // 2) Log: rule hiện tại => PROD_REWORK -> "QC_REJECTED"
             var logs = await db.OrderDetailLogs
                 .Where(l => l.OrderDetailId == od1)
                 .OrderByDescending(l => l.CreatedAt)
@@ -149,11 +140,12 @@ namespace CB_Gift.Tests.Services
             var log = logs.First();
             log.ActorUserId.Should().Be(qcUserId);
             log.Reason.Should().Be("Misaligned print area");
-            log.EventType.Should().Be("STATUS_UPDATED");
+            log.EventType.Should().Be("QC_REJECTED");
 
-            // Assert 3: cập nhật order theo min status sau reject
-            // od1 = QC_DONE (11), od2 = DESIGNING (4) => min = 4 => map StatusOrder = 4
-            var order = await db.Orders.Include(o => o.OrderDetails).FirstAsync(o => o.OrderId == orderId);
+            // 3) Order status theo min sau reject:
+            // od1 = PROD_REWORK(11), od2 = DESIGNING(3) => min = 3 -> Map => StatusOrder = 4
+            var order = await db.Orders.Include(o => o.OrderDetails)
+                                       .FirstAsync(o => o.OrderId == orderId);
             order.StatusOrder.Should().Be(4);
         }
 
