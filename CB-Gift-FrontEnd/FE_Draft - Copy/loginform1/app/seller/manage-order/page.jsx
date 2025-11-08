@@ -330,19 +330,19 @@ export default function ManageOrder() {
     let proofUrl = null;
 
     const { value: reason } = await Swal.fire({
-      title: `Hoàn tiền đơn #${order.orderId}`,
+      title: `Refund order #${order.orderId}`,
       html: `
       <textarea id="refundReason" class="swal2-textarea" placeholder="Nhập lý do hoàn tiền (tối thiểu 5 ký tự)"></textarea>
       <input type="file" id="refundImageInput" accept="image/*" style="margin-top: 10px;" />
       <div id="uploadStatus" style="margin-top:10px; display:none;">
         <div class="swal2-loader" style="display:inline-block;"></div>
-        <span>Đang tải ảnh...</span>
+        <span>Loading images...</span>
       </div>
       <img id="refundImagePreview" style="display:none; margin-top: 10px; max-width:100%; max-height:150px; border-radius: 5px;" />
     `,
       showCancelButton: true,
-      confirmButtonText: "Gửi yêu cầu",
-      cancelButtonText: "Hủy",
+      confirmButtonText: "Submit request",
+      cancelButtonText: "Cancel",
       confirmButtonColor: "#d97706",
       cancelButtonColor: "#6b7280",
 
@@ -425,23 +425,23 @@ export default function ManageOrder() {
 
   const openCancelPopup = async (order) => {
     const { value: reason } = await Swal.fire({
-      title: `Hủy đơn #${order.orderId}`,
+      title: `Cancel order #${order.orderId}`,
       input: "text",
-      inputLabel: "Nhập lý do hủy đơn",
-      inputPlaceholder: "Ví dụ: Khách đổi ý, sai thông tin...",
+      inputLabel: "Enter reason for cancellation",
+      inputPlaceholder: "For example: Customer changed his mind, wrong information...",
       inputAttributes: {
         maxlength: 200,
         autocapitalize: "off",
         autocorrect: "off",
       },
       showCancelButton: true,
-      confirmButtonText: "Gửi yêu cầu",
-      cancelButtonText: "Hủy",
+      confirmButtonText: "Submit request",
+      cancelButtonText: "Cancel",
       confirmButtonColor: "#d33",
       cancelButtonColor: "#3085d6",
       preConfirm: (value) => {
         if (!value || value.trim().length < 5) {
-          Swal.showValidationMessage("Lý do phải có ít nhất 5 ký tự!");
+          Swal.showValidationMessage("Reason must be at least 5 characters!");
           return false;
         }
         return value;
@@ -475,8 +475,8 @@ export default function ManageOrder() {
       // Thành công
       Swal.fire({
         icon: "success",
-        title: "Thành công!",
-        text: "Yêu cầu hủy đã được gửi.",
+        title: "Success!",
+        text: "Cancellation request has been sent.",
         timer: 2000,
         showConfirmButton: false,
       });
@@ -1271,7 +1271,7 @@ export default function ManageOrder() {
         throw new Error(data.message || `HTTP ${res.status}`);
       }
 
-      setSuccessMessage(`✅ Đã duyệt thành công chi tiết #${orderDetailId}!`);
+      setSuccessMessage(`✅ Details successfully approved #${orderDetailId}!`);
       setShowSuccessDialog(true);
       setIsDialogOpen(false);
       setTimeout(() => fetchOrders(), 1500);
@@ -1287,20 +1287,20 @@ export default function ManageOrder() {
   const handleRejectOrderDetail = async (orderDetailId) => {
     // Hiển thị modal nhập lý do từ chối
     const { value: reason } = await Swal.fire({
-      title: `Từ chối chi tiết đơn `,
+      title: `Reject application details `,
       input: "textarea",
-      inputPlaceholder: "Nhập lý do từ chối (ít nhất 10 ký tự)...",
+      inputPlaceholder: "Enter reason for rejection (at least 10 characters)...",
       inputAttributes: {
         "aria-label": "Reason",
       },
       showCancelButton: true,
-      confirmButtonText: "Gửi yêu cầu",
-      cancelButtonText: "Hủy",
+      confirmButtonText: "Submit request",
+      cancelButtonText: "Cancel",
       confirmButtonColor: "#d33",
       cancelButtonColor: "#6c757d",
       preConfirm: (value) => {
         if (!value || value.trim().length < 10) {
-          Swal.showValidationMessage("Lý do từ chối phải từ 10 ký tự trở lên!");
+          Swal.showValidationMessage("Rejection reason must be 10 characters or more!");
           return false;
         }
         return value;
@@ -1341,8 +1341,8 @@ export default function ManageOrder() {
       // ✅ Thành công
       await Swal.fire({
         icon: "success",
-        title: "Đã gửi yêu cầu!",
-        text: `Yêu cầu làm lại chi tiết #${orderDetailId} đã được gửi thành công.`,
+        title: "Request sent!",
+        text: `Request to redo details #${orderDetailId} has been sent successfully.`,
         timer: 2000,
         showConfirmButton: false,
       });
