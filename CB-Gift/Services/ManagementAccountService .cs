@@ -12,18 +12,24 @@ public class ManagementAccountService : IManagementAccountService
     private readonly UserManager<AppUser> _userManager;
     private readonly RoleManager<IdentityRole> _roleManager;
 
+    private readonly CBGiftDbContext _db;
     public ManagementAccountService(
         UserManager<AppUser> userManager,
-        RoleManager<IdentityRole> roleManager)
+        RoleManager<IdentityRole> roleManager,
+        CBGiftDbContext db)
     {
         _userManager = userManager;
         _roleManager = roleManager;
+        _db = db;
     }
+
 
     public async Task<PagedResult<UserSummaryDto>> GetUsersAsync(UserQuery q)
     {
-        var users = _userManager.Users.AsQueryable();
+        // 1) Base query
+        var users = _db.Users.AsNoTracking().AsQueryable();
 
+        // 2) Search
         if (!string.IsNullOrWhiteSpace(q.Search))
         {
             var kw = q.Search.Trim().ToLower();
@@ -32,46 +38,70 @@ public class ManagementAccountService : IManagementAccountService
                 (u.FullName ?? "").ToLower().Contains(kw));
         }
 
+        // 3) IsActive
         if (q.IsActive.HasValue)
             users = users.Where(u => u.IsActive == q.IsActive.Value);
 
+        // 4) Role filter (lọc TRƯỚC khi Count/Skip/Take)
+        if (!string.IsNullOrWhiteSpace(q.Role))
+        {
+            var roleName = q.Role.Trim();
+            users =
+                from u in users
+                where
+                    (from ur in _db.UserRoles
+                     join r in _db.Roles on ur.RoleId equals r.Id
+                     where ur.UserId == u.Id && r.Name == roleName
+                     select 1).Any()
+                select u;
+        }
+
+        // 5) Sort
         users = (q.SortBy?.ToLower(), q.SortDir?.ToLower()) switch
         {
             ("email", "asc") => users.OrderBy(u => u.Email),
             ("email", _) => users.OrderByDescending(u => u.Email),
             ("fullname", "asc") => users.OrderBy(u => u.FullName),
             ("fullname", _) => users.OrderByDescending(u => u.FullName),
-            ("createdat", "asc") => users.OrderBy(u => u.Id), // AppUser chưa có CreatedAt -> tạm theo Id
+            // AppUser không có CreatedAt -> tạm theo Id (chuỗi tăng không đảm bảo thời gian, nhưng ổn tạm)
+            ("createdat", "asc") => users.OrderBy(u => u.Id),
             _ => users.OrderByDescending(u => u.Id)
         };
 
+        // 6) Count sau khi đã lọc đầy đủ
         var total = await users.CountAsync();
+
+        // 7) Paging
         var page = Math.Max(1, q.Page);
         var size = Math.Clamp(q.PageSize, 1, 200);
-
-        var pageItems = await users
+        var pageUsers = await users
             .Skip((page - 1) * size)
             .Take(size)
             .ToListAsync();
 
-        var items = new List<UserSummaryDto>();
-        foreach (var u in pageItems)
-        {
-            var roles = await _userManager.GetRolesAsync(u);
-            if (!string.IsNullOrEmpty(q.Role) &&
-                !roles.Any(r => r.Equals(q.Role, StringComparison.OrdinalIgnoreCase)))
-                continue;
+        // 8) Lấy roles cho danh sách user trên trang bằng 1 query
+        var userIds = pageUsers.Select(u => u.Id).ToList();
+        var rolePairs = await (
+            from ur in _db.UserRoles
+            join r in _db.Roles on ur.RoleId equals r.Id
+            where userIds.Contains(ur.UserId)
+            select new { ur.UserId, r.Name }
+        ).ToListAsync();
 
-            items.Add(new UserSummaryDto
-            {
-                Id = u.Id,
-                Email = u.Email,
-                FullName = u.FullName,
-                EmailConfirmed = u.EmailConfirmed,
-                IsActive = u.IsActive,
-                Roles = roles
-            });
-        }
+        var rolesMap = rolePairs
+            .GroupBy(x => x.UserId)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.Name!).ToList() as IEnumerable<string>);
+
+        // 9) Map DTO
+        var items = pageUsers.Select(u => new UserSummaryDto
+        {
+            Id = u.Id,
+            Email = u.Email,
+            FullName = u.FullName,
+            EmailConfirmed = u.EmailConfirmed,
+            IsActive = u.IsActive,
+            Roles = rolesMap.TryGetValue(u.Id, out var rs) ? rs : Enumerable.Empty<string>()
+        }).ToList();
 
         return new PagedResult<UserSummaryDto>
         {
@@ -81,6 +111,7 @@ public class ManagementAccountService : IManagementAccountService
             TotalItems = total
         };
     }
+
 
     public async Task<UserDetailDto?> GetByIdAsync(string userId)
     {
