@@ -36,7 +36,6 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogFooter,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -82,6 +81,109 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { format } from "date-fns";
+
+import ImportOrdersModal from "@/components/modals/import-orders-modal";
+
+const STATS_CONFIG = [
+  {
+    title: "Total Order",
+    color: "bg-blue-50 border-blue-200",
+    icon: Package,
+    iconColor: "text-blue-500",
+    statusFilter: null,
+  },
+  {
+    title: "Draft",
+    color: "bg-gray-50 border-gray-200",
+    icon: FileEdit,
+    iconColor: "text-gray-500",
+    statusFilter: "Draft (Nháp)",
+  },
+  {
+    title: "Need Design",
+    color: "bg-yellow-50 border-yellow-200",
+    icon: Handshake,
+    iconColor: "text-yellow-500",
+    statusFilter: "Cần Design",
+  },
+  {
+    title: "Designing",
+    color: "bg-purple-50 border-purple-200",
+    icon: Clock,
+    iconColor: "text-purple-500",
+    statusFilter: "Đang làm Design",
+  },
+  {
+    title: "Need Check Design",
+    color: "bg-green-50 border-green-200",
+    icon: ListTodo,
+    iconColor: "text-green-500",
+    statusFilter: "Cần Check Design",
+  },
+  {
+    title: "Close Order (Lock Seller)",
+    color: "bg-orange-50 border-orange-200",
+    icon: CheckCircle,
+    iconColor: "text-orange-500",
+    statusFilter: "Chốt Đơn (Khóa Seller)",
+  },
+  {
+    title: "Redesign (Design Error)",
+    color: "bg-red-50 border-red-200",
+    icon: AlertTriangle,
+    iconColor: "text-red-500",
+    statusFilter: "Thiết kế Lại (Design Lỗi)",
+  },
+  {
+    title: "Production Ready",
+    color: "bg-cyan-50 border-cyan-200",
+    icon: Package,
+    iconColor: "text-cyan-500",
+    statusFilter: "Sẵn sàng Sản xuất",
+  },
+  {
+    title: "Production Done",
+    color: "bg-teal-50 border-teal-200",
+    icon: CheckCircle,
+    iconColor: "text-teal-500",
+    statusFilter: "Sản xuất Xong",
+  },
+  {
+    title: "Manufacturing Defect (Requires Rework)",
+    color: "bg-red-50 border-red-200",
+    icon: AlertTriangle,
+    iconColor: "text-red-600",
+    statusFilter: "Sản xuất Lại",
+  },
+  {
+    title: "Quality Checked",
+    color: "bg-emerald-50 border-emerald-200",
+    icon: CheckCircle,
+    iconColor: "text-emerald-500",
+    statusFilter: "Đã Kiểm tra Chất lượng",
+  },
+  {
+    title: "Shipped",
+    color: "bg-blue-50 border-blue-200",
+    icon: Package,
+    iconColor: "text-blue-600",
+    statusFilter: "Đã Ship",
+  },
+  {
+    title: "Cancel",
+    color: "bg-gray-50 border-gray-300",
+    icon: AlertTriangle,
+    iconColor: "text-gray-600",
+    statusFilter: "Cancel",
+  },
+  {
+    title: "Return the product",
+    color: "bg-amber-50 border-amber-200",
+    icon: Package,
+    iconColor: "text-amber-600",
+    statusFilter: "Hoàn Hàng",
+  },
+];
 
 export default function ManageOrder() {
   const [currentPage, setCurrentPage] = useState("manage-order");
@@ -190,7 +292,7 @@ export default function ManageOrder() {
     return statusVal === 4 || productionVal === 4;
   };
 
-  // orders: chỉ chứa dữ liệu trang hiện tại
+  // orders: chỉ chứa dữ liệu dữ liệu trang hiện tại
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -396,7 +498,7 @@ export default function ManageOrder() {
       setError(null);
 
       // 1. Xác định Status Filter (BE cần tên Status đầy đủ)
-      const selectedStatConfigInList = stats.find(
+      const selectedStatConfigInList = STATS_CONFIG.find(
         (stat) => stat.title === selectedStat
       );
       const statusFilter =
@@ -511,112 +613,22 @@ export default function ManageOrder() {
     fetchOrders();
   }, [page, itemsPerPage, searchTerm, selectedStat, sortColumn, sortDirection]);
 
-  const stats = [
-    {
-      title: "Total Order",
-      color: "bg-blue-50 border-blue-200",
-      icon: Package,
-      iconColor: "text-blue-500",
-      statusFilter: null,
-    },
-    {
-      title: "Draft",
-      color: "bg-gray-50 border-gray-200",
-      icon: FileEdit,
-      iconColor: "text-gray-500",
-      statusFilter: "Draft (Nháp)",
-    },
-    {
-      title: "Need Design",
-      color: "bg-yellow-50 border-yellow-200",
-      icon: Handshake,
-      iconColor: "text-yellow-500",
-      statusFilter: "Cần Design",
-    },
-    {
-      title: "Designing",
-      color: "bg-purple-50 border-purple-200",
-      icon: Clock,
-      iconColor: "text-purple-500",
-      statusFilter: "Đang làm Design",
-    },
-    {
-      title: "Need Check Design",
+  const stats = STATS_CONFIG; // Keep this reference for other parts that use stats
 
-      color: "bg-green-50 border-green-200",
-      icon: ListTodo,
-      iconColor: "text-green-500",
-      statusFilter: "Cần Check Design",
-    },
-    {
-      title: "Close Order (Lock Seller)",
-      color: "bg-orange-50 border-orange-200",
-      icon: CheckCircle,
-      iconColor: "text-orange-500",
-      statusFilter: "Chốt Đơn (Khóa Seller)",
-    },
-    {
-      title: "Redesign (Design Error)",
+  // fetchStats: async () => {
+  //   try {
+  //     const res = await fetch("https://localhost:7015/api/Seller/stats", {
+  //       credentials: "include",
+  //     });
+  //     if (!res.ok) throw new Error("Failed to fetch stats");
+  //     const data = await res.json();
+  //     setOrderStats(data);
+  //   } catch (error) {
+  //     console.error("Error fetching stats:", error);
+  //   }
+  // };
 
-      color: "bg-red-50 border-red-200",
-      icon: AlertTriangle,
-      iconColor: "text-red-500",
-      statusFilter: "Thiết kế Lại (Design Lỗi)",
-    },
-    {
-      title: "Production Ready",
-      color: "bg-cyan-50 border-cyan-200",
-      icon: Package,
-      iconColor: "text-cyan-500",
-      statusFilter: "Sẵn sàng Sản xuất",
-    },
-    {
-      title: "Production Done",
-      color: "bg-teal-50 border-teal-200",
-      icon: CheckCircle,
-      iconColor: "text-teal-500",
-      statusFilter: "Sản xuất Xong",
-    },
-    {
-      title: "Manufacturing Defect (Requires Rework)",
-      color: "bg-red-50 border-red-200",
-      icon: AlertTriangle,
-      iconColor: "text-red-600",
-      statusFilter: "Sản xuất Lại",
-    },
-    {
-      title: "Quality Checked",
-      color: "bg-emerald-50 border-emerald-200",
-
-      icon: CheckCircle,
-      iconColor: "text-emerald-500",
-      statusFilter: "Đã Kiểm tra Chất lượng",
-    },
-    {
-      title: "Shipped",
-      color: "bg-blue-50 border-blue-200",
-      icon: Package,
-      iconColor: "text-blue-600",
-      statusFilter: "Đã Ship",
-    },
-    {
-      title: "Cancel",
-      color: "bg-gray-50 border-gray-300",
-      icon: AlertTriangle,
-
-      iconColor: "text-gray-600",
-      statusFilter: "Cancel",
-    },
-    {
-      title: "Return the product",
-      color: "bg-amber-50 border-amber-200",
-      icon: Package,
-      iconColor: "text-amber-600",
-      statusFilter: "Hoàn Hàng",
-    },
-    // </CHANGE>
-  ];
-
+  // ✅ Dù
   const fetchStats = async () => {
     try {
       const res = await fetch("https://localhost:7015/api/Seller/stats", {
@@ -632,7 +644,7 @@ export default function ManageOrder() {
 
   // ✅ Dùng useMemo để tính toán số lượng thống kê
   const statsWithCounts = useMemo(() => {
-    let newStats = stats.map((stat) => ({
+    let newStats = STATS_CONFIG.map((stat) => ({
       ...stat,
       // Tạm thời tính các status khác trên dữ liệu trang hiện tại (chỉ có 10-20 orders)
       // Để chính xác, cần một API BE riêng chỉ trả về COUNT theo từng Status.
@@ -939,30 +951,27 @@ export default function ManageOrder() {
     fetchStats(); // load lại 4 cục
   };
 
-  // const handleSelectAll = () => {
-  //   const newSelectAll = !selectAll;
-  //   setSelectAll(newSelectAll);
-  //   if (newSelectAll) {
-  //     setSelectedOrders(paginatedOrders.map((order) => order.id));
-  //   } else {
-  //     setSelectedOrders([]);
-  //   }
-  // };
+  const handleSelectAll = () => {
+    const newSelectAll = !selectAll;
+    setSelectAll(newSelectAll);
+    if (newSelectAll) {
+      setSelectedOrders(paginatedOrders.map((order) => order.id));
+    } else {
+      setSelectedOrders([]);
+    }
+  };
 
-  // const handleOrderSelect = (orderId) => {
-  //   if (selectedOrders.includes(orderId)) {
-  //     setSelectedOrders(selectedOrders.filter((id) => id !== orderId));
-  //   } else {
-  //     setSelectedOrders([...selectedOrders, orderId]);
-  //   }
-  // };
+  const handleOrderSelect = (orderId) => {
+    if (selectedOrders.includes(orderId)) {
+      setSelectedOrders(selectedOrders.filter((id) => id !== orderId));
+    } else {
+      setSelectedOrders([...selectedOrders, orderId]);
+    }
+  };
 
-  // const handleFileImport = (event) => {
-  //   const file = event.target.files[0];
-  //   if (file) {
-  //     console.log("File selected:", file.name);
-  //   }
-  // };
+  const handleFileImport = () => {
+    setShowImportModal(true);
+  };
 
   const handleAssignClick = () => {
     const selectedOrdersData = orders.filter((order) =>
@@ -1428,29 +1437,17 @@ export default function ManageOrder() {
     }
   };
 
-  const handleSelectAll = () => {
-    const newSelectAll = !selectAll;
-    setSelectAll(newSelectAll);
-    if (newSelectAll) {
-      setSelectedOrders(paginatedOrders.map((order) => order.id));
-    } else {
-      setSelectedOrders([]);
-    }
-  };
+  const [showImportModal, setShowImportModal] = useState(false);
 
-  const handleOrderSelect = (orderId) => {
-    if (selectedOrders.includes(orderId)) {
-      setSelectedOrders(selectedOrders.filter((id) => id !== orderId));
-    } else {
-      setSelectedOrders([...selectedOrders, orderId]);
-    }
-  };
-
-  const handleFileImport = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      console.log("File selected:", file.name);
-    }
+  const handleImportSuccess = (importedData) => {
+    console.log("Imported data:", importedData);
+    // Here you can add API call to save the imported data
+    Swal.fire({
+      icon: "success",
+      title: "Import Successful",
+      text: `Successfully imported ${importedData.length} orders!`,
+    });
+    setShowImportModal(false);
   };
 
   return (
@@ -1630,7 +1627,7 @@ export default function ManageOrder() {
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className="w-full justify-start text-left font-normal 
+                          className="w-full justify-start text-left font-normal
                             bg-white border-blue-100 hover:border-blue-300 hover:bg-blue-50"
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
@@ -1687,7 +1684,7 @@ export default function ManageOrder() {
                     <span className="hidden sm:inline">Export file</span>
                     <span className="sm:hidden">Export</span>
                   </Button>
-                  <Button
+                  {/* <Button
                     variant="outline"
                     onClick={() =>
                       document.getElementById("file-input").click()
@@ -1697,15 +1694,23 @@ export default function ManageOrder() {
                     <Upload className="h-4 w-4 mr-2" />
                     <span className="hidden sm:inline">Import file</span>
                     <span className="sm:hidden">Import</span>
-                  </Button>
-
-                  <input
+                  </Button> */}
+                  {/* <input
                     id="file-input"
                     type="file"
                     className="hidden"
                     onChange={handleFileImport}
                     accept=".csv,.xlsx,.xls"
-                  />
+                  /> */}
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowImportModal(true)}
+                    className="border-blue-100 hover:bg-blue-50"
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    <span className="hidden sm:inline">Import file</span>
+                    <span className="sm:hidden">Import</span>
+                  </Button>
                   <Button
                     variant="outline"
                     onClick={() => setShowMakeManualModal(true)}
@@ -1858,7 +1863,7 @@ export default function ManageOrder() {
                             Amount {renderSortIcon("totalAmount")}
                           </TableHead>
                           <TableHead
-                            className="font-medium text-slate-700 uppercase text-xs tracking-wide 
+                            className="font-medium text-slate-700 uppercase text-xs tracking-wide
 whitespace-nowrap"
                           >
                             Actions
@@ -2513,8 +2518,8 @@ whitespace-nowrap"
                                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                           {/* Design File */}
                                                           <div
-                                                            className="border border-blue-100 
-rounded-lg p-3 hover:shadow-md transition-shadow bg-blue-50"
+                                                            className="border border-blue-100
+                                                            rounded-lg p-3 hover:shadow-md transition-shadow bg-blue-50"
                                                           >
                                                             <Label className="text-xs text-slate-500 font-medium">
                                                               Design File
@@ -2528,6 +2533,8 @@ rounded-lg p-3 hover:shadow-md transition-shadow bg-blue-50"
                                                                   <img
                                                                     src={
                                                                       product.linkFileDesign ||
+                                                                      "/placeholder.svg" ||
+                                                                      "/placeholder.svg" ||
                                                                       "/placeholder.svg" ||
                                                                       "/placeholder.svg"
                                                                     }
@@ -2627,6 +2634,8 @@ rounded-lg p-3 hover:shadow-md transition-shadow bg-blue-50"
                                                                     src={
                                                                       product.linkThanksCard ||
                                                                       "/placeholder.svg" ||
+                                                                      "/placeholder.svg" ||
+                                                                      "/placeholder.svg" ||
                                                                       "/placeholder.svg"
                                                                     }
                                                                     alt="Thanks Card"
@@ -2723,6 +2732,8 @@ rounded-lg p-3 hover:shadow-md transition-shadow bg-blue-50"
                                                                   <img
                                                                     src={
                                                                       product.linkImg ||
+                                                                      "/placeholder.svg" ||
+                                                                      "/placeholder.svg" ||
                                                                       "/placeholder.svg" ||
                                                                       "/placeholder.svg"
                                                                     }
@@ -2905,8 +2916,8 @@ rounded-lg p-3 hover:shadow-md transition-shadow bg-blue-50"
                                                 </div>
                                                 <div>
                                                   <Label
-                                                    className="text-sm 
-text-slate-500 font-medium"
+                                                    className="text-sm
+                                                    text-slate-500 font-medium"
                                                   >
                                                     Order Date
                                                   </Label>
@@ -2945,8 +2956,8 @@ text-slate-500 font-medium"
 
                                             {/* QR Code Section */}
                                             {/* <div
-                                              className="bg-blue-50 p-4 rounded-lg border 
-border-blue-100"
+                                              className="bg-blue-50 p-4 rounded-lg border
+                                              border-blue-100"
                                             >
                                               <h4 className="font-medium mb-2 text-slate-900">
                                                 QR Code for Order{" "}
@@ -3178,6 +3189,7 @@ border-blue-100"
                                                   <img
                                                     src={
                                                       item.linkImg ||
+                                                      "/placeholder.svg" ||
                                                       "/placeholder.svg"
                                                     }
                                                     alt={
@@ -3434,58 +3446,16 @@ border-blue-100"
           </AlertDialog>
         </main>
       </div>
+      <ImportOrdersModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImportSuccess={handleImportSuccess}
+      />
       <MakeManualModal
         isOpen={showMakeManualModal}
         onClose={() => setShowMakeManualModal(false)}
       />
-      <Dialog open={isAssignPopupOpen} onOpenChange={setIsAssignPopupOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Assign Designer</DialogTitle>
-            <DialogDescription>
-              Choose a designer to assign to {selectedOrders.length} selected
-              order(s).
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="mt-4 space-y-4">
-            <Label htmlFor="designer">Select Designer</Label>
-            <Select
-              value={selectedDesignerId}
-              onValueChange={(value) => setSelectedDesignerId(value)}
-            >
-              <SelectTrigger className="border-blue-100 focus:border-blue-300">
-                <SelectValue placeholder="Choose designer" />
-              </SelectTrigger>
-              <SelectContent>
-                {designers.map((d) => (
-                  <SelectItem key={d.designerUserId} value={d.designerUserId}>
-                    {d.designerName || "Unnamed Designer"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <div className="flex justify-end gap-2 mt-4">
-              <Button
-                variant="outline"
-                onClick={() => setIsAssignPopupOpen(false)}
-                className="border-blue-100 hover:bg-blue-50"
-              >
-                Cancel
-              </Button>
-
-              <Button
-                onClick={handleConfirmAssignDesigner}
-                className="bg-indigo-600 hover:bg-indigo-700"
-              >
-                OK
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-      {/* ✅ Success Dialog */}
+      {/* Success Dialog */}
       <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
         <DialogContent>
           <DialogHeader>
@@ -3503,7 +3473,7 @@ border-blue-100"
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {/* ❌ Error Dialog */}
+      {/* Error Dialog */}
       <Dialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
         <DialogContent>
           <DialogHeader>

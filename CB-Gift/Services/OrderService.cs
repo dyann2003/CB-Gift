@@ -30,6 +30,8 @@ namespace CB_Gift.Services
             _hubContext = hubContext;
         }
 
+
+
         // ----------------------------------------------------------------------
         // ✅ TRIỂN KHAI PHƯƠNG THỨC HỖ TRỢ PHÂN TRANG (ĐÃ SỬA LỖI biên dịch)
         // ----------------------------------------------------------------------
@@ -193,7 +195,7 @@ namespace CB_Gift.Services
                 Email = request.Email,
                 Address = request.Address,
                 Address1 = request.Address1,
-                Zipcode = request.ZipCode,
+                Zipcode = "",
                 ShipState = request.ShipState,
                 ShipCity = request.ShipCity,
                 ShipCountry = request.ShipCountry
@@ -950,7 +952,7 @@ namespace CB_Gift.Services
             };
         }
 
-        public async Task<(IEnumerable<OrderDto> Orders, int Total)> GetFilteredAndPagedOrdersAsync(
+        public async Task<(IEnumerable<OrderWithDetailsDto> Orders, int Total)> GetFilteredAndPagedOrdersAsync(
     string? status,
     string? searchTerm,
     string? sortColumn,
@@ -960,122 +962,36 @@ namespace CB_Gift.Services
     int page,
     int pageSize)
         {
+            // ví dụ code
             var query = _context.Orders
                 .Include(o => o.EndCustomer)
                 .Include(o => o.StatusOrderNavigation)
+                .Include(o => o.OrderDetails)
+                    .ThenInclude(od => od.ProductVariant)
                 .AsQueryable();
 
-            // Lọc trạng thái
             if (!string.IsNullOrEmpty(status))
                 query = query.Where(o => o.StatusOrderNavigation.Code == status);
 
-            // Lọc tìm kiếm
             if (!string.IsNullOrEmpty(searchTerm))
                 query = query.Where(o =>
                     o.OrderCode.Contains(searchTerm) ||
                     o.EndCustomer.Name.Contains(searchTerm));
 
-            // Lọc thời gian
             if (fromDate.HasValue && toDate.HasValue)
                 query = query.Where(o => o.OrderDate >= fromDate && o.OrderDate <= toDate);
 
-            // Sắp xếp
-            query = sortColumn?.ToLower() switch
-            {
-                "ordercode" => sortDirection == "asc" ? query.OrderBy(o => o.OrderCode)
-                                                      : query.OrderByDescending(o => o.OrderCode),
-                "orderdate" => sortDirection == "asc" ? query.OrderBy(o => o.OrderDate)
-                                                      : query.OrderByDescending(o => o.OrderDate),
-                "totalcost" => sortDirection == "asc" ? query.OrderBy(o => o.TotalCost)
-                                                      : query.OrderByDescending(o => o.TotalCost),
-                "status" => sortDirection == "asc" ? query.OrderBy(o => o.StatusOrderNavigation.Code)
-                                                      : query.OrderByDescending(o => o.StatusOrderNavigation.Code),
-                _ => query.OrderByDescending(o => o.CreationDate)
-            };
-
             int total = await query.CountAsync();
 
-            // Lấy danh sách Order
             var orders = await query
+                .OrderByDescending(o => o.CreationDate)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .Select(o => new OrderDto
-                {
-                    OrderId = o.OrderId,
-                    OrderCode = o.OrderCode,
-                    OrderDate = o.OrderDate,
-                    CustomerId = o.EndCustomerId,
-                    CustomerName = o.EndCustomer.Name,
-                    Phone = o.EndCustomer.Phone,
-                    Email = o.EndCustomer.Email,
-                    Address = o.EndCustomer.Address,
-                    SellerId = o.SellerUserId,
-                    CreationDate = o.CreationDate ?? o.OrderDate,
-                    TotalCost = o.TotalCost,
-                    PaymentStatus = o.PaymentStatus,
-                    ProductionStatus = o.ProductionStatus,
-                    ActiveTTS = o.ActiveTts,
-                    Tracking = o.Tracking,
-                    StatusOrder = o.StatusOrder,
-                    StatusOderName = o.StatusOrderNavigation.Code,
-
-                    // ✅ Lấy lý do từ request mới nhất (Cancel hoặc Refund)
-                    Reason = (
-                        from cr in _context.CancellationRequests
-                        where cr.OrderId == o.OrderId
-                        orderby cr.CreatedAt descending
-                        select cr.RequestReason
-                    ).FirstOrDefault()
-                    ??
-                    (
-                        from rf in _context.Refunds
-                        where rf.OrderId == o.OrderId
-                        orderby rf.CreatedAt descending
-                        select rf.Reason
-                    ).FirstOrDefault(),
-
-                    // ✅ Lấy lý do từ chối nếu request mới nhất bị Reject
-                    RejectionReason = (
-                        from cr in _context.CancellationRequests
-                        where cr.OrderId == o.OrderId
-                        orderby cr.CreatedAt descending
-                        select (cr.Status == "Rejected" ? cr.RejectionReason : null)
-                    ).FirstOrDefault()
-                    ??
-                    (
-                        from rf in _context.Refunds
-                        where rf.OrderId == o.OrderId
-                        orderby rf.CreatedAt descending
-                        select (rf.Status == "Rejected" ? rf.StaffRejectionReason : null)
-                    ).FirstOrDefault(),
-
-                    // ✅ Refund mới nhất (để Staff có thể thao tác Approve/Reject)
-                    LatestRefundId = (
-                        from rf in _context.Refunds
-                        where rf.OrderId == o.OrderId
-                        orderby rf.CreatedAt descending
-                        select (int?)rf.RefundId
-                    ).FirstOrDefault(),
-
-                    // ✅ Kiểm tra đang có yêu cầu Refund Pending hay không
-                    IsRefundPending = _context.Refunds.Any(rf =>
-                        rf.OrderId == o.OrderId && rf.Status == "Pending"),
-
-                    // ✅ Số tiền yêu cầu Refund gần nhất
-                    RefundAmount = (
-                        from rf in _context.Refunds
-                        where rf.OrderId == o.OrderId
-                        orderby rf.CreatedAt descending
-                        select (decimal?)rf.Amount
-                    ).FirstOrDefault(),
-                })
+                .ProjectTo<OrderWithDetailsDto>(_mapper.ConfigurationProvider)
                 .ToListAsync();
 
             return (orders, total);
         }
-
-
-
 
 
 

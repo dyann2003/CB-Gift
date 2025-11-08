@@ -24,14 +24,14 @@ namespace CB_Gift.Controllers
 
         [HttpGet("GetAllOrders")]
         public async Task<IActionResult> GetAllOrders(
-            [FromQuery] string? status = null,
-            [FromQuery] string? searchTerm = null,
-            [FromQuery] string? sortColumn = null,
-            [FromQuery] string? sortDirection = "desc",
-            [FromQuery] DateTime? fromDate = null,
-            [FromQuery] DateTime? toDate = null,
-            [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 10)
+     [FromQuery] string? status = null,
+     [FromQuery] string? searchTerm = null,
+     [FromQuery] string? sortColumn = null,
+     [FromQuery] string? sortDirection = "desc",
+     [FromQuery] DateTime? fromDate = null,
+     [FromQuery] DateTime? toDate = null,
+     [FromQuery] int page = 1,
+     [FromQuery] int pageSize = 10)
         {
             try
             {
@@ -50,6 +50,16 @@ namespace CB_Gift.Controllers
             }
         }
 
+
+
+
+
+        //[HttpGet("GetAllOrders")]
+        //public async Task<IActionResult> GetAllOrders()
+        //{
+        //    var orders = await _orderService.GetAllOrders();
+        //    return Ok(orders);
+        //}
 
 
         [HttpGet("{orderId}")]
