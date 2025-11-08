@@ -280,15 +280,34 @@ public class ManagementAccountService : IManagementAccountService
 
     public async Task<ServiceResult<bool>> DeleteAsync(string userId)
     {
-        var u = await _userManager.FindByIdAsync(userId);
-        if (u == null) return ServiceResult<bool>.Fail("User not found.");
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null)
+            return new ServiceResult<bool> { Success = false, Message = "User not found." };
 
-        // Hard delete (AppUser hiện không có IsDeleted)
-        var res = await _userManager.DeleteAsync(u);
-        return res.Succeeded
-            ? ServiceResult<bool>.Ok(true, "User deleted.")
-            : ServiceResult<bool>.Fail(string.Join("; ", res.Errors.Select(e => e.Description)));
+
+        if (!user.IsActive)
+            return new ServiceResult<bool> { Success = true, Message = "User already inactive.", Data = true };
+
+        user.IsActive = false;
+
+        var result = await _userManager.UpdateAsync(user);
+        if (!result.Succeeded)
+        {
+            return new ServiceResult<bool>
+            {
+                Success = false,
+                Message = string.Join("; ", result.Errors.Select(e => e.Description))
+            };
+        }
+
+        return new ServiceResult<bool>
+        {
+            Success = true,
+            Message = "User has been deactivated (IsActive = false).",
+            Data = true
+        };
     }
+
 
     private static string GenerateRandomPassword(int length)
     {
