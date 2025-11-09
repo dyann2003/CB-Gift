@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import RoleSidebar from "@/components/layout/shared/role-sidebar";
+import { useState, useEffect } from "react";
 import ManagerSidebar from "@/components/layout/manager/sidebar";
 import ManagerHeader from "@/components/layout/manager/header";
 import AccountDetailsModal from "@/components/modals/account-details-modal";
@@ -9,6 +8,7 @@ import AssignAccountModal from "@/components/modals/assign-account-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -24,71 +24,109 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Eye, UserPlus, Search, Filter, Ban, CheckCircle } from "lucide-react";
+import {
+  Eye,
+  UserPlus,
+  Search,
+  Filter,
+  Ban,
+  CheckCircle,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 
 export default function ManageAccount() {
   const [currentPage, setCurrentPage] = useState("manage-account");
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [selectedAccounts, setSelectedAccounts] = useState([]);
+  const [selectAll, setSelectAll] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [accounts, setAccounts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [totalAccountsCount, setTotalAccountsCount] = useState(0);
 
-  // Mock data for accounts
-  const [accounts, setAccounts] = useState([
-    {
-      id: "ACC-001",
-      username: "john.doe",
-      email: "john.doe@company.com",
-      fullName: "John Doe",
-      role: "designer",
-      status: "active",
-      createdDate: "2024-01-15",
-      lastLogin: "2024-01-20",
-    },
-    {
-      id: "ACC-002",
-      username: "jane.smith",
-      email: "jane.smith@company.com",
-      fullName: "Jane Smith",
-      role: "qc",
-      status: "active",
-      createdDate: "2024-01-16",
-      lastLogin: "2024-01-19",
-    },
-    {
-      id: "ACC-003",
-      username: "mike.johnson",
-      email: "mike.johnson@company.com",
-      fullName: "Mike Johnson",
-      role: "staff",
-      status: "banned",
-      createdDate: "2024-01-17",
-      lastLogin: "2024-01-18",
-    },
-    {
-      id: "ACC-004",
-      username: "sarah.wilson",
-      email: "sarah.wilson@company.com",
-      fullName: "Sarah Wilson",
-      role: "seller",
-      status: "active",
-      createdDate: "2024-01-18",
-      lastLogin: "2024-01-20",
-    },
-  ]);
+  // Popups
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState(null); // lưu tài khoản đang ban/unban
+  const [successMessage, setSuccessMessage] = useState("");
 
-  const filteredAccounts = accounts.filter((account) => {
-    const matchesSearch =
-      account.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      account.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      account.username.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = roleFilter === "all" || account.role === roleFilter;
-    const matchesStatus =
-      statusFilter === "all" || account.status === statusFilter;
-    return matchesSearch && matchesRole && matchesStatus;
-  });
+  const fetchAccounts = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Build query parameters
+      const params = new URLSearchParams({
+        page: page.toString(),
+        pageSize: itemsPerPage.toString(),
+      });
+
+      if (searchTerm) params.append("search", searchTerm);
+
+      if (roleFilter !== "all") params.append("role", roleFilter);
+      if (statusFilter !== "all")
+        params.append("isActive", statusFilter === "active" ? "true" : "false");
+
+      const url = `https://localhost:7015/api/management/accounts?${params.toString()}`;
+      console.log("[v0] Fetching accounts from:", url);
+
+      const response = await fetch(url, {
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("[v0] Accounts fetched:", data);
+
+      // Map API response to component state
+      const mappedAccounts = data.items.map((account) => ({
+        id: account.id,
+        email: account.email,
+        fullName: account.fullName || "N/A",
+        username: account.email.split("@")[0], // Extract username from email
+        role:
+          account.roles && account.roles.length > 0
+            ? account.roles[0].toLowerCase()
+            : "user",
+        status: account.isActive ? "active" : "banned",
+        createdDate: new Date(
+          account.emailConfirmed
+            ? account.createdDate || new Date()
+            : new Date()
+        )
+          .toISOString()
+          .split("T")[0],
+        lastLogin: new Date().toISOString().split("T")[0], // API doesn't provide lastLogin, using current date
+      }));
+
+      setAccounts(mappedAccounts);
+      setTotalAccountsCount(data.totalItems);
+      setSelectedAccounts([]);
+      setSelectAll(false);
+    } catch (err) {
+      console.error("[v0] Error fetching accounts:", err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAccounts();
+  }, [page, itemsPerPage, searchTerm, roleFilter, statusFilter]);
+
+  const totalPages = Math.ceil(totalAccountsCount / itemsPerPage);
 
   const getRoleBadge = (role) => {
     const roleColors = {
@@ -97,6 +135,7 @@ export default function ManageAccount() {
       qc: "bg-green-500",
       seller: "bg-orange-500",
       staff: "bg-gray-500",
+      user: "bg-gray-400",
     };
     return (
       <Badge className={roleColors[role] || "bg-gray-500"}>
@@ -113,39 +152,181 @@ export default function ManageAccount() {
     );
   };
 
-  const handleViewDetails = (account) => {
-    setSelectedAccount(account);
-    setShowDetailsModal(true);
-  };
-
-  const handleUpdateRole = (accountId, newRole) => {
-    setAccounts(
-      accounts.map((account) =>
-        account.id === accountId ? { ...account, role: newRole } : account
-      )
-    );
-    // Update selected account if it's the one being modified
-    if (selectedAccount && selectedAccount.id === accountId) {
-      setSelectedAccount({ ...selectedAccount, role: newRole });
+  const handleSelectAll = () => {
+    const newSelectAll = !selectAll;
+    setSelectAll(newSelectAll);
+    if (newSelectAll) {
+      setSelectedAccounts(accounts.map((account) => account.id));
+    } else {
+      setSelectedAccounts([]);
     }
   };
 
-  const handleToggleBan = (accountId) => {
-    setAccounts(
-      accounts.map((account) =>
-        account.id === accountId
-          ? {
-              ...account,
-              status: account.status === "active" ? "banned" : "active",
-            }
-          : account
-      )
-    );
-    // Update selected account if it's the one being modified
-    if (selectedAccount && selectedAccount.id === accountId) {
-      const newStatus =
-        selectedAccount.status === "active" ? "banned" : "active";
-      setSelectedAccount({ ...selectedAccount, status: newStatus });
+  const handleAccountSelect = (accountId) => {
+    if (selectedAccounts.includes(accountId)) {
+      setSelectedAccounts(selectedAccounts.filter((id) => id !== accountId));
+      setSelectAll(false);
+    } else {
+      setSelectedAccounts([...selectedAccounts, accountId]);
+    }
+  };
+
+  const handleSearchChange = (value) => {
+    setSearchTerm(value);
+    setPage(1);
+  };
+
+  const handleRoleFilterChange = (value) => {
+    setRoleFilter(value);
+    setPage(1);
+  };
+
+  const handleStatusFilterChange = (value) => {
+    setStatusFilter(value);
+    setPage(1);
+  };
+
+  const handleItemsPerPageChange = (value) => {
+    setItemsPerPage(Number(value));
+    setPage(1);
+  };
+
+  const handleViewDetails = async (account) => {
+    try {
+      const response = await fetch(
+        `https://localhost:7015/api/management/accounts/${account.id}`,
+        {
+          credentials: "include",
+        }
+      );
+
+      if (response.ok) {
+        const detailedAccount = await response.json();
+        // Merge dữ liệu chi tiết từ API vào selectedAccount
+        setSelectedAccount({
+          ...account,
+          ...detailedAccount,
+          // đảm bảo roles luôn là mảng (API có thể trả null)
+          roles: detailedAccount.roles ?? account.roles ?? [],
+          // đảm bảo isActive có mặt
+          isActive:
+            detailedAccount.isActive ??
+            account.isActive ??
+            Boolean(account.status === "active"),
+          emailConfirmed:
+            detailedAccount.emailConfirmed ?? account.emailConfirmed,
+        });
+      } else {
+        // nếu lỗi khi lấy chi tiết thì fallback về account rút gọn
+        setSelectedAccount({
+          ...account,
+          roles: account.roles ?? (account.role ? [account.role] : []),
+          isActive: account.status === "active",
+        });
+      }
+    } catch (err) {
+      console.error("[v0] Error fetching account details:", err);
+      setSelectedAccount({
+        ...account,
+        roles: account.roles ?? (account.role ? [account.role] : []),
+        isActive: account.status === "active",
+      });
+    }
+    setShowDetailsModal(true);
+  };
+
+  const handleUpdateRole = async (accountId, newRole) => {
+    try {
+      // Cập nhật local list nhanh để UI phản hồi ngay
+      setAccounts((prev) =>
+        prev.map((a) =>
+          a.id === accountId
+            ? { ...a, role: newRole } // cập nhật hiển thị cột Role
+            : a
+        )
+      );
+
+      // Nếu modal đang mở cho user này thì cập nhật roles trong modal
+      if (selectedAccount && selectedAccount.id === accountId) {
+        setSelectedAccount((prev) => ({
+          ...prev,
+          roles: [newRole],
+        }));
+      }
+
+      // Tùy chọn: fetch lại server để đồng bộ (nếu muốn phản hồi server => uncomment)
+      // await fetchAccounts();
+    } catch (err) {
+      console.error("[v0] Error in handleUpdateRole:", err);
+    }
+  };
+
+  const confirmToggleBan = (account) => {
+    setConfirmTarget(account);
+    setShowConfirmDialog(true);
+  };
+
+  const handleToggleBan = async (accountId) => {
+    try {
+      // Tìm user trong list
+      const target = accounts.find((a) => a.id === accountId);
+      if (!target) return;
+
+      const newIsActive = target.status !== "active";
+
+      const payload = {
+        id: target.id,
+        fullName: target.fullName,
+        email: target.email,
+        isActive: newIsActive,
+      };
+
+      console.log(
+        "[v0] Toggling ban status with PUT to /api/management/accounts:",
+        payload
+      );
+
+      const response = await fetch(
+        "https://localhost:7015/api/management/accounts",
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const responseData = await response.json();
+      console.log("[v0] ToggleBan response:", responseData);
+
+      if (!response.ok) {
+        throw new Error(responseData.message || `HTTP ${response.status}`);
+      }
+
+      // Cập nhật trạng thái trong UI
+      setAccounts((prev) =>
+        prev.map((a) =>
+          a.id === accountId
+            ? { ...a, status: newIsActive ? "active" : "banned" }
+            : a
+        )
+      );
+
+      // Nếu modal đang mở cho user này -> cập nhật luôn
+      if (selectedAccount && selectedAccount.id === accountId) {
+        setSelectedAccount((prev) => ({
+          ...prev,
+          isActive: newIsActive,
+        }));
+      }
+
+      // Hiển thị log thành công
+      console.log("[v0] Ban/unban updated successfully.");
+    } catch (err) {
+      console.error("[v0] Error in handleToggleBan:", err);
+    } finally {
+      // Sau khi đổi xong, reload lại list từ server để đảm bảo sync DB
+      await fetchAccounts();
     }
   };
 
@@ -181,12 +362,15 @@ export default function ManageAccount() {
                     <Input
                       placeholder="Search by name, email, or username..."
                       value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
+                      onChange={(e) => handleSearchChange(e.target.value)}
                       className="pl-10"
                     />
                   </div>
 
-                  <Select value={roleFilter} onValueChange={setRoleFilter}>
+                  <Select
+                    value={roleFilter}
+                    onValueChange={handleRoleFilterChange}
+                  >
                     <SelectTrigger className="w-40">
                       <Filter className="h-4 w-4 mr-2" />
                       <SelectValue placeholder="Filter by role" />
@@ -201,7 +385,10 @@ export default function ManageAccount() {
                     </SelectContent>
                   </Select>
 
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <Select
+                    value={statusFilter}
+                    onValueChange={handleStatusFilterChange}
+                  >
                     <SelectTrigger className="w-40">
                       <SelectValue placeholder="Filter by status" />
                     </SelectTrigger>
@@ -227,77 +414,188 @@ export default function ManageAccount() {
             <div className="bg-white rounded-lg shadow">
               <div className="px-6 py-4 border-b border-gray-200">
                 <h2 className="text-lg font-semibold text-gray-900">
-                  User Accounts ({filteredAccounts.length})
+                  User Accounts ({totalAccountsCount})
                 </h2>
                 <p className="text-sm text-gray-600">
-                  Manage and monitor all user accounts
+                  {selectedAccounts.length > 0 && (
+                    <>Selected: {selectedAccounts.length} | </>
+                  )}
+                  {loading
+                    ? "Loading..."
+                    : "Manage and monitor all user accounts"}
                 </p>
               </div>
               <div className="overflow-x-auto">
+                {error && (
+                  <div className="p-4 bg-red-50 text-red-700 border-b border-red-200">
+                    Error loading accounts: {error}
+                  </div>
+                )}
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Account ID</TableHead>
+                    <TableRow className="bg-blue-100">
+                      <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap w-12">
+                        <Checkbox
+                          checked={selectAll}
+                          onCheckedChange={handleSelectAll}
+                          disabled={loading}
+                        />
+                      </TableHead>
+                      {/* <TableHead>Account ID</TableHead> */}
                       <TableHead>Full Name</TableHead>
                       <TableHead>Username</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Role</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Created Date</TableHead>
-                      <TableHead>Last Login</TableHead>
+                      {/* <TableHead>Created Date</TableHead> */}
+                      {/* <TableHead>Last Login</TableHead> */}
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredAccounts.map((account) => (
-                      <TableRow key={account.id}>
-                        <TableCell className="font-medium">
-                          {account.id}
-                        </TableCell>
-                        <TableCell>{account.fullName}</TableCell>
-                        <TableCell>{account.username}</TableCell>
-                        <TableCell>{account.email}</TableCell>
-                        <TableCell>{getRoleBadge(account.role)}</TableCell>
-                        <TableCell>{getStatusBadge(account.status)}</TableCell>
-                        <TableCell>{account.createdDate}</TableCell>
-                        <TableCell>{account.lastLogin}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleViewDetails(account)}
-                            >
-                              <Eye className="h-4 w-4 mr-1" />
-                              View
-                            </Button>
-                            <Button
-                              variant={
-                                account.status === "active"
-                                  ? "destructive"
-                                  : "default"
-                              }
-                              size="sm"
-                              onClick={() => handleToggleBan(account.id)}
-                            >
-                              {account.status === "active" ? (
-                                <>
-                                  <Ban className="h-4 w-4 mr-1" />
-                                  Ban
-                                </>
-                              ) : (
-                                <>
-                                  <CheckCircle className="h-4 w-4 mr-1" />
-                                  Unban
-                                </>
-                              )}
-                            </Button>
-                          </div>
+                    {loading ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan="10"
+                          className="text-center py-8 text-gray-500"
+                        >
+                          Loading accounts...
                         </TableCell>
                       </TableRow>
-                    ))}
+                    ) : accounts.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan="10"
+                          className="text-center py-8 text-gray-500"
+                        >
+                          No accounts found
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      accounts.map((account) => (
+                        <TableRow key={account.id} className="hover:bg-blue-50">
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedAccounts.includes(account.id)}
+                              onCheckedChange={() =>
+                                handleAccountSelect(account.id)
+                              }
+                            />
+                          </TableCell>
+                          {/* <TableCell className="font-medium text-sm">
+                            {account.id.substring(0, 8)}...
+                          </TableCell> */}
+                          <TableCell>{account.fullName}</TableCell>
+                          <TableCell>{account.username}</TableCell>
+                          <TableCell className="text-sm">
+                            {account.email}
+                          </TableCell>
+                          <TableCell>{getRoleBadge(account.role)}</TableCell>
+                          <TableCell>
+                            {getStatusBadge(account.status)}
+                          </TableCell>
+                          {/* <TableCell className="text-sm">
+                            {account.createdDate}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {account.lastLogin}
+                          </TableCell> */}
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleViewDetails(account)}
+                              >
+                                <Eye className="h-4 w-4 mr-1" />
+                                View
+                              </Button>
+                              <Button
+                                variant={
+                                  account.status === "active"
+                                    ? "destructive"
+                                    : "default"
+                                }
+                                size="sm"
+                                onClick={() => confirmToggleBan(account)}
+                              >
+                                {account.status === "active" ? (
+                                  <>
+                                    <Ban className="h-4 w-4 mr-1" />
+                                    Ban
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle className="h-4 w-4 mr-1" />
+                                    Unban
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
+              </div>
+
+              <div className="bg-blue-100 px-4 py-3 border-t border-blue-200 sm:px-6">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                  {/* Items Per Page Selector */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-600">
+                      Items per page:
+                    </span>
+                    <Select
+                      value={itemsPerPage.toString()}
+                      onValueChange={handleItemsPerPageChange}
+                      disabled={loading}
+                    >
+                      <SelectTrigger className="w-[70px] bg-white border-blue-200 hover:bg-blue-50">
+                        <SelectValue placeholder={itemsPerPage} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="5">5</SelectItem>
+                        <SelectItem value="10">10</SelectItem>
+                        <SelectItem value="15">15</SelectItem>
+                        <SelectItem value="20">20</SelectItem>
+                        <SelectItem value="50">50</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Page Info */}
+                  <div className="text-sm text-slate-600">
+                    Showing{" "}
+                    {accounts.length > 0 ? (page - 1) * itemsPerPage + 1 : 0} to{" "}
+                    {Math.min(page * itemsPerPage, totalAccountsCount)} of{" "}
+                    {totalAccountsCount}
+                  </div>
+
+                  {/* Pagination Controls */}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page === 1 || loading}
+                      onClick={() => setPage(page - 1)}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm text-slate-600 min-w-[60px] text-center">
+                      Page {page} of {totalPages || 1}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page === totalPages || loading}
+                      onClick={() => setPage(page + 1)}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -322,6 +620,71 @@ export default function ManageAccount() {
         onClose={() => setShowAssignModal(false)}
         onAssignAccount={handleAssignAccount}
       />
+      {/* Confirm Dialog */}
+      {showConfirmDialog && confirmTarget && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50">
+          <div className="bg-white p-6 rounded-xl shadow-lg w-[400px] text-center">
+            <h2 className="text-lg font-semibold mb-2">
+              {confirmTarget.status === "active"
+                ? "Confirm Ban Account"
+                : "Confirm Unban Account"}
+            </h2>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to{" "}
+              {confirmTarget.status === "active" ? "ban" : "unban"}{" "}
+              <span className="font-medium">{confirmTarget.email}</span>?
+            </p>
+            <div className="flex justify-center gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowConfirmDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant={
+                  confirmTarget.status === "active" ? "destructive" : "default"
+                }
+                onClick={async () => {
+                  setShowConfirmDialog(false);
+                  await handleToggleBan(confirmTarget.id);
+                  setSuccessMessage(
+                    confirmTarget.status === "active"
+                      ? "Account banned successfully"
+                      : "Account unbanned successfully"
+                  );
+                  setShowSuccessDialog(true);
+                }}
+              >
+                Confirm
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Dialog */}
+      {showSuccessDialog && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50">
+          <div className="bg-white p-6 rounded-xl shadow-lg w-[400px] text-center">
+            <h2 className="text-lg font-semibold text-green-600 mb-2">
+              Success
+            </h2>
+            <p className="text-gray-700 mb-6">{successMessage}</p>
+            <div className="flex justify-center">
+              <Button
+                onClick={() => {
+                  setShowSuccessDialog(false);
+                  setConfirmTarget(null);
+                }}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                OK
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

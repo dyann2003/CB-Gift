@@ -1,108 +1,176 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Card, CardContent } from "@/components/ui/card"
-import { Search, Plus } from "lucide-react"
+import { useState, useEffect } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Card, CardContent } from "@/components/ui/card";
+import { Search, Plus, AlertCircle } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 
 export default function AddRelationshipModal({ isOpen, onClose, onAdd }) {
-  const [sellers, setSellers] = useState([])
-  const [designers, setDesigners] = useState([])
-  const [selectedSeller, setSelectedSeller] = useState("")
-  const [selectedDesigner, setSelectedDesigner] = useState("")
-  const [sellerSearch, setSellerSearch] = useState("")
-  const [designerSearch, setDesignerSearch] = useState("")
-  const [notes, setNotes] = useState("")
-  const [loading, setLoading] = useState(false)
+  const { toast } = useToast();
+  const [sellers, setSellers] = useState([]);
+  const [designers, setDesigners] = useState([]);
+  const [selectedSeller, setSelectedSeller] = useState("");
+  const [selectedDesigner, setSelectedDesigner] = useState("");
+  const [sellerSearch, setSellerSearch] = useState("");
+  const [designerSearch, setDesignerSearch] = useState("");
+  const [notes, setNotes] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [loadingData, setLoadingData] = useState(false);
+  const [error, setError] = useState("");
 
-  // Mock data - replace with actual API calls
+  // ✅ Fetch sellers & designers when modal opens
   useEffect(() => {
-    if (isOpen) {
-      const mockSellers = [
-        { id: 1, name: "John Seller", email: "john@seller.com" },
-        { id: 2, name: "Mike Seller", email: "mike@seller.com" },
-        { id: 3, name: "Sarah Seller", email: "sarah@seller.com" },
-        { id: 4, name: "Tom Seller", email: "tom@seller.com" },
-      ]
+    if (isOpen) fetchSellersAndDesigners();
+  }, [isOpen]);
 
-      const mockDesigners = [
-        { id: 1, name: "Alice Designer", email: "alice@designer.com" },
-        { id: 2, name: "Bob Designer", email: "bob@designer.com" },
-        { id: 3, name: "Carol Designer", email: "carol@designer.com" },
-        { id: 4, name: "David Designer", email: "david@designer.com" },
-      ]
+  const fetchSellersAndDesigners = async () => {
+    setLoadingData(true);
+    try {
+      const [sellerRes, designerRes] = await Promise.all([
+        fetch("https://localhost:7015/api/Auth/all-sellers", {
+          credentials: "include",
+        }),
+        fetch("https://localhost:7015/api/Auth/all-designers", {
+          credentials: "include",
+        }),
+      ]);
 
-      setSellers(mockSellers)
-      setDesigners(mockDesigners)
+      if (!sellerRes.ok || !designerRes.ok)
+        throw new Error("Failed to fetch sellers or designers.");
+
+      const sellersData = await sellerRes.json();
+      const designersData = await designerRes.json();
+      setSellers(sellersData);
+      setDesigners(designersData);
+    } catch (err) {
+      console.error("❌ Error fetching sellers/designers:", err);
+      setError("Unable to load sellers and designers. Please try again.");
+    } finally {
+      setLoadingData(false);
     }
-  }, [isOpen])
+  };
 
-  const filteredSellers = sellers.filter(
-    (seller) =>
-      seller.name.toLowerCase().includes(sellerSearch.toLowerCase()) ||
-      seller.email.toLowerCase().includes(sellerSearch.toLowerCase()),
-  )
+  const filteredSellers = sellers.filter((s) =>
+    (s.sellerName || "").toLowerCase().includes(sellerSearch.toLowerCase())
+  );
 
-  const filteredDesigners = designers.filter(
-    (designer) =>
-      designer.name.toLowerCase().includes(designerSearch.toLowerCase()) ||
-      designer.email.toLowerCase().includes(designerSearch.toLowerCase()),
-  )
+  const filteredDesigners = designers.filter((d) =>
+    (d.designerName || "").toLowerCase().includes(designerSearch.toLowerCase())
+  );
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
+    e.preventDefault();
 
     if (!selectedSeller || !selectedDesigner) {
-      alert("Please select both seller and designer")
-      return
+      toast({
+        title: "⚠ Missing Info",
+        description: "Please select both seller and designer.",
+        variant: "destructive",
+      });
+      return;
     }
 
-    if (selectedSeller === selectedDesigner) {
-      alert("Seller and designer cannot be the same person")
-      return
-    }
+    setLoading(true);
 
-    setLoading(true)
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      console.log("🟡 Submitting relationship:", {
+        sellerUserId: selectedSeller,
+        designerUserId: selectedDesigner,
+      });
 
-      const seller = sellers.find((s) => s.id.toString() === selectedSeller)
-      const designer = designers.find((d) => d.id.toString() === selectedDesigner)
+      const res = await fetch(
+        "https://localhost:7015/api/manager/assignments",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            sellerUserId: selectedSeller,
+            designerUserId: selectedDesigner,
+          }),
+        }
+      );
 
-      const newRelationship = {
-        id: Date.now(),
-        seller,
-        designer,
-        status: "active",
-        createdAt: new Date().toISOString().split("T")[0],
-        projectsCount: 0,
-        notes,
+      const text = await res.text();
+      console.log("🔵 Response text:", text);
+
+      if (!res.ok) {
+        let message = "Failed to create relationship.";
+        try {
+          const json = JSON.parse(text);
+          message = json.message || json.error || message;
+        } catch {
+          message = text || message;
+        }
+
+        // ✅ Nếu backend báo đã tồn tại
+        if (
+          message.toLowerCase().includes("exist") ||
+          message.toLowerCase().includes("tồn tại")
+        ) {
+          toast({
+            title: "Duplicate Relationship",
+            description: "This seller–designer relationship already exists.",
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
+
+        throw new Error(message);
       }
 
-      onAdd(newRelationship)
-      handleClose()
+      // ✅ Success
+      toast({
+        title: "✅ Success",
+        description: "Relationship created successfully!",
+        className: "bg-green-50 text-green-700 border border-green-200",
+      });
 
-      alert("Relationship created successfully!")
+      // Gọi cập nhật danh sách
+      onAdd?.();
+
+      // Reset modal sau một chút để toast vẫn hiển thị
+      setTimeout(() => {
+        handleClose();
+      }, 500);
     } catch (error) {
-      alert("Failed to create relationship. Please try again.")
+      console.error("❌ Create relationship error:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create relationship.",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleClose = () => {
-    setSelectedSeller("")
-    setSelectedDesigner("")
-    setSellerSearch("")
-    setDesignerSearch("")
-    setNotes("")
-    onClose()
-  }
+    setSelectedSeller("");
+    setSelectedDesigner("");
+    setSellerSearch("");
+    setDesignerSearch("");
+    setNotes("");
+    setError("");
+    onClose();
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -111,102 +179,134 @@ export default function AddRelationshipModal({ isOpen, onClose, onAdd }) {
           <DialogTitle>Add New Relationship</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Seller Selection */}
-            <Card>
-              <CardContent className="p-4">
-                <Label className="text-sm font-medium text-gray-700 mb-2 block">Select Seller</Label>
-                <div className="space-y-3">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                    <Input
-                      placeholder="Search sellers..."
-                      value={sellerSearch}
-                      onChange={(e) => setSellerSearch(e.target.value)}
-                      className="pl-10"
-                    />
+        {loadingData ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <p className="ml-3 text-gray-600">
+              Loading sellers and designers...
+            </p>
+          </div>
+        ) : error ? (
+          <div className="bg-red-50 border border-red-200 rounded-md p-3 text-red-700 text-sm flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Seller Selection */}
+              <Card>
+                <CardContent className="p-4">
+                  <Label className="text-sm font-medium text-gray-700 mb-2 block">
+                    Select Seller
+                  </Label>
+                  <div className="space-y-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <Input
+                        placeholder="Search sellers..."
+                        value={sellerSearch}
+                        onChange={(e) => setSellerSearch(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                    <Select
+                      value={selectedSeller}
+                      onValueChange={setSelectedSeller}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose a seller" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {filteredSellers.map((seller) => (
+                          <SelectItem
+                            key={seller.sellerId}
+                            value={seller.sellerId}
+                          >
+                            {seller.sellerName || "Unnamed Seller"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <Select value={selectedSeller} onValueChange={setSelectedSeller}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose a seller" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {filteredSellers.map((seller) => (
-                        <SelectItem key={seller.id} value={seller.id.toString()}>
-                          <div>
-                            <p className="font-medium">{seller.name}</p>
-                            <p className="text-xs text-gray-500">{seller.email}</p>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
 
-            {/* Designer Selection */}
-            <Card>
-              <CardContent className="p-4">
-                <Label className="text-sm font-medium text-gray-700 mb-2 block">Select Designer</Label>
-                <div className="space-y-3">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                    <Input
-                      placeholder="Search designers..."
-                      value={designerSearch}
-                      onChange={(e) => setDesignerSearch(e.target.value)}
-                      className="pl-10"
-                    />
+              {/* Designer Selection */}
+              <Card>
+                <CardContent className="p-4">
+                  <Label className="text-sm font-medium text-gray-700 mb-2 block">
+                    Select Designer
+                  </Label>
+                  <div className="space-y-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <Input
+                        placeholder="Search designers..."
+                        value={designerSearch}
+                        onChange={(e) => setDesignerSearch(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                    <Select
+                      value={selectedDesigner}
+                      onValueChange={setSelectedDesigner}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose a designer" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {filteredDesigners.map((designer) => (
+                          <SelectItem
+                            key={designer.designerId}
+                            value={designer.designerId}
+                          >
+                            {designer.designerName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <Select value={selectedDesigner} onValueChange={setSelectedDesigner}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose a designer" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {filteredDesigners.map((designer) => (
-                        <SelectItem key={designer.id} value={designer.id.toString()}>
-                          <div>
-                            <p className="font-medium">{designer.name}</p>
-                            <p className="text-xs text-gray-500">{designer.email}</p>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                </CardContent>
+              </Card>
+            </div>
 
-          {/* Notes */}
-          <div>
-            <Label htmlFor="notes" className="text-sm font-medium text-gray-700">
-              Notes (Optional)
-            </Label>
-            <textarea
-              id="notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="w-full mt-1 p-2 border border-gray-300 rounded-md resize-none"
-              rows={3}
-              placeholder="Add any notes about this relationship..."
-            />
-          </div>
+            {/* Notes */}
+            <div>
+              <Label
+                htmlFor="notes"
+                className="text-sm font-medium text-gray-700"
+              >
+                Notes (Optional)
+              </Label>
+              <textarea
+                id="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="w-full mt-1 p-2 border border-gray-300 rounded-md resize-none"
+                rows={3}
+                placeholder="Add any notes about this relationship..."
+              />
+            </div>
 
-          {/* Actions */}
-          <div className="flex justify-end gap-3">
-            <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={loading}>
-              <Plus className="h-4 w-4 mr-1" />
-              {loading ? "Creating..." : "Create Relationship"}
-            </Button>
-          </div>
-        </form>
+            {/* Actions */}
+            <div className="flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleClose}
+                disabled={loading}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={loading}>
+                <Plus className="h-4 w-4 mr-1" />
+                {loading ? "Creating..." : "Create Relationship"}
+              </Button>
+            </div>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
-  )
+  );
 }

@@ -76,5 +76,74 @@ namespace CB_Gift.Services
                .ToListAsync();
             return _mapper.Map<IEnumerable<DesignerSellerDto>>(assignments);
         }
+
+        public async Task<IEnumerable<SellerDesignerPairDto>> GetAllAssignmentsAsync()
+        {
+            var pairs = await _context.DesignerSellers
+                .Join(_context.Users, ds => ds.SellerUserId, s => s.Id, (ds, s) => new { ds, s })
+                .Join(_context.Users, combined => combined.ds.DesignerUserId, d => d.Id, (combined, d) => new SellerDesignerPairDto
+                {
+                    SellerId = combined.s.Id,
+                    SellerName = combined.s.FullName,
+                    DesignerId = d.Id,
+                    DesignerName = d.FullName
+                })
+                .ToListAsync();
+
+            return pairs;
+        }
+
+        public async Task<(IEnumerable<SellerDesignerPairDto> Data, int Total)> GetAllAssignmentsPagedAsync(
+    string? search, string? sellerName, int page, int pageSize)
+        {
+            var query = _context.DesignerSellers
+                .Include(x => x.SellerUser)
+                .Include(x => x.DesignerUser)
+                .AsNoTracking()
+                .AsQueryable();
+
+            // ✅ Lọc theo seller name
+            if (!string.IsNullOrWhiteSpace(sellerName))
+            {
+                var keyword = sellerName.Trim().ToLower();
+                query = query.Where(x => x.SellerUser.FullName.ToLower().Contains(keyword));
+            }
+
+            // ✅ Lọc hoặc tìm kiếm chung (có thể tìm theo designer hoặc seller name)
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var keyword = search.Trim().ToLower();
+                query = query.Where(x =>
+                    x.SellerUser.FullName.ToLower().Contains(keyword) ||
+                    x.DesignerUser.FullName.ToLower().Contains(keyword));
+            }
+
+            // ✅ Tổng số bản ghi
+            var total = await query.CountAsync();
+
+            // ✅ Phân trang
+            var skip = (page - 1) * pageSize;
+
+            var result = await query
+                .OrderByDescending(x => x.CreatedAt)
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new SellerDesignerPairDto
+                {
+                    SellerId = x.SellerUserId,
+                    SellerName = x.SellerUser.FullName,
+                    DesignerId = x.DesignerUserId,
+                    DesignerName = x.DesignerUser.FullName
+                })
+                .ToListAsync();
+
+            return (result, total);
+        }
+
+ 
+
+
+
+
     }
 }

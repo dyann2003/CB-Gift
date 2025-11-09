@@ -1,286 +1,322 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { Separator } from "@/components/ui/separator"
-import { UserPlus, Mail, Save, X, AlertCircle, CheckCircle } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useState, useEffect } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Card, CardContent } from "@/components/ui/card";
+import { Search, Plus, XCircle } from "lucide-react";
 
-export default function AssignAccountModal({ isOpen, onClose, onAssignAccount }) {
-  const [formData, setFormData] = useState({
-    fullName: "",
-    email: "",
-    username: "",
-    role: "",
-    department: "",
-    notes: "",
-  })
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [showSuccess, setShowSuccess] = useState(false)
-  const [errors, setErrors] = useState({})
+export default function AddRelationshipModal({ isOpen, onClose, onAdd }) {
+  const [sellers, setSellers] = useState([]);
+  const [designers, setDesigners] = useState([]);
+  const [selectedSeller, setSelectedSeller] = useState("");
+  const [selectedDesigner, setSelectedDesigner] = useState("");
+  const [sellerSearch, setSellerSearch] = useState("");
+  const [designerSearch, setDesignerSearch] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const validateForm = () => {
-    const newErrors = {}
+  // Popup UI state
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [showError, setShowError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
-    if (!formData.fullName.trim()) {
-      newErrors.fullName = "Full name is required"
+  /* ------------------- SỬA 1: Reset khi modal mở ------------------- */
+  useEffect(() => {
+    if (isOpen) {
+      fetchSellers();
+      fetchDesigners();
+      setShowSuccess(false);
+      setShowError(false);
+      setErrorMessage("");
+      setSelectedSeller("");
+      setSelectedDesigner("");
+      setSellerSearch("");
+      setDesignerSearch("");
     }
+  }, [isOpen]);
 
-    if (!formData.email.trim()) {
-      newErrors.email = "Email is required"
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = "Please enter a valid email address"
+  const fetchSellers = async () => {
+    try {
+      const res = await fetch("https://localhost:7015/api/Auth/all-sellers", {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to load sellers");
+      const data = await res.json();
+      setSellers(data);
+    } catch (err) {
+      console.error("Error loading sellers:", err);
+      setShowError(true);
+      setErrorMessage("Unable to load sellers. Please try again later.");
     }
+  };
 
-    if (!formData.username.trim()) {
-      newErrors.username = "Username is required"
-    } else if (formData.username.length < 3) {
-      newErrors.username = "Username must be at least 3 characters"
+  const fetchDesigners = async () => {
+    try {
+      const res = await fetch("https://localhost:7015/api/Auth/all-designers", {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to load designers");
+      const data = await res.json();
+      setDesigners(data);
+    } catch (err) {
+      console.error("Error loading designers:", err);
+      setShowError(true);
+      setErrorMessage("Unable to load designers. Please try again later.");
     }
+  };
 
-    if (!formData.role) {
-      newErrors.role = "Role is required"
-    }
+  const filteredSellers = sellers.filter((s) =>
+    (s.sellerName || "").toLowerCase().includes(sellerSearch.toLowerCase())
+  );
 
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
-
-  const handleInputChange = (field, value) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: "" }))
-    }
-  }
+  const filteredDesigners = designers.filter((d) =>
+    (d.designerName || "").toLowerCase().includes(designerSearch.toLowerCase())
+  );
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
+    e.preventDefault();
 
-    if (!validateForm()) {
-      return
+    if (!selectedSeller || !selectedDesigner) {
+      setErrorMessage("Please select both a seller and a designer.");
+      setShowError(true);
+      return;
     }
 
-    setIsSubmitting(true)
+    setLoading(true);
+    setShowError(false);
 
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      const body = {
+        sellerUserId: selectedSeller,
+        designerUserId: selectedDesigner,
+      };
 
-      // Generate account ID
-      const accountId = `ACC-${String(Math.floor(Math.random() * 1000)).padStart(3, "0")}`
+      const res = await fetch(
+        "https://localhost:7015/api/manager/assignments",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(body),
+        }
+      );
 
-      // Create new account object
-      const newAccount = {
-        id: accountId,
-        ...formData,
-        status: "active",
-        createdDate: new Date().toISOString().split("T")[0],
-        lastLogin: "Never",
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Failed to create relationship.");
       }
 
-      // Call parent function to add account
-      onAssignAccount(newAccount)
+      /* ------------------- HIỂN THỊ SUCCESS ------------------- */
+      setShowSuccess(true);
+      onAdd(); // refresh danh sách
 
-      setShowSuccess(true)
-
-      // Reset form after success
+      /* ------------------- SỬA 2: Tự đóng sau 2s (không gọi handleClose ngay) ------------------- */
       setTimeout(() => {
-        setFormData({
-          fullName: "",
-          email: "",
-          username: "",
-          role: "",
-          department: "",
-          notes: "",
-        })
-        setShowSuccess(false)
-        onClose()
-      }, 2000)
+        // Đóng modal và reset success
+        setShowSuccess(false);
+        onClose();
+      }, 2000);
     } catch (error) {
-      console.error("Error assigning account:", error)
+      console.error("Create relationship error:", error);
+      setErrorMessage(error.message || "Failed to create relationship.");
+      setShowError(true);
     } finally {
-      setIsSubmitting(false)
+      setLoading(false);
     }
-  }
+  };
 
+  /* ------------------- SỬA 3: handleClose chỉ reset khi không ở success ------------------- */
   const handleClose = () => {
-    if (!isSubmitting) {
-      setFormData({
-        fullName: "",
-        email: "",
-        username: "",
-        role: "",
-        department: "",
-        notes: "",
-      })
-      setErrors({})
-      setShowSuccess(false)
-      onClose()
-    }
-  }
+    if (loading) return;
+
+    // Nếu đang hiện success → để setTimeout đóng, không làm gì ở đây
+    if (showSuccess) return;
+
+    // Reset form khi đóng bình thường
+    setSelectedSeller("");
+    setSelectedDesigner("");
+    setSellerSearch("");
+    setDesignerSearch("");
+    setShowError(false);
+    setShowSuccess(false);
+    onClose();
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <UserPlus className="h-5 w-5" />
-            Assign New Account
-          </DialogTitle>
-        </DialogHeader>
-
-        {showSuccess ? (
-          <div className="py-8 text-center">
-            <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-green-700 mb-2">Account Created Successfully!</h3>
-            <p className="text-gray-600 mb-4">
-              Account credentials have been sent to <strong>{formData.email}</strong>
-            </p>
-            <Alert className="border-green-200 bg-green-50">
-              <Mail className="h-4 w-4" />
-              <AlertDescription className="text-green-700">
-                The user will receive their login credentials via email and can start using the system immediately.
-              </AlertDescription>
-            </Alert>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Personal Information */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Personal Information</h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="fullName">
-                    Full Name <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="fullName"
-                    placeholder="Enter full name"
-                    value={formData.fullName}
-                    onChange={(e) => handleInputChange("fullName", e.target.value)}
-                    className={errors.fullName ? "border-red-500" : ""}
-                  />
-                  {errors.fullName && <p className="text-sm text-red-500">{errors.fullName}</p>}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="email">
-                    Email Address <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="Enter email address"
-                    value={formData.email}
-                    onChange={(e) => handleInputChange("email", e.target.value)}
-                    className={errors.email ? "border-red-500" : ""}
-                  />
-                  {errors.email && <p className="text-sm text-red-500">{errors.email}</p>}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="username">
-                  Username <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="username"
-                  placeholder="Enter username (min 3 characters)"
-                  value={formData.username}
-                  onChange={(e) => handleInputChange("username", e.target.value)}
-                  className={errors.username ? "border-red-500" : ""}
+      <DialogContent className="max-w-2xl p-6">
+        {/* ------------------- SUCCESS POPUP ------------------- */}
+        {showSuccess && (
+          <div className="p-6 text-center bg-green-50 border border-green-200 rounded-lg animate-fadeIn">
+            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <svg
+                className="w-6 h-6 text-green-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
                 />
-                {errors.username && <p className="text-sm text-red-500">{errors.username}</p>}
-              </div>
+              </svg>
             </div>
+            <h3 className="text-lg font-semibold text-green-800 mb-2">
+              Relationship Created
+            </h3>
+            <p className="text-green-700 mb-4">
+              The seller-designer relationship has been successfully created.
+            </p>
+            {/* Người dùng có thể bấm OK để đóng ngay, hoặc đợi 2s */}
+            <Button
+              onClick={() => {
+                setShowSuccess(false);
+                onClose();
+              }}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              OK
+            </Button>
+          </div>
+        )}
 
-            <Separator />
+        {/* ------------------- ERROR POPUP ------------------- */}
+        {showError && !showSuccess && (
+          <div className="p-6 text-center bg-red-50 border border-red-200 rounded-lg animate-fadeIn">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <XCircle className="w-6 h-6 text-red-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-red-800 mb-2">Error</h3>
+            <p className="text-red-700 mb-4">{errorMessage}</p>
+            <Button
+              onClick={() => setShowError(false)}
+              variant="outline"
+              className="border-red-300 text-red-600 hover:bg-red-50"
+            >
+              Try Again
+            </Button>
+          </div>
+        )}
 
-            {/* Role and Department */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Role Assignment</h3>
+        {/* ------------------- FORM ------------------- */}
+        {!showSuccess && !showError && (
+          <form onSubmit={handleSubmit} className="space-y-6 animate-fadeIn">
+            <DialogHeader>
+              <DialogTitle className="text-xl flex items-center gap-2">
+                <Plus className="h-5 w-5" />
+                Create Relationship
+              </DialogTitle>
+            </DialogHeader>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="role">
-                    Role <span className="text-red-500">*</span>
-                  </Label>
-                  <Select value={formData.role} onValueChange={(value) => handleInputChange("role", value)}>
-                    <SelectTrigger className={errors.role ? "border-red-500" : ""}>
-                      <SelectValue placeholder="Select role" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Seller */}
+              <Card>
+                <CardContent className="p-4 space-y-3">
+                  <Label className="text-sm font-medium">Select Seller</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+                    <Input
+                      placeholder="Search sellers..."
+                      value={sellerSearch}
+                      onChange={(e) => setSellerSearch(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <Select
+                    value={selectedSeller}
+                    onValueChange={setSelectedSeller}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a seller" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="manager">Manager</SelectItem>
-                      <SelectItem value="designer">Designer</SelectItem>
-                      <SelectItem value="qc">QC</SelectItem>
-                      <SelectItem value="seller">Seller</SelectItem>
-                      <SelectItem value="staff">Staff</SelectItem>
+                      {filteredSellers.map((seller) => (
+                        <SelectItem
+                          key={seller.sellerId}
+                          value={seller.sellerId}
+                        >
+                          {seller.sellerName}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
-                  {errors.role && <p className="text-sm text-red-500">{errors.role}</p>}
-                </div>
+                </CardContent>
+              </Card>
 
-                <div className="space-y-2">
-                  <Label htmlFor="department">Department (Optional)</Label>
-                  <Input
-                    id="department"
-                    placeholder="Enter department"
-                    value={formData.department}
-                    onChange={(e) => handleInputChange("department", e.target.value)}
-                  />
-                </div>
-              </div>
+              {/* Designer */}
+              <Card>
+                <CardContent className="p-4 space-y-3">
+                  <Label className="text-sm font-medium">Select Designer</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+                    <Input
+                      placeholder="Search designers..."
+                      value={designerSearch}
+                      onChange={(e) => setDesignerSearch(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <Select
+                    value={selectedDesigner}
+                    onValueChange={setSelectedDesigner}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a designer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {filteredDesigners.map((designer) => (
+                        <SelectItem
+                          key={designer.designerId}
+                          value={designer.designerId}
+                        >
+                          {designer.designerName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </CardContent>
+              </Card>
             </div>
 
-            <Separator />
-
-            {/* Additional Notes */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Additional Information</h3>
-
-              <div className="space-y-2">
-                <Label htmlFor="notes">Notes (Optional)</Label>
-                <Textarea
-                  id="notes"
-                  placeholder="Add any additional notes about this account..."
-                  value={formData.notes}
-                  onChange={(e) => handleInputChange("notes", e.target.value)}
-                  rows={3}
-                />
-              </div>
-            </div>
-
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                After creating the account, login credentials will be automatically generated and sent to the provided
-                email address. The user will be able to log in immediately.
-              </AlertDescription>
-            </Alert>
-
-            {/* Form Actions */}
             <div className="flex justify-end gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={handleClose} disabled={isSubmitting}>
-                <X className="h-4 w-4 mr-2" />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleClose}
+                disabled={loading}
+              >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting} className="bg-blue-600 hover:bg-blue-700">
-                {isSubmitting ? (
+              <Button
+                type="submit"
+                disabled={loading}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {loading ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Creating Account...
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                    Creating...
                   </>
                 ) : (
                   <>
-                    <Save className="h-4 w-4 mr-2" />
-                    Create & Send Credentials
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Relationship
                   </>
                 )}
               </Button>
@@ -289,5 +325,5 @@ export default function AssignAccountModal({ isOpen, onClose, onAssignAccount })
         )}
       </DialogContent>
     </Dialog>
-  )
+  );
 }

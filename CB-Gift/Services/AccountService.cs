@@ -69,17 +69,31 @@ namespace CB_Gift.Services
             };
         }
 
-        private string GenerateRandomPassword(int length)
+        private string GenerateRandomPassword(int length = 8)
         {
-            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+            const string upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            const string lower = "abcdefghijklmnopqrstuvwxyz";
+            const string digits = "0123456789";
+            const string special = "!@#$%^&*";
+            var allChars = upper + lower + digits + special;
+
             var random = new Random();
-            var password = new char[length];
-            for (int i = 0; i < length; i++)
-            {
-                password[i] = chars[random.Next(chars.Length)];
-            }
-            return new string(password);
+            var passwordChars = new char[length];
+
+            // Bắt buộc có ít nhất 1 ký tự mỗi loại
+            passwordChars[0] = upper[random.Next(upper.Length)];
+            passwordChars[1] = lower[random.Next(lower.Length)];
+            passwordChars[2] = digits[random.Next(digits.Length)];
+            passwordChars[3] = special[random.Next(special.Length)];
+
+            // Các ký tự còn lại ngẫu nhiên
+            for (int i = 4; i < length; i++)
+                passwordChars[i] = allChars[random.Next(allChars.Length)];
+
+            // Trộn để không cố định vị trí
+            return new string(passwordChars.OrderBy(_ => random.Next()).ToArray());
         }
+
 
         private async Task SendWelcomeEmailAsync(string email, string password)
         {
@@ -159,45 +173,70 @@ namespace CB_Gift.Services
             await _emailSender.SendAsync(email, subject, body);
         }
 
-        // Reset mật khẩu bằng OTP
+        // 1️⃣ Xác thực OTP
+        public async Task<ServiceResult<bool>> VerifyOtpAsync(string email, string otp)
+        {
+            var user = await _userManager.FindByEmailAsync(email);
+            if (user == null)
+                return new ServiceResult<bool> { Success = false, Message = "User not found." };
+
+            // Kiểm tra OTP
+            if (user.PasswordResetOtp != otp)
+                return new ServiceResult<bool> { Success = false, Message = "Invalid OTP." };
+
+            // Kiểm tra hạn OTP
+            if (user.PasswordResetOtpExpiry == null || DateTime.UtcNow > user.PasswordResetOtpExpiry)
+                return new ServiceResult<bool> { Success = false, Message = "OTP has expired." };
+
+            // ✅ OTP hợp lệ, không reset password ở đây
+            return new ServiceResult<bool> { Success = true, Message = "OTP verified successfully.", Data = true };
+        }
+
+
+        // 2️⃣ Đặt lại mật khẩu sau khi OTP đã xác thực
         public async Task<ServiceResult<ResetPasswordWithOtpDto>> ResetPasswordWithOtpAsync(ResetPasswordWithOtpDto dto)
         {
             var user = await _userManager.FindByEmailAsync(dto.Email);
             if (user == null)
-            {
                 return new ServiceResult<ResetPasswordWithOtpDto> { Success = false, Message = "User not found." };
-            }
 
-            // Xác thực OTP
+            // Kiểm tra lại một lần nữa cho an toàn
             if (user.PasswordResetOtp != dto.Otp)
-            {
                 return new ServiceResult<ResetPasswordWithOtpDto> { Success = false, Message = "Invalid OTP." };
-            }
 
-            // Xác thực thời gian hết hạn
             if (user.PasswordResetOtpExpiry == null || DateTime.UtcNow > user.PasswordResetOtpExpiry)
-            {
                 return new ServiceResult<ResetPasswordWithOtpDto> { Success = false, Message = "OTP has expired." };
-            }
 
-            // Nếu OTP đúng và còn hạn, ta vẫn cần tạo 'token' của Identity
-            // để có thể gọi hàm ResetPasswordAsync
+            // Tạo token của Identity
             var token = await _userManager.GeneratePasswordResetTokenAsync(user);
             var result = await _userManager.ResetPasswordAsync(user, token, dto.NewPassword);
-
             if (!result.Succeeded)
             {
+                foreach (var error in result.Errors)
+                {
+                    Console.WriteLine($"❌ Password reset error: {error.Code} - {error.Description}");
+                }
+
                 var errorString = string.Join("; ", result.Errors.Select(e => e.Description));
-                return new ServiceResult<ResetPasswordWithOtpDto> { Success = false, Message = $"Reset password failed: {errorString}" };
+                return new ServiceResult<ResetPasswordWithOtpDto>
+                {
+                    Success = false,
+                    Message = $"Reset password failed: {errorString}"
+                };
             }
 
-            // Xóa OTP sau khi đã sử dụng
+            // Xóa OTP sau khi reset thành công
             user.PasswordResetOtp = null;
             user.PasswordResetOtpExpiry = null;
             await _userManager.UpdateAsync(user);
 
-            return new ServiceResult<ResetPasswordWithOtpDto> { Success = true, Message = "Password has been reset successfully." };
+            return new ServiceResult<ResetPasswordWithOtpDto>
+            {
+                Success = true,
+                Message = "Password has been reset successfully."
+            };
         }
+
 
         /// Lấy danh sách tất cả người dùng có vai trò là "Seller".
         public async Task<IEnumerable<SellerDto>> GetAllSellersAsync()
@@ -212,6 +251,24 @@ namespace CB_Gift.Services
                 SellerName = user.FullName
             }).ToList();
         }
+
+        /// <summary>
+        /// Lấy danh sách tất cả người dùng có vai trò là "Designer".
+        /// </summary>
+        public async Task<IEnumerable<DesignerDto>> GetAllDesignersAsync()
+        {
+            // Lấy danh sách tất cả người dùng thuộc vai trò "Designer"
+            var designers = await _userManager.GetUsersInRoleAsync("Designer");
+
+            // Biến đổi danh sách AppUser sang danh sách DesignerDto
+            return designers.Select(user => new DesignerDto
+            {
+                DesignerId = user.Id,
+                DesignerName = user.FullName
+            }).ToList();
+        }
+
+
 
 
     }

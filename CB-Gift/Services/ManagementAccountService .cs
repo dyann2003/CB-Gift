@@ -138,6 +138,53 @@ public class ManagementAccountService : IManagementAccountService
             ? GenerateRandomPassword(10)
             : dto.Password!;
 
+        // ⚙️ Kiểm tra nếu user đã tồn tại → update lại thông tin + roles
+        var existingUser = await _userManager.FindByEmailAsync(dto.Email);
+        if (existingUser != null)
+        {
+            // ✅ Cập nhật các trường thông tin
+            existingUser.FullName = dto.FullName ?? existingUser.FullName;
+            existingUser.IsActive = dto.IsActive;
+
+            await _userManager.UpdateAsync(existingUser);
+
+            // ✅ Cập nhật lại roles (xóa role cũ → thêm role mới)
+            if (dto.Roles != null && dto.Roles.Any())
+            {
+                var currentRoles = await _userManager.GetRolesAsync(existingUser);
+                if (currentRoles.Any())
+                    await _userManager.RemoveFromRolesAsync(existingUser, currentRoles);
+
+                foreach (var role in dto.Roles.Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    if (!await _roleManager.RoleExistsAsync(role))
+                        await _roleManager.CreateAsync(new IdentityRole(role));
+                }
+
+                await _userManager.AddToRolesAsync(existingUser, dto.Roles);
+            }
+
+            var updatedRoles = await _userManager.GetRolesAsync(existingUser);
+
+            return new ServiceResult<UserDetailDto>
+            {
+                Success = true,
+                Message = "Existing user updated successfully.",
+                Data = new UserDetailDto
+                {
+                    Id = existingUser.Id,
+                    Email = existingUser.Email,
+                    FullName = existingUser.FullName,
+                    EmailConfirmed = existingUser.EmailConfirmed,
+                    IsActive = existingUser.IsActive,
+                    LockoutEnd = existingUser.LockoutEnd,
+                    CreatedAt = default, // nếu chưa có trường này thì để nguyên
+                    Roles = updatedRoles
+                }
+            };
+        }
+
+        // ⚙️ Nếu chưa tồn tại → tạo mới user
         var user = new AppUser
         {
             Email = dto.Email,
@@ -157,11 +204,14 @@ public class ManagementAccountService : IManagementAccountService
             };
         }
 
+        // ✅ Tạo role nếu chưa có
         foreach (var role in dto.Roles.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             if (!await _roleManager.RoleExistsAsync(role))
                 await _roleManager.CreateAsync(new IdentityRole(role));
         }
+
+        // ✅ Gán role cho user
         if (dto.Roles.Any())
             await _userManager.AddToRolesAsync(user, dto.Roles);
 
@@ -179,11 +229,12 @@ public class ManagementAccountService : IManagementAccountService
                 EmailConfirmed = user.EmailConfirmed,
                 IsActive = user.IsActive,
                 LockoutEnd = user.LockoutEnd,
-                CreatedAt = default, // chưa có trường này
+                CreatedAt = default, // nếu DB có CreatedAt thì bạn set ở đây
                 Roles = roles
             }
         };
     }
+
 
     public async Task<ServiceResult<bool>> UpdateAsync(UpdateUserDto dto)
     {

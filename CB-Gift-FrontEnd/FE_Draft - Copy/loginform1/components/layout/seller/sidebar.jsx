@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
-export default function SellerSidebar({ currentPage, setCurrentPage }) {
+export default function SellerSidebar({ currentPage }) {
   const router = useRouter();
 
   const menuItems = [
@@ -14,11 +14,15 @@ export default function SellerSidebar({ currentPage, setCurrentPage }) {
       label: "Order Overview",
       path: "/seller/order-overview",
     },
+    {
+      id: "manage-invoice",
+      label: "Manage Invoice",
+      path: "/seller/manage-invoice",
+    },
     { id: "receive-bill", label: "Receive Bill", path: "/seller/receive-bill" },
   ];
 
   const handleNavigation = (item) => {
-    setCurrentPage(item.id);
     router.push(item.path);
   };
 

@@ -99,20 +99,21 @@ public class AuthController : ControllerBase
 
         return Ok(new { message = "Password changed." });
     }
-    
+
     // POST: /api/Auth/register
-    //[Authorize(Roles = "Manager")]
+    [Authorize(Roles = "Manager")]
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequestDto request)
     {
-
         var result = await _accountService.RegisterAsync(request);
+
         if (!result.Success)
         {
-            return BadRequest(result.Message);
+            // Trả về JSON, không phải plain text
+            return BadRequest(new { message = result.Message });
         }
 
-        return Ok(result.Data);
+        return Ok(new { data = result.Data });
     }
 
     // POST: /api/auth/forgot-password
@@ -134,26 +135,60 @@ public class AuthController : ControllerBase
     }
 
     // POST: /api/auth/reset-password
-    [HttpPost("reset-password")]
-    [AllowAnonymous]
-    // Sử dụng DTO mới
-    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordWithOtpDto dto)
-    {
-        if (!ModelState.IsValid) return BadRequest(ModelState);
+    //[HttpPost("reset-password")]
+    //[AllowAnonymous]
+    //// Sử dụng DTO mới
+    //public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordWithOtpDto dto)
+    //{
+    //    if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        // Tất cả logic đã được chuyển vào service
-        var result = await _accountService.ResetPasswordWithOtpAsync(dto);
+    //    // Tất cả logic đã được chuyển vào service
+    //    var result = await _accountService.ResetPasswordWithOtpAsync(dto);
+
+    //    if (!result.Success)
+    //    {
+    //        return BadRequest(new
+    //        {
+    //            message = result.Message,
+    //        });
+    //    }
+
+    //    return Ok(new { message = result.Message });
+    //}
+
+    // ✅ Bước 1: Verify OTP
+    [HttpPost("verify-otp")]
+    [AllowAnonymous]
+    public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var result = await _accountService.VerifyOtpAsync(dto.Email, dto.Otp);
 
         if (!result.Success)
-        {
-            return BadRequest(new
-            {
-                message = result.Message,
-            });
-        }
+            return BadRequest(new { message = result.Message });
 
         return Ok(new { message = result.Message });
     }
+
+
+    // ✅ Bước 2: Reset password sau khi verify thành công
+    [HttpPost("reset-password-with-otp")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ResetPasswordWithOtp([FromBody] ResetPasswordWithOtpDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var result = await _accountService.ResetPasswordWithOtpAsync(dto);
+
+        if (!result.Success)
+            return BadRequest(new { message = result.Message });
+
+        return Ok(new { message = result.Message });
+    }
+
 
     // GET: /api/auth/profile
     [Authorize]
@@ -190,6 +225,34 @@ public class AuthController : ControllerBase
             return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn khi lấy danh sách seller.", error = ex.Message });
         }
     }
+
+    /// <summary>
+    /// Lấy danh sách tất cả các Designer trong hệ thống.
+    /// </summary>
+    /// <returns>Danh sách designer gồm Id và FullName</returns>
+    [Authorize(Roles = "Staff,Manager")]
+    [HttpGet("all-designers")]
+    public async Task<IActionResult> GetAllDesigners()
+    {
+        try
+        {
+            var designers = await _accountService.GetAllDesignersAsync();
+
+            if (designers == null || !designers.Any())
+                return NotFound(new { message = "Không tìm thấy designer nào." });
+
+            return Ok(designers);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new
+            {
+                message = "Đã xảy ra lỗi không mong muốn khi lấy danh sách designer.",
+                error = ex.Message
+            });
+        }
+    }
+
 
 
 }

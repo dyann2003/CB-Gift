@@ -17,6 +17,36 @@ public class DesignerSellerController : ControllerBase
         _service = service;
     }
 
+    [HttpGet("all")]
+    public async Task<IActionResult> GetAllAssignments(
+       [FromQuery] string? search = null,
+       [FromQuery] string? sellerName = null,
+       [FromQuery] int page = 1,
+       [FromQuery] int pageSize = 10)
+    {
+        try
+        {
+            var (data, total) = await _service.GetAllAssignmentsPagedAsync(search, sellerName, page, pageSize);
+
+            if (!data.Any())
+                return NotFound(new { message = "Không có mối quan hệ nào giữa Seller và Designer." });
+
+            return Ok(new
+            {
+                total,
+                page,
+                pageSize,
+                items = data
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Đã xảy ra lỗi khi lấy danh sách Seller–Designer.", error = ex.Message });
+        }
+    }
+
+
+
     [HttpPost]
     public async Task<IActionResult> AssignDesigner([FromBody] AssignDesignerDto dto)
     {
@@ -40,4 +70,7 @@ public class DesignerSellerController : ControllerBase
         var result = await _service.GetDesignersForSellerAsync(sellerId);
         return Ok(result);
     }
+
+  
+
 }

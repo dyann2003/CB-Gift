@@ -1452,7 +1452,6 @@ export default function ManageOrder() {
 
   return (
     <div className="flex h-screen bg-blue-50">
-      {" "}
       {/* changed from bg-slate-50 to bg-blue-50 */}
       <SellerSidebar
         currentPage={currentPage}
@@ -1464,7 +1463,6 @@ export default function ManageOrder() {
           <div className="space-y-6">
             {/* Welcome Header */}
             <div className="bg-blue-50 p-4 sm:p-6 rounded-lg border-2 border-blue-200 shadow-sm">
-              {" "}
               {/* unified to blue-50 and blue-200 */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -1597,7 +1595,6 @@ export default function ManageOrder() {
             </div> */}
 
             <div className="bg-blue-50 p-4 sm:p-6 rounded-lg shadow-sm border border-blue-100">
-              {" "}
               {/* changed to bg-blue-50 */}
               <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-end justify-between">
                 <div className="flex flex-col sm:flex-row gap-4 flex-1 w-full">
@@ -1792,7 +1789,6 @@ export default function ManageOrder() {
             </AlertDialog>
 
             <div className="bg-blue-50 rounded-lg shadow-sm border border-blue-100">
-              {" "}
               {/* unified bg color */}
               {loading ? (
                 <div className="flex items-center justify-center p-12">
@@ -1824,7 +1820,6 @@ export default function ManageOrder() {
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-blue-100 hover:bg-blue-100">
-                          {" "}
                           {/* updated header bg */}
                           <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
                             <Checkbox
@@ -1887,7 +1882,6 @@ whitespace-nowrap"
                                 key={order.id}
                                 className="hover:bg-blue-50 transition-colors"
                               >
-                                {" "}
                                 {/* updated hover color */}
                                 <TableCell>
                                   <Checkbox

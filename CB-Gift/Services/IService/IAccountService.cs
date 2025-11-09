@@ -9,6 +9,10 @@ namespace CB_Gift.Services.Email
         Task<ServiceResult<ForgotPasswordDto>> SendPasswordResetOtpAsync(ForgotPasswordDto dto);
         Task<ServiceResult<ResetPasswordWithOtpDto>> ResetPasswordWithOtpAsync(ResetPasswordWithOtpDto dto);
         Task<IEnumerable<SellerDto>> GetAllSellersAsync();
+        Task<ServiceResult<bool>> VerifyOtpAsync(string email, string otp);
+
+        Task<IEnumerable<DesignerDto>> GetAllDesignersAsync();
+
 
     }
 }
