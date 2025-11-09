@@ -31,6 +31,10 @@ namespace CB_Gift.Models
 
         public string? ProcessedByStaffId { get; set; }
 
+        // Bắt buộc cho logic Payment Intent
+        [Required]
+        [StringLength(30)]
+        public string Status { get; set; } // Ví dụ: "Pending", "Completed", "Failed"
         // --- Navigation Properties ---
         [ForeignKey("InvoiceId")]
         public virtual Invoice Invoice { get; set; }

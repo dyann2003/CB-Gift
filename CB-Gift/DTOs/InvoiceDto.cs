@@ -12,18 +12,23 @@ namespace CB_Gift.DTOs
         [Required]
         public string SellerId { get; set; }
 
-        // THÊM MỚI: Danh sách ID các đơn hàng cần tạo hóa đơn (tùy chọn)
+        //Danh sách ID các đơn hàng cần tạo hóa đơn (tùy chọn)
         public List<int>? OrderIds { get; set; }
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
 
         public string? Notes { get; set; }
+        public string? DiscountCode { get; set; }
     }
     // DTO để Seller yêu cầu tạo link thanh toán
     public class CreatePaymentLinkRequest
     {
         [Required]
         public int InvoiceId { get; set; }
+
+        // Nếu null: Thanh toán hết số nợ còn lại.
+        // Nếu có giá trị: Thanh toán đúng số tiền đó.
+        public decimal? Amount { get; set; }
         [Required]
         public string ReturnUrl { get; set; }
         [Required]
@@ -39,7 +44,7 @@ namespace CB_Gift.DTOs
         public string Desc { get; set; }
 
         [JsonProperty("data")]
-        public PayOSWebhookData Data { get; set; } // Quan trọng: Tên thuộc tính trong JSON là "data" (chữ thường)
+        public PayOSWebhookData Data { get; set; } 
 
         [JsonProperty("signature")]
         public string Signature { get; set; }
@@ -61,7 +66,6 @@ namespace CB_Gift.DTOs
         [JsonProperty("transactionDateTime")]
         public string TransactionDateTime { get; set; }
 
-        // Sửa lại: Trạng thái thành công nằm ở đây
         [JsonProperty("desc")]
         public string Desc { get; set; }
     }

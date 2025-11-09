@@ -694,99 +694,99 @@ public class AuthControllerTests
         accounts.Verify(a => a.SendPasswordResetOtpAsync(It.Is<ForgotPasswordDto>(d => d.Email == "not-an-email")), Times.Once);
     }
 
-    //// ===== Reset password
+    // ===== Reset password
 
-    //[Fact]
-    //public async Task ResetPassword_Returns_BadRequest_When_Model_Invalid()
-    //{
-    //    var http = new DefaultHttpContext();
-    //    var um = CreateUserManagerWithOptions();
-    //    var sm = CreateSignInManagerMock(um.Object, http);
-    //    var accounts = new Mock<IAccountService>();
+    /*[Fact]
+    public async Task ResetPassword_Returns_BadRequest_When_Model_Invalid()
+    {
+        var http = new DefaultHttpContext();
+        var um = CreateUserManagerWithOptions();
+        var sm = CreateSignInManagerMock(um.Object, http);
+        var accounts = new Mock<IAccountService>();
 
-    //    var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), accounts.Object)
-    //    { ControllerContext = new ControllerContext { HttpContext = http } };
+        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), accounts.Object)
+        { ControllerContext = new ControllerContext { HttpContext = http } };
 
-    //    ctl.ModelState.AddModelError("Email", "Required");
-    //    var r = await ctl.ResetPassword(new ResetPasswordWithOtpDto());
-    //    r.Should().BeOfType<BadRequestObjectResult>();
-    //}
+        ctl.ModelState.AddModelError("Email", "Required");
+        var r = await ctl.ResetPassword(new ResetPasswordWithOtpDto());
+        r.Should().BeOfType<BadRequestObjectResult>();
+    }
 
-    //[Fact]
-    //public async Task ResetPassword_Returns_BadRequest_When_Service_Fails()
-    //{
-    //    var http = new DefaultHttpContext();
-    //    var um = CreateUserManagerWithOptions();
-    //    var sm = CreateSignInManagerMock(um.Object, http);
-    //    var accounts = new Mock<IAccountService>();
+    [Fact]
+    public async Task ResetPassword_Returns_BadRequest_When_Service_Fails()
+    {
+        var http = new DefaultHttpContext();
+        var um = CreateUserManagerWithOptions();
+        var sm = CreateSignInManagerMock(um.Object, http);
+        var accounts = new Mock<IAccountService>();
 
-    //    accounts.Setup(a => a.ResetPasswordWithOtpAsync(It.IsAny<ResetPasswordWithOtpDto>()))
-    //        .ReturnsAsync(new ServiceResult<ResetPasswordWithOtpDto> { Success = false, Message = "Invalid OTP" });
+        accounts.Setup(a => a.ResetPasswordWithOtpAsync(It.IsAny<ResetPasswordWithOtpDto>()))
+            .ReturnsAsync(new ServiceResult<ResetPasswordWithOtpDto> { Success = false, Message = "Invalid OTP" });
 
-    //    var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), accounts.Object)
-    //    { ControllerContext = new ControllerContext { HttpContext = http } };
+        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), accounts.Object)
+        { ControllerContext = new ControllerContext { HttpContext = http } };
 
-    //    var r = await ctl.ResetPassword(new ResetPasswordWithOtpDto { Email = "user@gmail.com" });
-    //    r.Should().BeOfType<BadRequestObjectResult>();
-    //}
+        var r = await ctl.ResetPassword(new ResetPasswordWithOtpDto { Email = "user@gmail.com" });
+        r.Should().BeOfType<BadRequestObjectResult>();
+    }
 
-    //[Fact]
-    //public async Task ResetPassword_Returns_Ok_When_Service_Succeeds()
-    //{
-    //    var http = new DefaultHttpContext();
-    //    var um = CreateUserManagerWithOptions();
-    //    var sm = CreateSignInManagerMock(um.Object, http);
-    //    var accounts = new Mock<IAccountService>();
+    [Fact]
+    public async Task ResetPassword_Returns_Ok_When_Service_Succeeds()
+    {
+        var http = new DefaultHttpContext();
+        var um = CreateUserManagerWithOptions();
+        var sm = CreateSignInManagerMock(um.Object, http);
+        var accounts = new Mock<IAccountService>();
 
-    //    accounts.Setup(a => a.ResetPasswordWithOtpAsync(It.IsAny<ResetPasswordWithOtpDto>()))
-    //        .ReturnsAsync(new ServiceResult<ResetPasswordWithOtpDto> { Success = true, Message = "Password has been reset successfully." });
+        accounts.Setup(a => a.ResetPasswordWithOtpAsync(It.IsAny<ResetPasswordWithOtpDto>()))
+            .ReturnsAsync(new ServiceResult<ResetPasswordWithOtpDto> { Success = true, Message = "Password has been reset successfully." });
 
-    //    var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), accounts.Object)
-    //    { ControllerContext = new ControllerContext { HttpContext = http } };
+        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), accounts.Object)
+        { ControllerContext = new ControllerContext { HttpContext = http } };
 
-    //    var r = await ctl.ResetPassword(new ResetPasswordWithOtpDto { Email = "okuser@gmail.com" });
-    //    r.Should().BeOfType<OkObjectResult>();
-    //}
+        var r = await ctl.ResetPassword(new ResetPasswordWithOtpDto { Email = "okuser@gmail.com" });
+        r.Should().BeOfType<OkObjectResult>();
+    }
 
 
-    //[Fact]
-    //public async Task ResetPassword_Returns_BadRequest_When_Passwords_Do_Not_Match()
-    //{
-    //    var http = new DefaultHttpContext();
-    //    var um = CreateUserManagerWithOptions();
-    //    var sm = CreateSignInManagerMock(um.Object, http);
-    //    var accounts = new Mock<IAccountService>();
+    [Fact]
+    public async Task ResetPassword_Returns_BadRequest_When_Passwords_Do_Not_Match()
+    {
+        var http = new DefaultHttpContext();
+        var um = CreateUserManagerWithOptions();
+        var sm = CreateSignInManagerMock(um.Object, http);
+        var accounts = new Mock<IAccountService>();
 
-    //    var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), accounts.Object)
-    //    { ControllerContext = new ControllerContext { HttpContext = http } };
+        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), accounts.Object)
+        { ControllerContext = new ControllerContext { HttpContext = http } };
 
-    //    ctl.ModelState.AddModelError("ConfirmPassword", "Mật khẩu và mật khẩu xác nhận không khớp.");
-    //    var dto = new ResetPasswordWithOtpDto
-    //    {
-    //        Email = "user@gmail.com",
-    //        Otp = "123456",
-    //        NewPassword = "NewPass@1",
-    //        ConfirmPassword = "Different"
-    //    };
+        ctl.ModelState.AddModelError("ConfirmPassword", "Mật khẩu và mật khẩu xác nhận không khớp.");
+        var dto = new ResetPasswordWithOtpDto
+        {
+            Email = "user@gmail.com",
+            Otp = "123456",
+            NewPassword = "NewPass@1",
+            ConfirmPassword = "Different"
+        };
 
-    //    var r = await ctl.ResetPassword(dto);
-    //    r.Should().BeOfType<BadRequestObjectResult>();
-    //    accounts.Verify(a => a.ResetPasswordWithOtpAsync(It.IsAny<ResetPasswordWithOtpDto>()), Times.Never);
-    //}
-    //[Fact]
-    //public async Task ResetPassword_Returns_BadRequest_When_Required_Fields_Missing()
-    //{
-    //    var http = new DefaultHttpContext();
-    //    var um = CreateUserManagerWithOptions();
-    //    var sm = CreateSignInManagerMock(um.Object, http);
-    //    var accounts = new Mock<IAccountService>();
+        var r = await ctl.ResetPassword(dto);
+        r.Should().BeOfType<BadRequestObjectResult>();
+        accounts.Verify(a => a.ResetPasswordWithOtpAsync(It.IsAny<ResetPasswordWithOtpDto>()), Times.Never);
+    }
+    [Fact]
+    public async Task ResetPassword_Returns_BadRequest_When_Required_Fields_Missing()
+    {
+        var http = new DefaultHttpContext();
+        var um = CreateUserManagerWithOptions();
+        var sm = CreateSignInManagerMock(um.Object, http);
+        var accounts = new Mock<IAccountService>();
 
-    //    var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), accounts.Object)
-    //    { ControllerContext = new ControllerContext { HttpContext = http } };
+        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), accounts.Object)
+        { ControllerContext = new ControllerContext { HttpContext = http } };
 
-    //    ctl.ModelState.AddModelError("Otp", "Required");
-    //    var r = await ctl.ResetPassword(new ResetPasswordWithOtpDto { Email = "user@gmail.com" });
-    //    r.Should().BeOfType<BadRequestObjectResult>();
-    //}
+        ctl.ModelState.AddModelError("Otp", "Required");
+        var r = await ctl.ResetPassword(new ResetPasswordWithOtpDto { Email = "user@gmail.com" });
+        r.Should().BeOfType<BadRequestObjectResult>();
+    }*/
 
 }
