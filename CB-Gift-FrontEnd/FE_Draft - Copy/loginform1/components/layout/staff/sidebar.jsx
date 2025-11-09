@@ -16,6 +16,11 @@ export default function StaffSidebar() {
       path: "/staff/needs-production",
     },
     { id: "produced", label: "Produced", path: "/staff/produced" },
+    {
+      id: "manage-invoice",
+      label: "Manage Invoice",
+      path: "/staff/manage-invoice",
+    },
     { id: "printer-bill", label: "Printer Bill", path: "/staff/printer-bill" },
   ];
 
