@@ -59,7 +59,7 @@ public class InvoiceService : IInvoiceService
                 // Kiểm tra xem có đơn hàng nào không thuộc về Seller được chỉ định không
                 if (requestedOrders.Any(o => o.SellerUserId != request.SellerId))
                 {
-                    throw new InvalidOperationException("Lỗi: Một hoặc nhiều đơn hàng không thuộc về Seller đã chọn.");
+                    throw new InvalidOperationException("Một hoặc nhiều đơn hàng không thuộc về Seller đã chọn.");
                 }
                 // Kiểm tra xem có đơn hàng nào chưa được thanh toán không
                /* var unpaidOrders = requestedOrders.Where(o => o.PaymentStatus != "Paid").ToList();
@@ -100,13 +100,49 @@ public class InvoiceService : IInvoiceService
                 throw new ArgumentException("Phải cung cấp danh sách Order ID hoặc khoảng thời gian (StartDate và EndDate).");
             }
 
-            // --- PHẦN LOGIC CHUNG (TỪ ĐÂY TRỞ XUỐNG KHÔNG THAY ĐỔI) ---
+            // --- PHẦN LOGIC CHUNG 
 
             if (!uninvoicedOrders.Any())
                 throw new InvalidOperationException("Không có đơn hàng mới hợp lệ để tạo hóa đơn.");
 
             var subtotal = uninvoicedOrders.Sum(o => o.TotalCost ?? 0);
+            decimal discountAmount = 0;
+            int? appliedDiscountId = null;
+            if (!string.IsNullOrEmpty(request.DiscountCode))
+            {
+                // Tìm mã chiết khấu trong DB
+                var discount = await _context.Discounts
+                    .FirstOrDefaultAsync(d => d.Code.ToUpper() == request.DiscountCode.ToUpper() &&
+                                            d.IsActive &&
+                                            d.StartDate <= DateTime.UtcNow &&
+                                            (d.EndDate == null || d.EndDate >= DateTime.UtcNow));
 
+                if (discount == null)
+                {
+                    throw new InvalidOperationException("Mã chiết khấu không hợp lệ hoặc đã hết hạn.");
+                }
+
+                if (subtotal < discount.MinApplicableAmount)
+                {
+                    throw new InvalidOperationException($"Tổng tiền chưa đạt mức tối thiểu {discount.MinApplicableAmount:C0} để áp dụng mã này.");
+                }
+
+                // Tính toán số tiền chiết khấu
+                if (discount.DiscountType == "Percentage")
+                {
+                    discountAmount = subtotal * (discount.Value / 100);
+                }
+                else if (discount.DiscountType == "FixedAmount")
+                {
+                    discountAmount = discount.Value;
+                }
+
+                appliedDiscountId = discount.DiscountId;
+            }
+
+            // 4. [CẬP NHẬT CÔNG THỨC] - Tính TotalAmount (Tổng cộng)
+            var totalAmount = subtotal - discountAmount;
+            if (totalAmount < 0) totalAmount = 0;
             var newInvoice = new Invoice
             {
                 InvoiceNumber = $"INV-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString().Substring(0, 4).ToUpper()}",
@@ -117,7 +153,10 @@ public class InvoiceService : IInvoiceService
                 InvoicePeriodEnd = request.EndDate ?? uninvoicedOrders.Max(o => o.OrderDate),
                 DueDate = (request.EndDate ?? uninvoicedOrders.Max(o => o.OrderDate)).AddDays(15), // DueDate cong 15 ngay.
                 Subtotal = subtotal,
-                TotalAmount = subtotal,
+                DiscountAmount = discountAmount,  
+                TotalAmount = totalAmount,         
+                DiscountId = appliedDiscountId,
+                AmountPaid = 0,
                 Status = "Issued",
                 Notes = request.Notes
             };
@@ -179,28 +218,58 @@ public class InvoiceService : IInvoiceService
         if (invoice.Status == "Paid")
             throw new InvalidOperationException("Hóa đơn này đã được thanh toán.");
 
-        // THAY ĐỔI 1: Tạo danh sách các mặt hàng (items) theo yêu cầu của constructor mới
+        // 1. - Tính toán số tiền còn lại
+        decimal remainingBalance = invoice.TotalAmount - invoice.AmountPaid;
+
+        // 2. - Xác định số tiền cần thanh toán cho LẦN NÀY
+        // Nếu người dùng không nhập (null), thì thanh toán hết số nợ còn lại.
+        // Nếu người dùng có nhập, thì thanh toán đúng số đó.
+        decimal amountToPay = request.Amount ?? remainingBalance;
+
+        // 3. - Validation (Kiểm tra hợp lệ)
+        if (amountToPay <= 0)
+            throw new InvalidOperationException("Số tiền thanh toán phải lớn hơn 0.");
+
+        if (amountToPay > remainingBalance)
+            throw new InvalidOperationException($"Số tiền thanh toán ({amountToPay:C0}) không thể lớn hơn số nợ còn lại ({remainingBalance:C0}).");
+
+        // 4. - TẠO PAYMENT INTENT (Bản ghi Payment ở trạng thái "Pending")
+        var newPayment = new Payment
+        {
+            InvoiceId = invoice.InvoiceId,
+            PaymentDate = DateTime.UtcNow,
+            Amount = amountToPay,
+            PaymentMethod = "PayOS",
+            Status = "Pending",      
+            ProcessedByStaffId = null
+        };
+
+        _context.Payments.Add(newPayment);
+        await _context.SaveChangesAsync(); // Lưu để lấy được PaymentId
+
+        // 5. - Tạo link PayOS với thông tin từ Payment (KHÔNG PHẢI INVOICE)
         var items = new List<ItemData>
         {
             new ItemData(
-                name: $"Thanh toán hóa đơn {invoice.InvoiceNumber}",
+                name: $"Thanh toán cho hóa đơn {invoice.InvoiceNumber}",
                 quantity: 1,
-                price: (int)invoice.TotalAmount
+                price: (int)newPayment.Amount // <-- SỬ DỤNG SỐ TIỀN CỦA LẦN NÀY
             )
         };
 
         var paymentData = new PaymentData(
-            orderCode: invoice.InvoiceId,
-            amount: (int)invoice.TotalAmount,
+            orderCode: newPayment.PaymentId, // <-- [RẤT QUAN TRỌNG] SỬ DỤNG PAYMENT ID LÀM ORDER CODE
+            amount: (int)newPayment.Amount,
             description: $"Pay Inv: {invoice.InvoiceNumber}".Substring(0, Math.Min(25, $"Pay Inv: {invoice.InvoiceNumber}".Length)),
-            items: items, // <-- Truyền danh sách items vào
+            items: items,
             cancelUrl: request.CancelUrl,
             returnUrl: request.ReturnUrl
         );
 
         CreatePaymentResult result = await _payOS.createPaymentLink(paymentData);
-        invoice.PaymentLink = result.checkoutUrl;
-        await _context.SaveChangesAsync();
+
+        // Không cần lưu PaymentLink vào Invoice nữa, vì link này là duy nhất cho 1 giao dịch
+
         return result.checkoutUrl;
     }
 
@@ -213,22 +282,18 @@ public class InvoiceService : IInvoiceService
         var invoice = await _context.Invoices
             .Include(i => i.SellerUser)
             .Include(i => i.CreatedByStaff)
-            .Include(i => i.Payments)
+            .Include(i => i.Payments) // Tải danh sách các lần thanh toán
             .Include(i => i.History)
+            .Include(i => i.AppliedDiscount) // [THAY ĐỔI] Tải thông tin mã chiết khấu đã áp dụng
             .Include(i => i.Items)
-                // Từ Items, tải Order
                 .ThenInclude(item => item.Order)
-                    // Từ Order, tải StatusOrderNavigation
                     .ThenInclude(order => order.StatusOrderNavigation)
             .Include(i => i.Items)
-                // Từ Items, tải Order
                 .ThenInclude(item => item.Order)
-                    // Từ Order, tải danh sách OrderDetails của nó
                     .ThenInclude(order => order.OrderDetails)
                     .ThenInclude(detail => detail.ProductVariant)
                         .ThenInclude(variant => variant.Product)
-
-            .AsNoTracking() // Bạn có thể thử giữ lại dòng này với cấu trúc Include mới
+            .AsNoTracking()
             .FirstOrDefaultAsync(i => i.InvoiceId == invoiceId);
 
         return invoice;
@@ -240,24 +305,21 @@ public class InvoiceService : IInvoiceService
     /// </summary>
     public async Task<IEnumerable<Invoice>> GetInvoicesForSellerAsync(string sellerId)
     {
-        var invoices = await _context.Invoices
+        return await _context.Invoices
             .Where(i => i.SellerUserId == sellerId)
-            .OrderByDescending(i => i.CreatedAt) // Sắp xếp để hóa đơn mới nhất lên đầu
+            .Include(i => i.AppliedDiscount) // [THAY ĐỔI] Thêm chiết khấu vào list
+            .OrderByDescending(i => i.CreatedAt)
             .AsNoTracking()
             .ToListAsync();
-
-        return invoices;
     }
     public async Task<IEnumerable<Invoice>> GetAllInvoicesAsync()
     {
-        // Truy vấn đơn giản, không có logic Skip/Take
-        var invoices = await _context.Invoices
-            .Include(i => i.SellerUser) // Tải kèm thông tin Seller để hiển thị tên
-            .OrderByDescending(i => i.CreatedAt) // Sắp xếp hóa đơn mới nhất lên đầu
+        return await _context.Invoices
+            .Include(i => i.SellerUser)
+            .Include(i => i.AppliedDiscount) // [THAY ĐỔI] Thêm chiết khấu vào list
+            .OrderByDescending(i => i.CreatedAt)
             .AsNoTracking()
             .ToListAsync();
-
-        return invoices;
     }
 
     public async Task<int> LogWebhookAsync(string gateway, string payload, string signature)
@@ -274,86 +336,129 @@ public class InvoiceService : IInvoiceService
         return log.WebhookLogId;
     }
 
+    // [CẬP NHẬT] - Toàn bộ logic webhook để xử lý công nợ
     public async Task ProcessPayOSWebhookAsync(int webhookLogId)
     {
         var log = await _context.WebhookLogs.FindAsync(webhookLogId);
         if (log == null || log.ProcessingStatus != "Received") return;
+
         Invoice invoiceForNotification = null;
         List<Order> ordersForNotification = new List<Order>();
+        Payment paymentForNotification = null;
+
         try
         {
             var payload = JsonConvert.DeserializeObject<WebhookType>(log.RawPayload);
-
             WebhookData verifiedData = _payOS.verifyPaymentWebhookData(payload);
             log.ProcessingStatus = "Verified";
 
-            // Kiểm tra "success" 
             if (verifiedData?.desc?.Equals("success", StringComparison.OrdinalIgnoreCase) == true || verifiedData?.desc?.Equals("Thành công", StringComparison.OrdinalIgnoreCase) == true)
             {
-                int invoiceId = (int)verifiedData.orderCode;
-                var invoice = await _context.Invoices
-                              .Include(i=>i.Items)
-                              .FirstOrDefaultAsync(i=>i.InvoiceId==invoiceId);
+                // 1. [THAY ĐỔI] - LẤY PAYMENT ID TỪ WEBHOOK (thay vì InvoiceId)
+                int paymentId = (int)verifiedData.orderCode;
+                var payment = await _context.Payments.FindAsync(paymentId);
 
-                // Xử lý trường hợp không tìm thấy hóa đơn
+                if (payment == null)
+                {
+                    throw new Exception($"Webhook đã xác thực nhưng không tìm thấy Payment với ID: {paymentId}.");
+                }
+
+                paymentForNotification = payment;
+
+                // 2. [THAY ĐỔI] - Kiểm tra xem đã xử lý chưa (dựa trên trạng thái của Payment)
+                if (payment.Status != "Pending")
+                {
+                    log.ProcessingStatus = "AlreadyProcessed";
+                    log.RelatedInvoiceId = payment.InvoiceId;
+                    await _context.SaveChangesAsync();
+                    return; // Đã xử lý rồi, dừng lại
+                }
+
+                // 3. Lấy Invoice cha
+                var invoice = await _context.Invoices
+                                    .Include(i => i.Items)
+                                    .FirstOrDefaultAsync(i => i.InvoiceId == payment.InvoiceId);
+
                 if (invoice == null)
                 {
-                    // Biến lỗi "im lặng" thành lỗi rõ ràng
-                    throw new Exception($"Webhook đã được xác thực nhưng không tìm thấy Invoice với ID: {invoiceId} trong database.");
+                    throw new Exception($"Không tìm thấy Invoice (ID: {payment.InvoiceId}) cho Payment (ID: {paymentId}).");
                 }
-                // Gán giá trị để gửi thông báo sau
-                invoiceForNotification = invoice;
-                if (invoice.Status != "Paid")
-                {
-                    // Logic cập nhật đúng
-                    invoice.Status = "Paid";
-                    invoice.AmountPaid = verifiedData.amount;
 
-                    _context.Payments.Add(new Payment
-                    {
-                        InvoiceId = invoiceId,
-                        Amount = verifiedData.amount,
-                        PaymentMethod = "PayOS",
-                        TransactionId = verifiedData.reference
-                    });
-                    //  Cập nhật trạng thái cho tất cả các Order liên quan
-                    var orderIdsToUpdate = invoice.Items.Select(item => item.OrderId).ToList(); // select các OrderID có trong hóa đơn
+                invoiceForNotification = invoice;
+
+                // 4. Cập nhật bản ghi Payment
+                payment.Status = "Completed";
+                payment.TransactionId = verifiedData.reference;
+
+                if (payment.Amount != verifiedData.amount)
+                {
+                    _logger.LogWarning("Payment (ID: {PaymentId}) amount mismatch. Expected: {ExpectedAmount}, Received: {ReceivedAmount}",
+                        payment.PaymentId, payment.Amount, verifiedData.amount);
+                    payment.Amount = verifiedData.amount; // Tin tưởng số tiền PayOS trả về
+                }
+
+                // 5. [THAY ĐỔI] - CẬP NHẬT INVOICE (CỘNG DỒN)
+                invoice.AmountPaid += payment.Amount;
+
+                // 6. [THAY ĐỔI] - KIỂM TRA VÀ CẬP NHẬT TRẠNG THÁI INVOICE
+                if (invoice.AmountPaid >= invoice.TotalAmount)
+                {
+                    // Thanh toán đủ
+                    invoice.Status = "Paid";
+                    invoice.AmountPaid = invoice.TotalAmount; // Chốt số tiền (tránh lỗi làm tròn)
+
+                    log.ProcessingStatus = "Processed_Full";
+
+                    // Cập nhật trạng thái cho tất cả các Order liên quan
+                    var orderIdsToUpdate = invoice.Items.Select(item => item.OrderId).ToList();
                     var ordersToUpdate = await _context.Orders
-                        .Where(o => orderIdsToUpdate.Contains(o.OrderId)) // dựa vào OrderID để lấy ra list Object [Order] để cập nhật
+                        .Where(o => orderIdsToUpdate.Contains(o.OrderId))
                         .ToListAsync();
 
                     foreach (var order in ordersToUpdate)
                     {
-                        order.PaymentStatus = "Paid"; // cập nhật trạng thái Order thành Paid
+                        order.PaymentStatus = "Paid";
                     }
-                    // Gán giá trị để gửi thông báo sau
                     ordersForNotification = ordersToUpdate;
-                    _context.InvoiceHistories.Add(new InvoiceHistory { InvoiceId = invoiceId, Action = "Payment received via PayOS Webhook" });
-
-                    log.ProcessingStatus = "Processed";
-                    log.RelatedInvoiceId = invoiceId;
                 }
                 else
                 {
-                    // Xử lý trường hợp webhook đến muộn hoặc bị gọi lại
-                    log.ProcessingStatus = "AlreadyProcessed";
-                    log.RelatedInvoiceId = invoiceId;
+                    // [THAY ĐỔI] - Thanh toán một phần (CÔNG NỢ)
+                    invoice.Status = "PartiallyPaid";
+                    log.ProcessingStatus = "Processed_Partial";
                 }
+
+                _context.InvoiceHistories.Add(new InvoiceHistory
+                {
+                    InvoiceId = invoice.InvoiceId,
+                    Action = $"Payment {payment.Amount:C0} received via PayOS. (PaymentID: {payment.PaymentId})",
+                    UserId = null
+                });
+
+                log.RelatedInvoiceId = invoice.InvoiceId;
             }
             else
             {
-                // Ghi nhận trường hợp giao dịch không thành công
+                // [THAY ĐỔI] - Xử lý khi giao dịch thất bại (cập nhật Payment)
+                int paymentId = (int)verifiedData.orderCode;
+                var payment = await _context.Payments.FindAsync(paymentId);
+                if (payment != null)
+                {
+                    payment.Status = "Failed";
+                    log.RelatedInvoiceId = payment.InvoiceId;
+                }
                 log.ProcessingStatus = "TransactionNotSuccessful";
                 log.ErrorMessage = $"Transaction description: {verifiedData?.desc}";
-                log.RelatedInvoiceId = (int?)verifiedData?.orderCode;
             }
 
             await _context.SaveChangesAsync();
-            // ✅ BẮT ĐẦU GỬI THÔNG BÁO (SAU KHI LƯU DB THÀNH CÔNG)
-            // Chỉ gửi nếu có hóa đơn được cập nhật
-            if (invoiceForNotification != null && log.ProcessingStatus == "Processed")
+
+            // Gửi thông báo (chỉ khi xử lý thành công)
+            if (invoiceForNotification != null && paymentForNotification != null &&
+                (log.ProcessingStatus == "Processed_Full" || log.ProcessingStatus == "Processed_Partial"))
             {
-                await SendPaymentSuccessNotificationsAsync(invoiceForNotification, ordersForNotification);
+                // [THAY ĐỔI] - Gọi hàm helper mới
+                await SendPaymentUpdateNotificationsAsync(invoiceForNotification, ordersForNotification, paymentForNotification);
             }
         }
         catch (Exception ex)
@@ -361,42 +466,59 @@ public class InvoiceService : IInvoiceService
             log.ProcessingStatus = "Failed";
             log.ErrorMessage = $"Message: {ex.Message} --- StackTrace: {ex.StackTrace}";
             await _context.SaveChangesAsync();
-            throw; // Ném lại lỗi để dễ dàng thấy trong log của server
+            throw;
         }
     }
-    /// <summary>
-    /// Hàm private để gửi thông báo sau khi webhook xử lý thanh toán thành công.
-    /// </summary>
-    private async Task SendPaymentSuccessNotificationsAsync(Invoice invoice, List<Order> orders)
+
+    // [CẬP NHẬT] - Hàm helper mới để gửi thông báo cho cả 2 trường hợp (Partial/Full)
+    private async Task SendPaymentUpdateNotificationsAsync(Invoice invoice, List<Order> orders, Payment payment)
     {
         try
         {
             // Gửi thông báo (chuông) cho Seller
+            string message;
+            if (invoice.Status == "Paid")
+            {
+                message = $"Hóa đơn #{invoice.InvoiceNumber} đã được thanh toán đầy đủ!";
+            }
+            else // PartiallyPaid
+            {
+                message = $"Hóa đơn #{invoice.InvoiceNumber} vừa nhận được một khoản thanh toán công nợ {payment.Amount:C0}.";
+            }
+
             await _notificationService.CreateAndSendNotificationAsync(
                 invoice.SellerUserId,
-                $"Hóa đơn #{invoice.InvoiceNumber} đã được thanh toán thành công!",
+                message,
                 $"/seller/invoices/{invoice.InvoiceId}"
             );
 
             // Gửi sự kiện real-time cập nhật Giao diện Hóa đơn (cho Seller)
             await _hubContext.Clients.Group($"user_{invoice.SellerUserId}").SendAsync(
-                "InvoicePaid",
-                new { invoiceId = invoice.InvoiceId, newStatus = "Paid" }
+                "InvoiceUpdated",
+                new
+                {
+                    invoiceId = invoice.InvoiceId,
+                    newStatus = invoice.Status,
+                    amountPaid = invoice.AmountPaid,
+                    remainingBalance = invoice.TotalAmount - invoice.AmountPaid
+                }
             );
 
-            // Gửi sự kiện real-time cập nhật Giao diện Đơn hàng (cho từng đơn hàng)
-            foreach (var order in orders)
+            // Chỉ cập nhật trạng thái order qua SignalR nếu hóa đơn đã "Paid"
+            if (invoice.Status == "Paid")
             {
-                // Gửi cho bất kỳ ai đang xem đơn hàng này
-                await _hubContext.Clients.Group($"order_{order.OrderId}").SendAsync(
-                    "OrderStatusChanged",
-                    new { orderId = order.OrderId, newPaymentStatus = "Paid" }
-                );
+                foreach (var order in orders)
+                {
+                    await _hubContext.Clients.Group($"order_{order.OrderId}").SendAsync(
+                        "OrderStatusChanged",
+                        new { orderId = order.OrderId, newPaymentStatus = "Paid" }
+                    );
+                }
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho ProcessPayOSWebhookAsync (InvoiceID: {InvoiceId})", invoice.InvoiceId);
+            _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho SendPaymentUpdateNotificationsAsync (InvoiceID: {InvoiceId})", invoice.InvoiceId);
         }
     }
 }

@@ -38,6 +38,10 @@ namespace CB_Gift.Models
         [Column(TypeName = "decimal(18, 2)")]
         public decimal TaxAmount { get; set; } = 0;
 
+        //lưu số tiền chiết khấu
+        [Column(TypeName = "decimal(18, 2)")]
+        public decimal DiscountAmount { get; set; } = 0;
+
         [Required]
         [Column(TypeName = "decimal(18, 2)")]
         public decimal TotalAmount { get; set; }
@@ -54,6 +58,7 @@ namespace CB_Gift.Models
 
         [StringLength(500)]
         public string? PaymentLink { get; set; }
+        public int? DiscountId { get; set; }
 
         // --- Navigation Properties ---
         [ForeignKey("SellerUserId")]
@@ -62,6 +67,8 @@ namespace CB_Gift.Models
         [ForeignKey("CreatedByStaffId")]
         public virtual AppUser CreatedByStaff { get; set; }
 
+        [ForeignKey("DiscountId")]
+        public virtual Discount? AppliedDiscount { get; set; }
         public virtual ICollection<InvoiceItem> Items { get; set; } = new List<InvoiceItem>();
         public virtual ICollection<Payment> Payments { get; set; } = new List<Payment>();
         public virtual ICollection<InvoiceHistory> History { get; set; } = new List<InvoiceHistory>();

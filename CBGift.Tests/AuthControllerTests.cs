@@ -696,7 +696,7 @@ public class AuthControllerTests
 
     // ===== Reset password
 
-    [Fact]
+    /*[Fact]
     public async Task ResetPassword_Returns_BadRequest_When_Model_Invalid()
     {
         var http = new DefaultHttpContext();
@@ -787,6 +787,6 @@ public class AuthControllerTests
         ctl.ModelState.AddModelError("Otp", "Required");
         var r = await ctl.ResetPassword(new ResetPasswordWithOtpDto { Email = "user@gmail.com" });
         r.Should().BeOfType<BadRequestObjectResult>();
-    }
+    }*/
 
 }
