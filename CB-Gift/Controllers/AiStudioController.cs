@@ -17,30 +17,19 @@ namespace CB_Gift.Controllers
         }
 
         [HttpPost("generate")]
-        public async Task<IActionResult> GenerateChibi([FromForm] AiPromptDto req)
+        public async Task<IActionResult> GenerateImageAsync([FromForm] AiPromptDto req)
         {
             if (req.ImageFile == null)
                 return BadRequest(new { message = "Vui lòng chọn ảnh để tạo hình." });
 
-            // Chấp nhận tất cả định dạng ảnh phổ biến
-            var allowedTypes = new[]
-            {
-                "image/png",
-                "image/jpeg",
-                "image/jpg",
-                "image/webp",
-                "image/gif",
-                "image/bmp",
-                "image/tiff",
-                "image/svg+xml"
-            };
-
+            var allowedTypes = new[] { "image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif", "image/bmp", "image/tiff", "image/svg+xml" };
             if (!allowedTypes.Contains(req.ImageFile.ContentType.ToLower()))
                 return BadRequest(new { message = $"Định dạng ảnh không được hỗ trợ: {req.ImageFile.ContentType}" });
 
             const long maxFileSize = 50 * 1024 * 1024;
             if (req.ImageFile.Length > maxFileSize)
                 return BadRequest(new { message = "Ảnh vượt quá dung lượng tối đa 50MB." });
+            // --- (Kết thúc phần xác thực) ---
 
             try
             {
@@ -48,7 +37,15 @@ namespace CB_Gift.Controllers
                 await req.ImageFile.CopyToAsync(ms);
                 var base64 = Convert.ToBase64String(ms.ToArray());
 
-                var resultImage = await _aiService.GenerateLineArtFromChibiAsync(base64, req.Prompt);
+                // ⭐️ TRUYỀN TẤT CẢ DỮ LIỆU SANG SERVICE
+                var resultImage = await _aiService.GenerateImageAsync(
+                    base64,
+                    req.Prompt,
+                    req.Style,
+                    req.AspectRatio,
+                    req.Quality
+                );
+
                 return Ok(new { image = resultImage });
             }
             catch (Exception ex)
