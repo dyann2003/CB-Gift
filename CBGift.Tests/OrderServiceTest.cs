@@ -278,7 +278,7 @@ namespace CB_Gift.Tests.Services
         [Fact]
         public async Task SellerApproveOrderDetailDesignAsync_Updates_Single_Detail()
         {
-            var ok = await _svc.SellerApproveOrderDetailDesignAsync(1000, ProductionStatus.READY_PROD, "sellerA");
+            var ok = await _svc.SellerApproveOrderDetailDesignAsync(1000, ProductionStatus.READY_PROD, "sellerA", "reason");
             ok.Should().BeTrue();
 
             (await _db.OrderDetails.FindAsync(1000))!.ProductionStatus.Should().Be(ProductionStatus.READY_PROD);
@@ -337,6 +337,222 @@ namespace CB_Gift.Tests.Services
             res.IsSuccess.Should().BeTrue();
 
             (await _db.Orders.FindAsync(100))!.StatusOrder.Should().Be(14);
+        }
+        [Fact]
+        public async Task CreateOrderAsync_NoTTS_NoSurcharge()
+        {
+            var req = new OrderCreateRequest { ActiveTTS = false };
+
+            _mapper.Setup(m => m.Map<Order>(It.IsAny<OrderCreateRequest>()))
+                   .Returns((OrderCreateRequest r) => new Order { ActiveTts = r.ActiveTTS, TotalCost = 0 });
+
+            var id = await _svc.CreateOrderAsync(req, "sellerZ");
+            id.Should().BeGreaterThan(0);
+
+            var inDb = await _db.Orders.FindAsync(id);
+            inDb!.TotalCost.Should().Be(0);
+            inDb.ActiveTts.Should().BeFalse();
+            inDb.SellerUserId.Should().Be("sellerZ");
+        }
+
+        [Fact]
+        public async Task SellerApproveOrderDesignAsync_Throws_When_WrongSeller()
+        {
+            var o = await _db.Orders.FindAsync(100);
+            o!.StatusOrder = 5; // CHECK_DESIGN phase
+            await _db.SaveChangesAsync();
+
+            var act = async () => await _svc.SellerApproveOrderDesignAsync(100, ProductionStatus.READY_PROD, "otherSeller");
+            await act.Should().ThrowAsync<UnauthorizedAccessException>()
+                     .WithMessage("*not authorized*");
+        }
+
+        [Fact]
+        public async Task SellerApproveOrderDesignAsync_Throws_When_OrderStatus_Invalid()
+        {
+            var o = await _db.Orders.FindAsync(100);
+            o!.StatusOrder = 4; // not equal to 5
+            await _db.SaveChangesAsync();
+
+            var act = async () => await _svc.SellerApproveOrderDesignAsync(100, ProductionStatus.READY_PROD, "sellerA");
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                     .WithMessage("*not in CHECK_DESIGN*");
+        }
+
+        [Fact]
+        public async Task SellerApproveOrderDesignAsync_Throws_When_NotAllDetails_Check_Design()
+        {
+            var o = await _db.Orders.Include(x => x.OrderDetails).FirstAsync(x => x.OrderId == 100);
+            o.StatusOrder = 5;
+            // Một detail không ở CHECK_DESIGN
+            o.OrderDetails.First().ProductionStatus = ProductionStatus.DESIGN_REDO;
+            await _db.SaveChangesAsync();
+
+            var act = async () => await _svc.SellerApproveOrderDesignAsync(100, ProductionStatus.READY_PROD, "sellerA");
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                     .WithMessage("*Not all OrderDetails*");
+        }
+
+        [Fact]
+        public async Task SellerApproveOrderDesignAsync_Sends_Notifications_And_SignalR()
+        {
+            // Sắp xếp dữ liệu đúng điều kiện
+            var o = await _db.Orders.Include(x => x.OrderDetails).FirstAsync(x => x.OrderId == 100);
+            o.StatusOrder = 5; // CHECK_DESIGN
+            foreach (var d in o.OrderDetails)
+            {
+                d.ProductionStatus = ProductionStatus.CHECK_DESIGN;
+                d.AssignedDesignerUserId = "designerX";
+            }
+            await _db.SaveChangesAsync();
+
+            var ok = await _svc.SellerApproveOrderDesignAsync(100, ProductionStatus.READY_PROD, "sellerA");
+            ok.Should().BeTrue();
+
+            // Verify chuông gửi tới designer
+            _notifyMock.Verify(n => n.CreateAndSendNotificationAsync(
+                    "designerX",
+                    It.Is<string>(msg => msg.Contains("ACCEPTED", StringComparison.OrdinalIgnoreCase)
+                                         || msg.Contains("ACCEPT", StringComparison.OrdinalIgnoreCase)),
+                    It.IsAny<string>()),
+                Times.AtLeastOnce);
+
+            // Verify SignalR group broadcast
+            _hubClientsMock.Verify(h => h.Group("order_100"), Times.AtLeastOnce);
+            _clientProxyMock.Verify(cp => cp.SendCoreAsync(
+                    "OrderStatusChanged",
+                    It.Is<object[]>(arr => arr.Length == 1),
+                    It.IsAny<CancellationToken>()),
+                Times.AtLeastOnce);
+        }
+
+        [Fact]
+        public async Task SellerApproveOrderDetailDesignAsync_Throws_When_WrongSeller()
+        {
+            var act = async () => await _svc.SellerApproveOrderDetailDesignAsync(1000, ProductionStatus.READY_PROD, "wrongSeller", "no");
+            await act.Should().ThrowAsync<UnauthorizedAccessException>()
+                     .WithMessage("*not authorized*");
+        }
+
+        [Fact]
+        public async Task SellerApproveOrderDetailDesignAsync_Throws_When_InvalidAction()
+        {
+            // Đặt về CHECK_DESIGN để qua điều kiện pre-check
+            var d = await _db.OrderDetails.Include(x => x.Order).FirstAsync(x => x.OrderDetailId == 1000);
+            d.Order!.SellerUserId = "sellerA";
+            d.ProductionStatus = ProductionStatus.CHECK_DESIGN;
+            await _db.SaveChangesAsync();
+
+            var act = async () => await _svc.SellerApproveOrderDetailDesignAsync(1000, ProductionStatus.DRAFT, "sellerA", "reason");
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                     .WithMessage("*Must be DESIGN_REDO or READY_PROD*");
+        }
+
+        [Fact]
+        public async Task SellerApproveOrderDetailDesignAsync_Throws_When_Not_In_CheckDesign()
+        {
+            var d = await _db.OrderDetails.Include(x => x.Order).FirstAsync(x => x.OrderDetailId == 1001);
+            d.Order!.SellerUserId = "sellerA";
+            d.ProductionStatus = ProductionStatus.DESIGN_REDO; // not CHECK_DESIGN
+            await _db.SaveChangesAsync();
+
+            var act = async () => await _svc.SellerApproveOrderDetailDesignAsync(1001, ProductionStatus.READY_PROD, "sellerA", null);
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                     .WithMessage("*Must be CHECK_DESIGN*");
+        }
+
+        [Fact]
+        public async Task SellerApproveOrderDetailDesignAsync_Sends_Notifications_And_SignalR()
+        {
+            var d = await _db.OrderDetails.Include(x => x.Order).FirstAsync(x => x.OrderDetailId == 1000);
+            d.Order!.SellerUserId = "sellerA";
+            d.ProductionStatus = ProductionStatus.CHECK_DESIGN;
+            d.AssignedDesignerUserId = "designerY";
+            await _db.SaveChangesAsync();
+
+            var ok = await _svc.SellerApproveOrderDetailDesignAsync(1000, ProductionStatus.READY_PROD, "sellerA", "ok");
+            ok.Should().BeTrue();
+
+            _notifyMock.Verify(n => n.CreateAndSendNotificationAsync(
+                    "designerY",
+                    It.Is<string>(msg => msg.Contains("#1000")),
+                    It.IsAny<string>()),
+                Times.AtLeastOnce);
+
+            _hubClientsMock.Verify(h => h.Group("order_100"), Times.AtLeastOnce);
+            _clientProxyMock.Verify(cp => cp.SendCoreAsync(
+                    "OrderStatusChanged",
+                    It.Is<object[]>(arr => arr.Length == 1),
+                    It.IsAny<CancellationToken>()),
+                Times.AtLeastOnce);
+        }
+
+        //[Fact]
+        //public async Task SendOrderToReadyProdAsync_Moves_Order101_And_All_Details()
+        //{
+        //    // Trạng thái ban đầu của order 101 là 1 trong seed
+        //    var ok = await _svc.SendOrderToReadyProdAsync(101, "sellerB");
+        //    ok.Should().BeTrue();
+
+        //    var updated = await _db.Orders.Include(o => o.OrderDetails).FirstAsync(o => o.OrderId == 101);
+        //    updated.StatusOrder.Should().Be(7);
+        //    updated.OrderDetails.Should().OnlyContain(d => d.ProductionStatus == ProductionStatus.READY_PROD);
+
+        //    _hubClientsMock.Verify(h => h.Group("order_101"), Times.AtLeastOnce);
+        //    _clientProxyMock.Verify(cp => cp.SendCoreAsync(
+        //            "OrderStatusChanged",
+        //            It.Is<object[]>(arr => arr.Length == 1),
+        //            It.IsAny<CancellationToken>()),
+        //        Times.AtLeastOnce);
+        //}
+
+        //[Fact]
+        //public async Task SendOrderToReadyProdAsync_Throws_When_NotStatus1()
+        //{
+        //    var o = await _db.Orders.FindAsync(100);
+        //    o!.StatusOrder = 2; // not 1
+        //    await _db.SaveChangesAsync();
+
+        //    var act = async () => await _svc.SendOrderToReadyProdAsync(100, "sellerA");
+        //    await act.Should().ThrowAsync<InvalidOperationException>()
+        //             .WithMessage("*Mới tạo*");
+        //}
+
+        //[Fact]
+        //public async Task SendOrderToReadyProdAsync_Throws_When_WrongSeller()
+        //{
+        //    var act = async () => await _svc.SendOrderToReadyProdAsync(101, "notOwner");
+        //    await act.Should().ThrowAsync<UnauthorizedAccessException>()
+        //             .WithMessage("*not authorized*");
+        //}
+
+        [Fact]
+        public async Task ApproveOrderForShippingAsync_Sends_Notification_And_SignalR_When_Success()
+        {
+            // Đặt order 100 tất cả QC_DONE và có seller
+            var o = await _db.Orders.Include(x => x.OrderDetails).FirstAsync(x => x.OrderId == 100);
+            o.SellerUserId = "sellerA";
+            foreach (var d in o.OrderDetails) d.ProductionStatus = ProductionStatus.QC_DONE;
+            await _db.SaveChangesAsync();
+
+            var res = await _svc.ApproveOrderForShippingAsync(100);
+            res.IsSuccess.Should().BeTrue();
+
+            // Verify chuông tới seller
+            _notifyMock.Verify(n => n.CreateAndSendNotificationAsync(
+                    "sellerA",
+                    It.Is<string>(msg => msg.Contains("#100")),
+                    It.Is<string>(url => url.Contains("/seller/orders/100"))),
+                Times.Once);
+
+            // Verify SignalR
+            _hubClientsMock.Verify(h => h.Group("order_100"), Times.AtLeastOnce);
+            _clientProxyMock.Verify(cp => cp.SendCoreAsync(
+                    "OrderStatusChanged",
+                    It.Is<object[]>(arr => arr.Length == 1),
+                    It.IsAny<CancellationToken>()),
+                Times.AtLeastOnce);
+
         }
     }
 }

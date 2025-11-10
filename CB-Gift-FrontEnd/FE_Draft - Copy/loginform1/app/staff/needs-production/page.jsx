@@ -364,9 +364,26 @@ export default function NeedsProductionPage() {
                                     <div className="text-xs text-gray-500">{detail.orderCode}</div>
                                   </td>
                                   <td className="p-3 text-center font-medium text-gray-700">{detail.quantity}</td>
-                                  <td className="p-3 text-gray-600 max-w-xs truncate">
-                                    {detail.noteOrEngravingContent || "N/A"}
-                                  </td>
+                                  <td className="p-3 text-gray-600 max-w-xs">
+                                      {/* Hiển thị Note (nếu có) */}
+                                      {detail.noteOrEngravingContent ? (
+                                        <div className="truncate" title={detail.noteOrEngravingContent}>
+                                          {detail.noteOrEngravingContent}
+                                        </div>
+                                      ) : (
+                                        <span className="text-gray-400 italic">N/A</span>
+                                      )}
+
+                                      {/* Hiển thị Reason (nếu có) */}
+                                      {detail.reason && (
+                                        <div 
+                                          className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md p-2"
+                                          title={detail.reason}
+                                        >
+                                          <strong>QC Reject Reason:</strong> {detail.reason}
+                                        </div>
+                                      )}
+                                    </td>
                                   <td className="p-3 text-center">
                                     <a
                                       href={detail.productionFileUrl}

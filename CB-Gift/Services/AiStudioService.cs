@@ -1,4 +1,4 @@
-﻿using CB_Gift.Services.IService;
+using CB_Gift.Services.IService;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Net.Http;
@@ -22,7 +22,7 @@ namespace CB_Gift.Services
             _stabilityApiKey = config["StabilityAiSettings:ApiKey"];
             _logger = logger;
         }
-
+        
         private const string staticInstructions = @"Based on the character in the source image, generate a 2D, completely flat, vector-style line art file suitable for a CNC router or laser cutter.
 Critical Requirements (MUST follow):
 Style: This must be a 2D technical drawing or blueprint, NOT a 3D render or artistic sketch.

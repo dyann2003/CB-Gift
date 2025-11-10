@@ -4,6 +4,7 @@ using CB_Gift.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CB_Gift.Migrations
 {
     [DbContext(typeof(CBGiftDbContext))]
-    partial class CBGiftDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251103082410_AddOrderDetailLogsTable")]
+    partial class AddOrderDetailLogsTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -96,56 +99,6 @@ namespace CB_Gift.Migrations
                         .HasDatabaseName("UserNameIndex");
 
                     b.ToTable("AspNetUsers", (string)null);
-                });
-
-            modelBuilder.Entity("CB_Gift.Models.CancellationRequest", b =>
-                {
-                    b.Property<int>("CancellationRequestId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("CancellationRequestId"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<int>("OrderId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("PreviousStatusOrder")
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("RejectionReason")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("RequestReason")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("RequestedByUserId")
-                        .IsRequired()
-                        .HasColumnType("varchar(255)");
-
-                    b.Property<DateTime?>("ReviewedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("ReviewedByStaffId")
-                        .HasColumnType("varchar(255)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("varchar(50)");
-
-                    b.HasKey("CancellationRequestId");
-
-                    b.HasIndex("OrderId");
-
-                    b.HasIndex("RequestedByUserId");
-
-                    b.HasIndex("ReviewedByStaffId");
-
-                    b.ToTable("CancellationRequests");
                 });
 
             modelBuilder.Entity("CB_Gift.Models.Category", b =>
@@ -897,64 +850,6 @@ namespace CB_Gift.Migrations
                     b.ToTable("QC", (string)null);
                 });
 
-            modelBuilder.Entity("CB_Gift.Models.Refund", b =>
-                {
-                    b.Property<int>("RefundId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("RefundId"));
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18, 2)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("GatewayRefundId")
-                        .HasMaxLength(100)
-                        .HasColumnType("varchar(100)");
-
-                    b.Property<int>("OrderId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("ProofUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("varchar(500)");
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("RequestedBySellerId")
-                        .IsRequired()
-                        .HasColumnType("varchar(255)");
-
-                    b.Property<DateTime?>("ReviewedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("ReviewedByStaffId")
-                        .HasColumnType("varchar(255)");
-
-                    b.Property<string>("StaffRejectionReason")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("varchar(20)");
-
-                    b.HasKey("RefundId");
-
-                    b.HasIndex("OrderId");
-
-                    b.HasIndex("RequestedBySellerId");
-
-                    b.HasIndex("ReviewedByStaffId");
-
-                    b.ToTable("Refunds");
-                });
-
             modelBuilder.Entity("CB_Gift.Models.Tag", b =>
                 {
                     b.Property<int>("TagsId")
@@ -1201,31 +1096,6 @@ namespace CB_Gift.Migrations
                     b.ToTable("ProductTag");
                 });
 
-            modelBuilder.Entity("CB_Gift.Models.CancellationRequest", b =>
-                {
-                    b.HasOne("CB_Gift.Models.Order", "Order")
-                        .WithMany()
-                        .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("CB_Gift.Data.AppUser", "RequestedByUser")
-                        .WithMany()
-                        .HasForeignKey("RequestedByUserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("CB_Gift.Data.AppUser", "ReviewedByStaff")
-                        .WithMany()
-                        .HasForeignKey("ReviewedByStaffId");
-
-                    b.Navigation("Order");
-
-                    b.Navigation("RequestedByUser");
-
-                    b.Navigation("ReviewedByStaff");
-                });
-
             modelBuilder.Entity("CB_Gift.Models.DesignerSeller", b =>
                 {
                     b.HasOne("CB_Gift.Data.AppUser", "DesignerUser")
@@ -1455,31 +1325,6 @@ namespace CB_Gift.Migrations
                         .HasConstraintName("FK_QC_PlanDetail");
 
                     b.Navigation("PlanDetail");
-                });
-
-            modelBuilder.Entity("CB_Gift.Models.Refund", b =>
-                {
-                    b.HasOne("CB_Gift.Models.Order", "Order")
-                        .WithMany()
-                        .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("CB_Gift.Data.AppUser", "RequestedBySeller")
-                        .WithMany()
-                        .HasForeignKey("RequestedBySellerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("CB_Gift.Data.AppUser", "ReviewedByStaff")
-                        .WithMany()
-                        .HasForeignKey("ReviewedByStaffId");
-
-                    b.Navigation("Order");
-
-                    b.Navigation("RequestedBySeller");
-
-                    b.Navigation("ReviewedByStaff");
                 });
 
             modelBuilder.Entity("CB_Gift.Models.UploadedImage", b =>

@@ -25,6 +25,7 @@ namespace CB_Gift.DTOs
             public int Quantity { get; set; }
 
             public ProductionStatus? StatusOrder { get; set; }
+            public string? Reason { get; set; }
         }
 
         public class StaffDateGroupDto

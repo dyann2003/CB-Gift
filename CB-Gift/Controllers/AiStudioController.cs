@@ -17,7 +17,7 @@ namespace CB_Gift.Controllers
         }
 
         [HttpPost("generate")]
-        public async Task<IActionResult> GenerateChibi([FromForm] AiPromptDto req)
+        public async Task<IActionResult> GenerateImageAsync([FromForm] AiPromptDto req)
         {
             if (req.ImageFile == null)
                 return BadRequest(new { message = "Vui lòng chọn ảnh để tạo hình." });
