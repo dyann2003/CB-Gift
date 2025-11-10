@@ -40,6 +40,39 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+
+        // ⭐️ ĐÃ DI CHUYỂN VÀO TRONG 'colors'
+        purple: {
+          50: '#fcf4ff',
+          100: '#fae8ff',
+          200: '#f5d0fe',
+          300: '#f0abfc',
+          400: '#e879f9',
+          500: '#d946ef',
+          600: '#c026d3', // Màu chính hơi đậm
+          700: '#a21caf',
+          800: '#86198f',
+          900: '#701a75',
+          primary: '#c026d3', // Màu primary cho các nút, tiêu đề
+        },
+        
+        teal: {
+          50: '#f0fdfa',
+          100: '#ccfbf1',
+          200: '#99f6e4',
+          300: '#5eead4',
+          400: '#2dd4bf',
+          500: '#14b8a6',
+          600: '#0d9488',
+          700: '#0f766e',
+          800: '#115e59',
+          900: '#134e4a',
+          accent: '#14b8a6', // Màu nhấn
+        },
+
+        neutral: {
+          bg: '#fdfbff', // Màu nền tổng thể rất nhạt, gần trắng
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -48,5 +81,7 @@ module.exports = {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    require("tailwindcss-animate")
+  ],
 };

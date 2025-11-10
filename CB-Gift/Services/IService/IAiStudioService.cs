@@ -2,6 +2,11 @@
 {
     public interface IAiStudioService
     {
-        Task<string> GenerateLineArtFromChibiAsync(string base64Image, string userPrompt);
+        Task<string> GenerateImageAsync(
+            string base64Image,
+            string userPrompt,
+            string? style,
+            string? aspectRatio,
+            string? quality);
     }
 }
