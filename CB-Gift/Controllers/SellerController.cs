@@ -1,9 +1,11 @@
 ﻿using CB_Gift.DTOs;
+using CB_Gift.Hubs;
 using CB_Gift.Models.Enums;
 using CB_Gift.Services;
 using CB_Gift.Services.IService;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using System.Security.Claims;
 
 namespace CB_Gift.Controllers
@@ -16,13 +18,19 @@ namespace CB_Gift.Controllers
         private readonly IOrderService _orderService;
         private readonly IDesignerTaskService _designerTaskService;
         private readonly IDesignerSellerService _designerSellerservice;
+        private readonly IHubContext<NotificationHub> _hubContext; // <-- SignalR hub context
 
-
-        public SellerController(IOrderService orderService, IDesignerTaskService designerTaskService, IDesignerSellerService designerSellerservice)
+        // Cập nhật constructor để inject IHubContext<NotificationHub>
+        public SellerController(
+            IOrderService orderService,
+            IDesignerTaskService designerTaskService,
+            IDesignerSellerService designerSellerservice,
+            IHubContext<NotificationHub> hubContext)   // <-- thêm param
         {
             _orderService = orderService;
             _designerTaskService = designerTaskService;
             _designerSellerservice = designerSellerservice;
+            _hubContext = hubContext;
         }
 
         // ----------------------------------------------------------------------
@@ -133,6 +141,35 @@ namespace CB_Gift.Controllers
         }
         //assign theo OrderId
         // POST: /api/seller/orders/{orderId}/assign-designer
+        //[HttpPost("orders/{orderId}/assign-designer")]
+        //public async Task<IActionResult> AssignDesignerToOrder(int orderId, [FromBody] AssignDesignerToOrderDetailDto dto)
+        //{
+        //    try
+        //    {
+        //        var sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        //        if (string.IsNullOrEmpty(sellerId)) return Unauthorized();
+
+        //        // Gọi phương thức service mới
+        //        var success = await _designerTaskService.AssignDesignerToOrderAsync(orderId, dto.DesignerUserId, sellerId);
+
+        //        if (!success)
+        //        {
+        //            return NotFound(new { message = "Không tìm thấy Đơn hàng hoặc bạn không có quyền truy cập." });
+        //        }
+
+        //        return Ok(new { message = "Giao việc cho Designer thành công. Toàn bộ đơn hàng đã được cập nhật." });
+        //    }
+        //    catch (InvalidOperationException ex)
+        //    {
+        //        return BadRequest(new { message = ex.Message });
+        //    }
+        //    catch (Exception)
+        //    {
+        //        // _logger.LogError(...)
+        //        return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn." });
+        //    }
+        //}
+
         [HttpPost("orders/{orderId}/assign-designer")]
         public async Task<IActionResult> AssignDesignerToOrder(int orderId, [FromBody] AssignDesignerToOrderDetailDto dto)
         {
@@ -149,18 +186,40 @@ namespace CB_Gift.Controllers
                     return NotFound(new { message = "Không tìm thấy Đơn hàng hoặc bạn không có quyền truy cập." });
                 }
 
+                // --- Gửi notification qua SignalR đến designer (không block response nếu gửi thất bại) ---
+                try
+                {
+                    var payload = new
+                    {
+                        OrderId = orderId,
+                        Message = "Bạn vừa được giao một đơn hàng mới.",
+                        AssignedBy = sellerId,
+                        TimeUtc = DateTime.UtcNow
+                    };
+
+                    // group name format: user_{userId} (phù hợp với NotificationHub.OnConnectedAsync)
+                    await _hubContext.Clients.Group($"user_{dto.DesignerUserId}")
+                        .SendAsync("NewTaskAssigned", payload);
+                }
+                catch (Exception sendEx)
+                {
+                    // Log ở đây nếu bạn có logger (không trả lỗi cho client vì assign đã thành công)
+                    Console.WriteLine("SignalR notify failed: " + sendEx.Message);
+                }
+
                 return Ok(new { message = "Giao việc cho Designer thành công. Toàn bộ đơn hàng đã được cập nhật." });
             }
             catch (InvalidOperationException ex)
             {
                 return BadRequest(new { message = ex.Message });
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // _logger.LogError(...)
-                return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn." });
+                // _logger.LogError(ex, "AssignDesignerToOrder failed");
+                return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn.", detail = ex.Message });
             }
         }
+
         //Get Designer của seller
         [HttpGet("my-designer")]
         public async Task<IActionResult> GetDesignersForSeller()
