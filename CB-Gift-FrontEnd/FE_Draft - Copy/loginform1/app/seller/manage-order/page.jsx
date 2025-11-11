@@ -428,7 +428,8 @@ export default function ManageOrder() {
       title: `Cancel order #${order.orderId}`,
       input: "text",
       inputLabel: "Enter reason for cancellation",
-      inputPlaceholder: "For example: Customer changed his mind, wrong information...",
+      inputPlaceholder:
+        "For example: Customer changed his mind, wrong information...",
       inputAttributes: {
         maxlength: 200,
         autocapitalize: "off",
@@ -1289,7 +1290,8 @@ export default function ManageOrder() {
     const { value: reason } = await Swal.fire({
       title: `Reject application details `,
       input: "textarea",
-      inputPlaceholder: "Enter reason for rejection (at least 10 characters)...",
+      inputPlaceholder:
+        "Enter reason for rejection (at least 10 characters)...",
       inputAttributes: {
         "aria-label": "Reason",
       },
@@ -1300,7 +1302,9 @@ export default function ManageOrder() {
       cancelButtonColor: "#6c757d",
       preConfirm: (value) => {
         if (!value || value.trim().length < 10) {
-          Swal.showValidationMessage("Rejection reason must be 10 characters or more!");
+          Swal.showValidationMessage(
+            "Rejection reason must be 10 characters or more!"
+          );
           return false;
         }
         return value;
@@ -3480,6 +3484,52 @@ whitespace-nowrap"
               className="bg-red-600 hover:bg-red-700"
             >
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isAssignPopupOpen} onOpenChange={setIsAssignPopupOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign Designer</DialogTitle>
+          </DialogHeader>
+
+          {designers.length > 0 ? (
+            <div className="space-y-3">
+              <Label>Select a designer:</Label>
+              <Select
+                onValueChange={(value) => setSelectedDesignerId(value)}
+                value={selectedDesignerId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose designer..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {designers.map((d) => (
+                    <SelectItem key={d.designerUserId} value={d.designerUserId}>
+                      {d.designerName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <p>No designers found for this seller.</p>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsAssignPopupOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-indigo-600 text-white"
+              onClick={handleConfirmAssignDesigner}
+              disabled={!selectedDesignerId}
+            >
+              Assign
             </Button>
           </DialogFooter>
         </DialogContent>

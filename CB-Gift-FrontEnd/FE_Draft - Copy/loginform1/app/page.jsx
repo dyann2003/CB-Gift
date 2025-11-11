@@ -100,8 +100,20 @@ export default function LoginPage() {
       const roles =
         decoded["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"];
 
+      // ✅ Lưu userId vào localStorage (SignalR dùng để JoinGroup)
+      const userId =
+        decoded[
+          "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"
+        ] || decoded.sub; // fallback nếu token không có claim này
+
+      if (userId) {
+        localStorage.setItem("userId", userId);
+        console.log("💾 Saved userId:", userId);
+      }
+
       console.log("Decoded token:", decoded);
       console.log("Roles:", roles);
+      console.log("👤 Current userId:", localStorage.getItem("userId"));
 
       // Lưu token (có thể đổi sang cookie nếu muốn an toàn hơn)
       if (rememberMe) {
