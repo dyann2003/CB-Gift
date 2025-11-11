@@ -149,26 +149,26 @@ namespace CB_Gift.Tests.Services
 
             // Assert page 1
             Assert.Equal(2, r1.TotalItems);               // Alice + Charlie
-            Assert.Single(r1.Items);
-            Assert.Equal("alice@x.com", r1.Items[0].Email);
-            Assert.Contains("Admin", r1.Items[0].Roles);
+            var p1 = Assert.Single(r1.Items);             // lấy phần tử duy nhất của trang
+            Assert.Equal("alice@x.com", p1.Email);
+            Assert.Contains("Admin", p1.Roles);
 
             // Act 2: page 2
             q1.Page = 2;
             var r2 = await _svc.GetUsersAsync(q1);
-            Assert.Single(r2.Items);
-            Assert.Equal("charlie@x.com", r2.Items[0].Email);
-            Assert.Contains("Admin", r2.Items[0].Roles);
+            var p2 = Assert.Single(r2.Items);
+            Assert.Equal("charlie@x.com", p2.Email);
+            Assert.Contains("Admin", p2.Roles);
 
             // Act 3: Role filter to Staff (should match Bob but Bob is inactive)
             var q2 = new UserQuery { Role = "Staff" };
             var r3 = await _svc.GetUsersAsync(q2);
 
             Assert.Equal(1, r3.TotalItems);
-            Assert.Single(r3.Items);
-            Assert.Equal("bob@x.com", r3.Items[0].Email);
-            Assert.Contains("Staff", r3.Items[0].Roles);
-            Assert.False(r3.Items[0].IsActive);
+            var p3 = Assert.Single(r3.Items);
+            Assert.Equal("bob@x.com", p3.Email);
+            Assert.Contains("Staff", p3.Roles);
+            Assert.False(p3.IsActive);
         }
 
         [Fact]
