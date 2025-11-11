@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react"; // [SỬA] Thêm useEffect
 import { Filter, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,140 +12,132 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 
-const mockInvoices = [
-  {
-    id: "INV-2025-01-001",
-    month: "January 2025",
-    totalAmount: 8_500_000,
-    status: "paid",
-    createdDate: "15/01/2025",
-    dueDate: "25/01/2025",
-    paidDate: "20/01/2025",
-    paidAmount: 8_500_000,
-    paymentType: "Full Payment",
-    transactionId: "TXN-2025-001",
-  },
-  {
-    id: "INV-2025-02-001",
-    month: "December 2024",
-    totalAmount: 7_200_000,
-    status: "pending",
-    createdDate: "10/01/2025",
-    dueDate: "20/01/2025",
-    paidDate: null,
-    paidAmount: 0,
-    paymentType: null,
-    transactionId: null,
-  },
-  {
-    id: "INV-2025-03-001",
-    month: "November 2024",
-    totalAmount: 6_800_000,
-    status: "partial",
-    createdDate: "05/01/2025",
-    dueDate: "15/01/2025",
-    paidDate: "12/01/2025",
-    paidAmount: 3_400_000,
-    paymentType: "50%",
-    transactionId: "TXN-2025-002",
-  },
-  {
-    id: "INV-2025-04-001",
-    month: "October 2024",
-    totalAmount: 5_500_000,
-    status: "partial",
-    createdDate: "01/01/2025",
-    dueDate: "10/01/2025",
-    paidDate: "08/01/2025",
-    paidAmount: 1_650_000,
-    paymentType: "30%",
-    transactionId: "TXN-2025-003",
-  },
-  {
-    id: "INV-2025-05-001",
-    month: "September 2024",
-    totalAmount: 4_200_000,
-    status: "partial",
-    createdDate: "20/12/2024",
-    dueDate: "30/12/2024",
-    paidDate: "28/12/2024",
-    paidAmount: 840_000,
-    paymentType: "20%",
-    transactionId: "TXN-2024-012",
-  },
-];
+// [XÓA] Toàn bộ mockInvoices
+// const mockInvoices = [ ... ];
 
 export default function SellerInvoiceList({ onPayment }) {
+  // [THÊM] State cho API
+  const [invoices, setInvoices] = useState([]);
+  const [totalInvoices, setTotalInvoices] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // State cho filter và pagination (giữ nguyên)
   const [searchTerm, setSearchTerm] = useState("");
-  const [paymentTypeFilter, setPaymentTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
 
-  const filteredInvoices = useMemo(() => {
-    return mockInvoices.filter((invoice) => {
-      const matchesSearch =
-        invoice.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        invoice.month.toLowerCase().includes(searchTerm.toLowerCase());
+  // [XÓA] State 'paymentTypeFilter'
+  // const [paymentTypeFilter, setPaymentTypeFilter] = useState("all");
 
-      const matchesPaymentType =
-        paymentTypeFilter === "all" ||
-        (paymentTypeFilter === "full" &&
-          invoice.paymentType === "Full Payment") ||
-        (paymentTypeFilter === "20" && invoice.paymentType === "20%") ||
-        (paymentTypeFilter === "30" && invoice.paymentType === "30%") ||
-        (paymentTypeFilter === "50" && invoice.paymentType === "50%") ||
-        (paymentTypeFilter === "none" && invoice.paymentType === null);
+  // [THÊM] useEffect để gọi API
+  useEffect(() => {
+    const fetchInvoices = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams();
+        params.append("page", currentPage);
+        params.append("pageSize", itemsPerPage);
 
-      const matchesStatus =
-        statusFilter === "all" || invoice.status === statusFilter;
+        if (searchTerm) {
+          params.append("searchTerm", searchTerm);
+        }
+        if (statusFilter !== "all") {
+          params.append("status", statusFilter);
+        }
 
-      return matchesSearch && matchesPaymentType && matchesStatus;
-    });
-  }, [searchTerm, paymentTypeFilter, statusFilter]);
+        // Gọi API
+        const response = await fetch(
+          `https://localhost:7015/api/invoices/myinvoices?${params.toString()}`,
+          {
+            credentials: "include", // Cần thiết vì có [Authorize]
+          }
+        );
 
-  const totalPages = Math.ceil(filteredInvoices.length / itemsPerPage);
+        if (!response.ok) {
+          throw new Error("Failed to fetch invoices");
+        }
+
+        const data = await response.json();
+        console.log(data);
+        setInvoices(data.items || []);
+        setTotalInvoices(data.total || 0); // Giả định API trả về { items: [], total: 0 }
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchInvoices();
+  }, [currentPage, itemsPerPage, searchTerm, statusFilter]); // Dependency
+
+  // [XÓA] 'filteredInvoices = useMemo()'
+  // Toàn bộ logic filter/pagination giờ do backend xử lý
+
+  // [SỬA] Tính toán dựa trên state từ API
+  const totalPages = Math.ceil(totalInvoices / itemsPerPage);
   const startIdx = (currentPage - 1) * itemsPerPage;
-  const paginatedInvoices = filteredInvoices.slice(
-    startIdx,
-    startIdx + itemsPerPage
-  );
 
+  // [SỬA] Cập nhật 'getStatusBadge' để khớp với API (Issued, Paid, PartiallyPaid)
   const getStatusBadge = (status) => {
     switch (status) {
-      case "paid":
+      case "Paid":
         return { bg: "bg-green-100", text: "text-green-800", label: "Paid" };
-      case "partial":
+      case "PartiallyPaid":
         return {
           bg: "bg-yellow-100",
           text: "text-yellow-800",
           label: "Partial",
         };
+      case "Issued":
       default:
-        return { bg: "bg-red-100", text: "text-red-800", label: "Pending" };
+        return { bg: "bg-red-100", text: "text-red-800", label: "Issued" };
     }
   };
 
   const handlePageChange = (page) => {
-    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+    // totalPages giờ đã được tính đúng
+    setCurrentPage(Math.max(1, Math.min(page, totalPages || 1)));
+  };
+
+  // Hàm format tiền tệ
+  const formatCurrency = (value) => {
+    if (value === 0) return "0";
+    if (!value) return "-";
+
+    // Sử dụng Intl.NumberFormat để thêm dấu phẩy (vd: 10.000)
+    const formatter = new Intl.NumberFormat('vi-VN');
+
+    // Nếu số < 1 triệu, hiển thị đầy đủ, có dấu phẩy
+    if (value < 1_000_000) {
+      return formatter.format(value);
+    }
+    
+    // Nếu số >= 1 triệu, mới hiển thị dạng "M"
+    return (value / 1_000_000).toFixed(1) + "M";
   };
 
   return (
     <div className="space-y-4">
       {/* Filters */}
       <div className="bg-blue-50 rounded-lg p-4 border border-blue-200 space-y-4">
+        {/* ... (Tiêu đề Filter) ... */}
         <div className="flex items-center gap-2 mb-4">
           <Filter className="h-5 w-5 text-blue-600" />
           <h3 className="font-semibold text-gray-900">Filters</h3>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* [SỬA] Chỉ còn 2 cột filter */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="text-sm font-medium text-gray-700 mb-2 block">
               Search
             </label>
             <Input
-              placeholder="Search invoice ID or month..."
+              placeholder="Search invoice number..."
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
@@ -159,6 +151,7 @@ export default function SellerInvoiceList({ onPayment }) {
             <label className="text-sm font-medium text-gray-700 mb-2 block">
               Status
             </label>
+            {/* [SỬA] Cập nhật các giá trị (value) của SelectItem */}
             <Select
               value={statusFilter}
               onValueChange={(value) => {
@@ -171,37 +164,14 @@ export default function SellerInvoiceList({ onPayment }) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="paid">Paid</SelectItem>
-                <SelectItem value="partial">Partial</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="Paid">Paid</SelectItem>
+                <SelectItem value="PartiallyPaid">Partially Paid</SelectItem>
+                <SelectItem value="Issued">Issued</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-2 block">
-              Payment Type
-            </label>
-            <Select
-              value={paymentTypeFilter}
-              onValueChange={(value) => {
-                setPaymentTypeFilter(value);
-                setCurrentPage(1);
-              }}
-            >
-              <SelectTrigger className="border-blue-200">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="full">Full Payment</SelectItem>
-                <SelectItem value="20">20%</SelectItem>
-                <SelectItem value="30">30%</SelectItem>
-                <SelectItem value="50">50%</SelectItem>
-                <SelectItem value="none">Not Paid</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {/* [XÓA] Toàn bộ <div> của "Payment Type" */}
         </div>
       </div>
 
@@ -212,10 +182,10 @@ export default function SellerInvoiceList({ onPayment }) {
             <thead>
               <tr className="bg-blue-100 border-b border-gray-200">
                 <th className="px-4 py-3 text-left font-semibold text-gray-700 text-sm uppercase tracking-wide">
-                  Invoice ID
+                  Invoice #
                 </th>
                 <th className="px-4 py-3 text-left font-semibold text-gray-700 text-sm uppercase tracking-wide">
-                  Month
+                  Created Date
                 </th>
                 <th className="px-4 py-3 text-right font-semibold text-gray-700 text-sm uppercase tracking-wide">
                   Amount
@@ -223,8 +193,9 @@ export default function SellerInvoiceList({ onPayment }) {
                 <th className="px-4 py-3 text-right font-semibold text-gray-700 text-sm uppercase tracking-wide">
                   Paid
                 </th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-700 text-sm uppercase tracking-wide">
-                  Payment Type
+                {/* [THÊM] Cột Remaining */}
+                <th className="px-4 py-3 text-right font-semibold text-gray-700 text-sm uppercase tracking-wide">
+                  Remaining
                 </th>
                 <th className="px-4 py-3 text-left font-semibold text-gray-700 text-sm uppercase tracking-wide">
                   Status
@@ -232,64 +203,103 @@ export default function SellerInvoiceList({ onPayment }) {
                 <th className="px-4 py-3 text-center font-semibold text-gray-700 text-sm uppercase tracking-wide">
                   Action
                 </th>
+                {/* [XÓA] Th "Payment Type" */}
               </tr>
             </thead>
             <tbody>
-              {paginatedInvoices.map((invoice) => {
-                const badge = getStatusBadge(invoice.status);
-                return (
-                  <tr
-                    key={invoice.id}
-                    className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
-                  >
-                    <td className="px-4 py-3 font-semibold text-blue-600">
-                      {invoice.id}
-                    </td>
-                    <td className="px-4 py-3 text-gray-700">{invoice.month}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-gray-900">
-                      {(invoice.totalAmount / 1_000_000).toFixed(1)}M
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold text-green-600">
-                      {(invoice.paidAmount / 1_000_000).toFixed(1)}M
-                    </td>
-                    <td className="px-4 py-3 text-gray-700">
-                      {invoice.paymentType || "-"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-semibold ${badge.bg} ${badge.text}`}
-                      >
-                        {badge.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => onPayment(invoice)}
-                        className="p-2 hover:bg-blue-100 rounded-lg transition-colors text-blue-600 hover:text-blue-700"
-                        title="View Details"
-                      >
-                        <Eye className="h-5 w-5" />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
+              {/* [SỬA] Thêm Loading/Error/No Data states */}
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="text-center p-8 text-gray-500">
+                    Loading invoices...
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={7} className="text-center p-8 text-red-500">
+                    Error: {error}
+                  </td>
+                </tr>
+              ) : invoices.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="text-center p-8 text-gray-500">
+                    No invoices found.
+                  </td>
+                </tr>
+              ) : (
+                // [SỬA] Dùng `invoices` thay vì `paginatedInvoices`
+                invoices.map((invoice) => {
+                  const badge = getStatusBadge(invoice.status);
+                  return (
+                    <tr
+                      key={invoice.invoiceId} // [SỬA] Dùng invoiceId
+                      className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                    >
+                      <td className="px-4 py-3 font-semibold text-blue-600">
+                        {invoice.invoiceNumber} {/* [SỬA] */}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {/* [SỬA] Dùng createdAt và format */}
+                        {new Date(invoice.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                        {formatCurrency(invoice.totalAmount)} {/* [SỬA] */}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-green-600">
+                        {formatCurrency(invoice.amountPaid)} {/* [SỬA] */}
+                      </td>
+                      {/* [THÊM] Cột Remaining */}
+                      <td className="px-4 py-3 text-right font-semibold text-red-600">
+                        {formatCurrency(invoice.remainingBalance)}
+                      </td>
+                      <td className="px-4 py-3">
+                        {/* Dòng 1: Badge (luôn hiển thị) */}
+                          <div>
+                            <span
+                              className={`px-3 py-1 rounded-full text-xs font-semibold ${badge.bg} ${badge.text}`}
+                            >
+                              {badge.label}
+                            </span>
+                          </div>
+
+                          {/* Dòng 2: Due Date (hiển thị có điều kiện) */}
+                          {(invoice.status === "Issued" ||
+                            invoice.status === "PartiallyPaid") && (
+                            <div className="text-xs text-red-600 mt-1">
+                              Due: {new Date(invoice.dueDate).toLocaleDateString()}
+                            </div>
+                          )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          onClick={() => onPayment(invoice)}
+                          className="p-2 hover:bg-blue-100 rounded-lg transition-colors text-blue-600 hover:text-blue-700"
+                          title="View Details"
+                        >
+                          <Eye className="h-5 w-5" />
+                        </button>
+                      </td>
+                      {/* [XÓA] Td "Payment Type" */}
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
       {/* Pagination Footer */}
+      {/* [SỬA] Cập nhật logic phân trang để dùng `totalInvoices` */}
       <div className="bg-blue-100 px-4 py-3 border-t border-blue-200">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          {/* Left: Showing X to Y of Z */}
           <div className="text-sm text-gray-700 font-medium">
-            Showing {paginatedInvoices.length > 0 ? startIdx + 1 : 0} to{" "}
-            {Math.min(startIdx + itemsPerPage, filteredInvoices.length)} of{" "}
-            {filteredInvoices.length} invoices
+            Showing {invoices.length > 0 ? startIdx + 1 : 0} to{" "}
+            {Math.min(startIdx + itemsPerPage, totalInvoices)} of{" "}
+            {totalInvoices} invoices
           </div>
 
-          {/* Center: Pagination Controls */}
+          {/* ... (Pagination Controls, giữ nguyên logic) ... */}
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -301,7 +311,6 @@ export default function SellerInvoiceList({ onPayment }) {
               Previous
             </Button>
 
-            {/* Page Numbers */}
             <div className="flex items-center gap-1">
               {Array.from({ length: totalPages }, (_, i) => i + 1)
                 .filter(
@@ -335,14 +344,14 @@ export default function SellerInvoiceList({ onPayment }) {
               variant="outline"
               size="sm"
               onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
+              disabled={currentPage === totalPages || totalPages === 0}
               className="border-blue-200 hover:bg-blue-50 text-sm"
             >
               Next
             </Button>
           </div>
 
-          {/* Right: Items Per Page */}
+          {/* ... (Items Per Page, giữ nguyên logic) ... */}
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-700 font-medium">
               Items Per Page

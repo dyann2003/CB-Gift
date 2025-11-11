@@ -1,14 +1,13 @@
 using CB_Gift.Models;
 using CB_Gift.DTOs;
 using CB_Gift.Models.Enums;
+using CB_Gift.Data;
 
 namespace CB_Gift.Services.IService
 {
     public interface IOrderService
     {
-        // ----------------------------------------------------------------------
-        // ✅ Lọc + phân trang cho Seller
-        // ----------------------------------------------------------------------
+        // Lọc + phân trang cho Seller
         Task<(List<OrderWithDetailsDto> Orders, int TotalCount)> GetFilteredAndPagedOrdersForSellerAsync(
             string sellerUserId,
             string? status,
@@ -19,10 +18,7 @@ namespace CB_Gift.Services.IService
             DateTime? toDate,
             int page,
             int pageSize);
-
-        // ----------------------------------------------------------------------
         // ✅ Lọc + phân trang cho tất cả (API GetAllOrders)
-        // ----------------------------------------------------------------------
         Task<(IEnumerable<OrderWithDetailsDto> Orders, int Total)> GetFilteredAndPagedOrdersAsync(
             string? status,
             string? searchTerm,
@@ -32,10 +28,6 @@ namespace CB_Gift.Services.IService
             DateTime? toDate,
             int page,
             int pageSize);
-
-        // ----------------------------------------------------------------------
-        // ✅ Các phương thức khác giữ nguyên
-        // ----------------------------------------------------------------------
         Task<List<OrderWithDetailsDto>> GetAllOrders();
         Task<List<OrderDto>> GetOrdersForSellerAsync(string sellerUserId);
         Task<List<OrderWithDetailsDto>> GetOrdersAndOrderDetailForSellerAsync(string sellerUserId);
@@ -55,5 +47,17 @@ namespace CB_Gift.Services.IService
         Task<bool> SellerApproveOrderDetailDesignAsync(int orderDetailId, ProductionStatus action, string sellerId, string? reason);
         Task<bool> SendOrderToReadyProdAsync(int orderId, string sellerId);
         Task<ApproveOrderResult> ApproveOrderForShippingAsync(int orderId);
+        Task<(IEnumerable<OrderWithDetailsDto> Orders, int Total)> GetFilteredAndPagedOrdersForInvoiceAsync(
+             string? status,
+             string? searchTerm,
+             string? seller, 
+             string? sortColumn,
+             string? sortDirection,
+             DateTime? fromDate,
+             DateTime? toDate,
+             int page,
+             int pageSize);
+
+        Task<IEnumerable<string>> GetUniqueSellersAsync(string? status);
     }
 }
