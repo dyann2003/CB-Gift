@@ -34,6 +34,15 @@ namespace CB_Gift.Tests.Services
             var mockClients = new Mock<IHubClients>();
             var mockProxy = new Mock<IClientProxy>();
 
+            // Cho phép mọi SendCoreAsync để test không bị throw khi không setup cụ thể
+            mockProxy
+                .Setup(p => p.SendCoreAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<object[]>(),
+                    It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
+
+            // Clients.Group(...) -> IClientProxy
             mockClients
                 .Setup(c => c.Group(It.IsAny<string>()))
                 .Returns(mockProxy.Object);
@@ -64,16 +73,24 @@ namespace CB_Gift.Tests.Services
                 OrderDetails = new List<OrderDetail>()
             };
 
-        private static Refund MakeRefund(int refundId, int orderId, string sellerId, string status = "Pending") =>
-            new Refund
-            {
-                RefundId = refundId,
-                OrderId = orderId,
-                RequestedBySellerId = sellerId,
-                Status = status,
-                Amount = 50m,
-                CreatedAt = DateTime.UtcNow
-            };
+        private static Refund MakeRefund(
+           int refundId,
+           int orderId,
+           string sellerId,
+           string status = "Pending",
+           string reason = "seed-reason",
+           string proofUrl = "http://example/proof.png")
+           => new Refund
+           {
+               RefundId = refundId,
+               OrderId = orderId,
+               RequestedBySellerId = sellerId,
+               Status = status,
+               Amount = 50m,
+               CreatedAt = DateTime.UtcNow,
+               Reason = reason,            
+               ProofUrl = proofUrl         
+           };
 
         // ====== RequestRefundAsync ======
 
@@ -108,10 +125,10 @@ namespace CB_Gift.Tests.Services
             Assert.Equal("seller-1", refund.RequestedBySellerId);
             Assert.Equal(order.TotalCost ?? 0, refund.Amount);
 
-            // SignalR assert
-            proxy.Verify(p => p.SendAsync(
+            // SignalR assert (verify SendCoreAsync)
+            proxy.Verify(p => p.SendCoreAsync(
                     "NewRefundRequest",
-                    It.Is<object>(o => o != null),
+                    It.Is<object[]>(args => args != null && args.Length == 1 && args[0] != null),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
         }
@@ -282,16 +299,16 @@ namespace CB_Gift.Tests.Services
                     It.Is<string>(u => u.Contains($"/seller/orders/{order.OrderId}"))),
                 Times.Once);
 
-            // SignalR: OrderStatusChanged + RefundRequestReviewed
-            proxy.Verify(p => p.SendAsync(
+            // SignalR: OrderStatusChanged + RefundRequestReviewed (verify SendCoreAsync)
+            proxy.Verify(p => p.SendCoreAsync(
                     "OrderStatusChanged",
-                    It.Is<object>(o => o != null),
+                    It.Is<object[]>(args => args != null && args.Length == 1 && args[0] != null),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
 
-            proxy.Verify(p => p.SendAsync(
+            proxy.Verify(p => p.SendCoreAsync(
                     "RefundRequestReviewed",
-                    It.Is<object>(o => o != null),
+                    It.Is<object[]>(args => args != null && args.Length == 1 && args[0] != null),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
         }
@@ -320,8 +337,8 @@ namespace CB_Gift.Tests.Services
             await service.ReviewRefundAsync(71, new StaffReviewRefundDto { Approved = false, RejectionReason = rejectionReason }, "staff-7");
 
             var reloadedOrder = await ctx.Orders.FirstAsync(o => o.OrderId == 7001);
-            Assert.Equal(10, reloadedOrder.StatusOrder); // giữ nguyên
-            Assert.Equal("Paid", reloadedOrder.PaymentStatus); // giữ nguyên
+            Assert.Equal(10, reloadedOrder.StatusOrder);            // giữ nguyên
+            Assert.Equal("Paid", reloadedOrder.PaymentStatus);      // giữ nguyên
 
             var reloadedRefund = await ctx.Refunds.FirstAsync(r => r.RefundId == 71);
             Assert.Equal("Rejected", reloadedRefund.Status);
@@ -334,16 +351,16 @@ namespace CB_Gift.Tests.Services
                     It.IsAny<string>()),
                 Times.Once);
 
-            // SignalR: OrderStatusChanged + RefundRequestReviewed
-            proxy.Verify(p => p.SendAsync(
+            // SignalR: OrderStatusChanged + RefundRequestReviewed (verify SendCoreAsync)
+            proxy.Verify(p => p.SendCoreAsync(
                     "OrderStatusChanged",
-                    It.Is<object>(o => o != null),
+                    It.Is<object[]>(args => args != null && args.Length == 1 && args[0] != null),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
 
-            proxy.Verify(p => p.SendAsync(
+            proxy.Verify(p => p.SendCoreAsync(
                     "RefundRequestReviewed",
-                    It.Is<object>(o => o != null),
+                    It.Is<object[]>(args => args != null && args.Length == 1 && args[0] != null),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
         }
