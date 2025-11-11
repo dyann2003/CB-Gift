@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using CB_Gift.Models.Enums;
+using System.ComponentModel.DataAnnotations;
 
 namespace CB_Gift.DTOs
 {
@@ -28,12 +29,16 @@ namespace CB_Gift.DTOs
         public string ProductName { get; set; }
         public string ProductDescribe { get; set; }
         public string ProductTemplate { get; set; }
-        public ProductDetails ProductDetails { get; set; }
+        public string? ProductionStatus { get; set; }
         public int Quantity { get; set; }
         public string LinkImg { get; set; } // Link ảnh mẫu
+        public string LinkThankCard { get; set; }
+        public string LinkFileDesign { get; set; }
         public string Note { get; set; } // Ghi chú từ Seller
         public int OrderStatus { get; set; }
         public DateTime? AssignedAt { get; set; }
+        public string? Reason { get; set; }
+        public ProductDetails ProductDetails { get; set; }
     }
     public class ProductDetails
     {
@@ -55,9 +60,14 @@ namespace CB_Gift.DTOs
     }
     public class UploadDesignDto
     {
-        [Required]
-        public IFormFile DesignFile { get; set; }
-        public string Note { get; set; }
+        // Không còn [Required] ở đây. Chúng ta sẽ kiểm tra trong Service/Controller.
+        public IFormFile? DesignFile { get; set; }
+
+        // Trường mới: Dùng để nhận URL của ảnh đã có sẵn từ kho ảnh của designer
+        public string? FileUrl { get; set; }
+
+        // Dùng để nhận ghi chú
+        public string? Note { get; set; }
     }
     public class AssignDesignerToOrderDetailDto
     {
@@ -68,6 +78,8 @@ namespace CB_Gift.DTOs
     {
         // Frontend sẽ gửi JSON: { "orderStatus": 4 }
         [Required]
-        public int OrderStatus { get; set; }
+        public ProductionStatus ProductionStatus { get; set; }
+        // Thêm trường Reason
+        public string? Reason { get; set; }
     }
 }

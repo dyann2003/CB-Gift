@@ -1,7 +1,9 @@
 ﻿using CB_Gift.Data;
 using CB_Gift.Models;
+using CB_Gift.Models.Enums;
 using CB_Gift.Services.IService;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using static CB_Gift.DTOs.StaffViewDtos;
 
 namespace CB_Gift.Services
@@ -78,6 +80,17 @@ namespace CB_Gift.Services
             foreach (var order in ordersToUpdate)
             {
                 order.StatusOrder = 8; // Chuyển trạng thái sang "Đã gom đơn"
+
+                // lấy danh sách của OrderDetails để cập nhật ProductionStatus
+                var orderDetails = await _context.OrderDetails
+                    .Where(od => od.OrderId == order.OrderId)
+                    .ToListAsync();
+
+                //cật nhật ProductionStatus của các OrderDetail thành READY_PROD
+                foreach (var detail in orderDetails)
+                {
+                    detail.ProductionStatus = ProductionStatus.READY_PROD;
+                }
             }
 
             await _context.SaveChangesAsync();
@@ -101,13 +114,19 @@ namespace CB_Gift.Services
 
             if (!string.IsNullOrEmpty(status))
             {
+                //0 là needs_production, 1 là đang sản xuất , 2 là produced
                 if (status.Equals("produced", StringComparison.OrdinalIgnoreCase))
                 {
-                    query = query.Where(pd => pd.OrderDetail.Order.StatusOrder >= 10);
+                    //query = query.Where(pd => pd.StatusOrder == 2);
+                    query = query.Where(pd => pd.OrderDetail.ProductionStatus == ProductionStatus.FINISHED);
+
                 }
                 else if (status.Equals("needs_production", StringComparison.OrdinalIgnoreCase))
                 {
-                    query = query.Where(pd => pd.OrderDetail.Order.StatusOrder == 8);
+                    //query = query.Where(pd => pd.StatusOrder == 0 || pd.StatusOrder == 1);
+                    query = query.Where(pd => pd.OrderDetail.ProductionStatus == ProductionStatus.READY_PROD 
+                    || pd.OrderDetail.ProductionStatus == ProductionStatus.IN_PROD 
+                    || pd.OrderDetail.ProductionStatus == ProductionStatus.PROD_REWORK);
                 }
                 else
                 {
@@ -135,6 +154,7 @@ namespace CB_Gift.Services
                             Details = dateGroup.Select(pd => new StaffPlanDetailDto
                             {
                                 PlanDetailId = pd.PlanDetailId,
+                                OrderDetailId = pd.OrderDetailId,
                                 OrderId = pd.OrderDetail.OrderId,
                                 OrderCode = pd.OrderDetail.Order.OrderCode,
                                 CustomerName = pd.OrderDetail.Order.EndCustomer.Name,
@@ -142,12 +162,136 @@ namespace CB_Gift.Services
                                 NoteOrEngravingContent = pd.OrderDetail.Note,
                                 ProductionFileUrl = pd.OrderDetail.LinkFileDesign,
                                 ThankYouCardUrl = pd.OrderDetail.LinkThanksCard,
+                                Quantity = pd.OrderDetail.Quantity,
+                                StatusOrder = pd.OrderDetail.ProductionStatus,
+                                Reason = (
+                                        pd.OrderDetail.ProductionStatus == ProductionStatus.PROD_REWORK ||
+                                        pd.OrderDetail.ProductionStatus == ProductionStatus.QC_FAIL
+                                    )
+                                    ? (from log in _context.OrderDetailLogs
+                                       where log.OrderDetailId == pd.OrderDetailId &&
+                                             log.EventType == "QC_REJECTED"
+                                       orderby log.CreatedAt descending
+                                       select log.Reason
+                                      ).FirstOrDefault()
+                                    : null
                             }).ToList()
                         }).ToList()
                 })
                 .ToListAsync();
 
             return results;
+        }
+
+        /*public async Task<bool> UpdatePlanDetailStatusAsync(int planDetailId, int newStatus)
+        {
+            var planDetail = await _context.PlanDetails.FindAsync(planDetailId);
+
+            if (planDetail == null)
+            {
+                return false;
+            }
+
+            var orderDetail = await _context.OrderDetails.FindAsync(planDetail.OrderDetailId);
+
+            if (orderDetail == null)
+            {
+                return false;
+            }
+
+            orderDetail.ProductionStatus = (ProductionStatus)newStatus;
+
+            await _context.SaveChangesAsync();
+
+            return true;
+        }*/
+        // Trong Service class của bạn (ví dụ: PlanService)
+
+        public async Task<bool> UpdatePlanDetailStatusAsync(int planDetailId, int newStatus)
+        {
+            IDbContextTransaction? transaction = null;
+
+            // Chỉ mở transaction khi provider là relational (SQL Server/SQLite/…)
+            if (_context.Database.IsRelational())
+            {
+                transaction = await _context.Database.BeginTransactionAsync();
+            }
+
+            try
+            {
+                var planDetail = await _context.PlanDetails.FindAsync(planDetailId);
+                if (planDetail == null) return false;
+
+                var orderDetail = await _context.OrderDetails.FindAsync(planDetail.OrderDetailId);
+                if (orderDetail == null) return false;
+
+                orderDetail.ProductionStatus = (ProductionStatus)newStatus;
+
+                var order = await _context.Orders
+                    .Include(o => o.OrderDetails)
+                    .FirstOrDefaultAsync(o => o.OrderId == orderDetail.OrderId);
+                if (order == null) return false;
+
+                var allOrderDetails = order.OrderDetails.ToList();
+                if (!allOrderDetails.Any())
+                {
+                    if (transaction != null) await transaction.CommitAsync();
+                    return true;
+                }
+
+                var minProductionStatusValue = allOrderDetails
+                    .Min(od => (int)od.ProductionStatus.GetValueOrDefault((ProductionStatus)0));
+                var minProductionStatus = (ProductionStatus)minProductionStatusValue;
+
+                order.StatusOrder = MapProductionStatusToOrderStatus(minProductionStatus);
+
+                await _context.SaveChangesAsync();
+                if (transaction != null) await transaction.CommitAsync();
+                return true;
+            }
+            catch
+            {
+                if (transaction != null) await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+
+        // Giữ nguyên hàm Mapping của bạn
+        private int MapProductionStatusToOrderStatus(ProductionStatus productionStatus)
+        {
+            // Ánh xạ ProductionStatus (OrderDetail) sang StatusOrder (Order)
+            return productionStatus switch
+            {
+                // Trạng thái chung:
+                ProductionStatus.DRAFT => 1,
+                ProductionStatus.CREATED => 2,
+                ProductionStatus.HOLD => 16,
+                ProductionStatus.CANCELLED => 17,
+
+                // Trạng thái Design:
+                ProductionStatus.NEED_DESIGN => 3,
+                ProductionStatus.DESIGNING => 4,
+                ProductionStatus.CHECK_DESIGN => 5,
+                ProductionStatus.DESIGN_REDO => 6,
+
+                // Trạng thái Chốt Đơn/Sản xuất:
+                // READY_PROD là trạng thái Sẵn sàng Sản xuất.
+                ProductionStatus.READY_PROD => 8,
+
+                // Trạng thái Sản xuất:
+                ProductionStatus.IN_PROD => 8,
+                ProductionStatus.PROD_REWORK => 15,
+                ProductionStatus.QC_FAIL => 12, // Lỗi Sản xuất (QC_FAIL)
+
+                // Trạng thái Hoàn thành/Giao hàng:
+                ProductionStatus.QC_DONE => 11, // Đã Kiểm tra Chất lượng
+                ProductionStatus.PACKING => 13,
+                ProductionStatus.FINISHED => 10, // Sản xuất xong
+
+                // Trạng thái không rõ hoặc mặc định
+                _ => 1
+            };
         }
     }
 }

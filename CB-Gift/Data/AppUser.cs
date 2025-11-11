@@ -6,5 +6,8 @@ namespace CB_Gift.Data
     {
         public string? FullName { get; set; }
         public bool IsActive { get; set; } = true;
+
+        public string? PasswordResetOtp { get; set; }
+        public DateTime? PasswordResetOtpExpiry { get; set; }
     }
 }

@@ -99,20 +99,21 @@ public class AuthController : ControllerBase
 
         return Ok(new { message = "Password changed." });
     }
-    
+
     // POST: /api/Auth/register
-    //[Authorize(Roles = "Manager")]
+    [Authorize(Roles = "Manager")]
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequestDto request)
     {
-
         var result = await _accountService.RegisterAsync(request);
+
         if (!result.Success)
         {
-            return BadRequest(result.Message);
+            // Trả về JSON, không phải plain text
+            return BadRequest(new { message = result.Message });
         }
 
-        return Ok(result.Data);
+        return Ok(new { data = result.Data });
     }
 
     // POST: /api/auth/forgot-password
@@ -120,54 +121,74 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
     {
-        var user = await _users.FindByEmailAsync(dto.Email);
-        if (user == null || !(await _users.IsEmailConfirmedAsync(user)))
+        // Tất cả logic đã được chuyển vào service
+        var result = await _accountService.SendPasswordResetOtpAsync(dto);
+
+        if (!result.Success)
         {
-            return BadRequest(new { message = "User not found or email not confirmed" });
+            // Trả về BadRequest nếu có lỗi cụ thể (ví dụ: user bị khóa)
+            return BadRequest(new { message = result.Message });
         }
 
-        var token = await _users.GeneratePasswordResetTokenAsync(user);
-        if (!user.IsActive)
-            return Unauthorized(new { message = "User is inactive" });
-
-        // Link reset (frontend nhận link này để cho user nhập password mới)
-        var resetLink = $"{_config["App:ClientUrl"]}/reset-password?email={Uri.EscapeDataString(dto.Email)}&token={Uri.EscapeDataString(token)}";
-
-        await _accountService.SendResetPasswordEmailAsync(dto.Email, resetLink);
-
-        return Ok(new
-        {
-            message = "Password reset link has been sent to your email.",
-            token = token,
-            resetLink = resetLink
-        });
+        // Luôn trả về OK để bảo mật, ngay cả khi email không tồn tại
+        return Ok(new { message = "If your email is registered, you will receive an OTP." });
     }
 
     // POST: /api/auth/reset-password
-    [HttpPost("reset-password")]
+    //[HttpPost("reset-password")]
+    //[AllowAnonymous]
+    //// Sử dụng DTO mới
+    //public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordWithOtpDto dto)
+    //{
+    //    if (!ModelState.IsValid) return BadRequest(ModelState);
+
+    //    // Tất cả logic đã được chuyển vào service
+    //    var result = await _accountService.ResetPasswordWithOtpAsync(dto);
+
+    //    if (!result.Success)
+    //    {
+    //        return BadRequest(new
+    //        {
+    //            message = result.Message,
+    //        });
+    //    }
+
+    //    return Ok(new { message = result.Message });
+    //}
+
+    // ✅ Bước 1: Verify OTP
+    [HttpPost("verify-otp")]
     [AllowAnonymous]
-    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
+    public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpDto dto)
     {
-        if (!ModelState.IsValid) return BadRequest(ModelState);
-        var user = await _users.FindByEmailAsync(dto.Email);
-        if (user == null) return BadRequest(new { message = "User not found" });
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
 
-        // Decode token để chắc chắn
-        var decodedToken = Uri.UnescapeDataString(dto.Token);
+        var result = await _accountService.VerifyOtpAsync(dto.Email, dto.Otp);
 
-        var result = await _users.ResetPasswordAsync(user, decodedToken, dto.NewPassword);
+        if (!result.Success)
+            return BadRequest(new { message = result.Message });
 
-        if (!result.Succeeded)
-        {
-            return BadRequest(new
-            {
-                message = "Reset password failed",
-                errors = result.Errors.Select(e => e.Description)
-            });
-        }
-
-        return Ok(new { message = "Password has been reset successfully." });
+        return Ok(new { message = result.Message });
     }
+
+
+    // ✅ Bước 2: Reset password sau khi verify thành công
+    [HttpPost("reset-password-with-otp")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ResetPasswordWithOtp([FromBody] ResetPasswordWithOtpDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var result = await _accountService.ResetPasswordWithOtpAsync(dto);
+
+        if (!result.Success)
+            return BadRequest(new { message = result.Message });
+
+        return Ok(new { message = result.Message });
+    }
+
 
     // GET: /api/auth/profile
     [Authorize]
@@ -187,6 +208,51 @@ public class AuthController : ControllerBase
             user.FullName
         });
     }
+    /// <summary>
+    /// Lấy danh sách tất cả các Seller trong hệ thống.
+    /// </summary> api/auth/all-sellers
+    [Authorize(Roles = "Staff,Manager")]
+    [HttpGet("all-sellers")]
+    public async Task<IActionResult> GetAllSellers()
+    {
+        try
+        {
+            var sellers = await _accountService.GetAllSellersAsync();
+            return Ok(sellers);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn khi lấy danh sách seller.", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Lấy danh sách tất cả các Designer trong hệ thống.
+    /// </summary>
+    /// <returns>Danh sách designer gồm Id và FullName</returns>
+    [Authorize(Roles = "Staff,Manager")]
+    [HttpGet("all-designers")]
+    public async Task<IActionResult> GetAllDesigners()
+    {
+        try
+        {
+            var designers = await _accountService.GetAllDesignersAsync();
+
+            if (designers == null || !designers.Any())
+                return NotFound(new { message = "Không tìm thấy designer nào." });
+
+            return Ok(designers);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new
+            {
+                message = "Đã xảy ra lỗi không mong muốn khi lấy danh sách designer.",
+                error = ex.Message
+            });
+        }
+    }
+
 
 
 }

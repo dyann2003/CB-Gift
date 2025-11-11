@@ -86,3 +86,5 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+"CB-Gift/appsettings.json" 
+"CB-Gift/appsettings.json" 
