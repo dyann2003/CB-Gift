@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using CB_Gift.Data;
+﻿using CB_Gift.Data;
 using CB_Gift.DTOs;
 using CB_Gift.Hubs;
 using CB_Gift.Models;
@@ -11,9 +6,15 @@ using CB_Gift.Services;
 using CB_Gift.Services.IService;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace CB_Gift.Tests.Services
@@ -23,7 +24,8 @@ namespace CB_Gift.Tests.Services
         // ===== Helpers =====
         private static DbContextOptions<CBGiftDbContext> NewInMemoryOptions()
             => new DbContextOptionsBuilder<CBGiftDbContext>()
-                .UseInMemoryDatabase(Guid.NewGuid().ToString()) // DB riêng cho mỗi test
+                .UseInMemoryDatabase(Guid.NewGuid().ToString()) 
+                .ConfigureWarnings(b => b.Ignore(InMemoryEventId.TransactionIgnoredWarning))
                 .EnableSensitiveDataLogging()
                 .Options;
 
