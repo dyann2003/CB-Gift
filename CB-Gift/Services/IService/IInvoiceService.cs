@@ -11,6 +11,21 @@ namespace CB_Gift.Services.IService
         Task ProcessPayOSWebhookAsync(int webhookLogId);
         Task<Invoice> GetInvoiceDetailsAsync(int invoiceId);
         Task<IEnumerable<Invoice>> GetInvoicesForSellerAsync(string sellerId);
-        Task<IEnumerable<Invoice>> GetAllInvoicesAsync();
+        Task<PaginatedResult<InvoiceSummaryDto>> GetInvoicesForSellerPageAsync(
+        string sellerId,
+        string? status,
+        string? searchTerm,
+        int page,
+        int pageSize
+        );
+        // Task<IEnumerable<Invoice>> GetAllInvoicesAsync();
+        Task<PaginatedResult<InvoiceSummaryDto>> GetAllInvoicesAsync(
+        string? status,
+        string? searchTerm,
+        string? sellerId,
+        int page,
+        int pageSize
+        );
+        Task<OverdueCheckDto> CheckForOverdueInvoiceAsync(string sellerId);
     }
 }
