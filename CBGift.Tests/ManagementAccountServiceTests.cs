@@ -188,7 +188,6 @@ namespace CB_Gift.Tests.Services
         [Fact]
         public async Task CreateAsync_Creates_New_User_And_Roles()
         {
-            // Arrange
             var dto = new CreateUserDto
             {
                 Email = "new@x.com",
@@ -198,23 +197,21 @@ namespace CB_Gift.Tests.Services
                 Roles = new List<string> { "C", "D" }
             };
 
-            // Act
             var res = await _svc.CreateAsync(dto);
 
-            // Assert
             Assert.True(res.Success, res.Message);
             Assert.NotNull(res.Data);
             Assert.Equal("new@x.com", res.Data!.Email);
-            Assert.Contains("Admin", res.Data.Roles);
-            Assert.Contains("Staff", res.Data.Roles);
+            Assert.Contains("C", res.Data.Roles);
+            Assert.Contains("D", res.Data.Roles);
 
-            // Verify in store
             var u = await _userManager.FindByEmailAsync("new@x.com");
             Assert.NotNull(u);
             var roles = await _userManager.GetRolesAsync(u!);
-            Assert.Contains("Admin", roles);
-            Assert.Contains("Staff", roles);
+            Assert.Contains("C", roles);
+            Assert.Contains("D", roles);
         }
+
 
         [Fact]
         public async Task CreateAsync_If_Exists_Update_Profile_And_Roles()
