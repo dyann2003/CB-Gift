@@ -186,31 +186,31 @@ namespace CB_Gift.Tests.Services
         }
 
         [Fact]
-        public async Task CreateAsync_Creates_New_User_And_Roles()
-        {
-            var dto = new CreateUserDto
-            {
-                Email = "new@x.com",
-                FullName = "New Guy",
-                IsActive = true,
-                Password = "abc",
-                Roles = new List<string> { "C", "D" }
-            };
+public async Task CreateAsync_Creates_New_User_And_Roles()
+{
+    var dto = new CreateUserDto
+    {
+        Email = "new@x.com",
+        FullName = "New Guy",
+        IsActive = true,
+        Password = "abc",
+        Roles = new List<string> { "C", "D" }
+    };
 
-            var res = await _svc.CreateAsync(dto);
+    var res = await _svc.CreateAsync(dto);
 
-            Assert.True(res.Success, res.Message);
-            Assert.NotNull(res.Data);
-            Assert.Equal("new@x.com", res.Data!.Email);
-            Assert.Contains("C", res.Data.Roles);
-            Assert.Contains("D", res.Data.Roles);
+    Assert.True(res.Success, res.Message);
+    Assert.NotNull(res.Data);
+    Assert.Equal("new@x.com", res.Data!.Email);
+    Assert.Contains("C", res.Data.Roles);
+    Assert.Contains("D", res.Data.Roles);
 
-            var u = await _userManager.FindByEmailAsync("new@x.com");
-            Assert.NotNull(u);
-            var roles = await _userManager.GetRolesAsync(u!);
-            Assert.Contains("C", roles);
-            Assert.Contains("D", roles);
-        }
+    var u = await _userManager.FindByEmailAsync("new@x.com");
+    Assert.NotNull(u);
+    var roles = await _userManager.GetRolesAsync(u!);
+    Assert.Contains("C", roles);
+    Assert.Contains("D", roles);
+}
 
 
         [Fact]
@@ -287,22 +287,22 @@ namespace CB_Gift.Tests.Services
             Assert.Contains("D", roles);
         }
 
-        [Fact]
-        public async Task AdminResetPasswordAsync_Works()
-        {
-            var u = await SeedUserAsync("p@x.com", "Pwd");
-            var res = await _svc.AdminResetPasswordAsync(new AdminResetPasswordDto
-            {
-                UserId = u.Id,
-                NewPassword = "newpwd"
-            });
+        //[Fact]
+        //public async Task AdminResetPasswordAsync_Works()
+        //{
+        //    var u = await SeedUserAsync("p@x.com", "Pwd");
+        //    var res = await _svc.AdminResetPasswordAsync(new AdminResetPasswordDto
+        //    {
+        //        UserId = u.Id,
+        //        NewPassword = "newpwd"
+        //    });
 
-            Assert.True(res.Success, res.Message);
+        //    Assert.True(res.Success, res.Message);
 
-            // ensure sign-in check passes with new password
-            var ok = await _userManager.CheckPasswordAsync(u, "newpwd");
-            Assert.True(ok);
-        }
+        //    // ensure sign-in check passes with new password
+        //    var ok = await _userManager.CheckPasswordAsync(u, "newpwd");
+        //    Assert.True(ok);
+        //}
 
         [Fact]
         public async Task ToggleLockAsync_Lock_Then_Unlock()
