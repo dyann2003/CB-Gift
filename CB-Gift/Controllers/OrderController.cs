@@ -1,5 +1,7 @@
 ﻿using CB_Gift.DTOs;
+using CB_Gift.Services;
 using CB_Gift.Services.IService;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -11,17 +13,54 @@ namespace CB_Gift.Controllers
     public class OrderController : ControllerBase
     {
         private readonly IOrderService _orderService;
-        public OrderController(IOrderService orderService)
+        private readonly ICancellationService _cancellationService;
+        private readonly IRefundService _refundService;
+        public OrderController(IOrderService orderService, ICancellationService cancellationService, IRefundService refundService)
         {
             _orderService = orderService;
+            _cancellationService = cancellationService;
+            _refundService = refundService;
         }
 
         [HttpGet("GetAllOrders")]
-        public async Task<IActionResult> GetAllOrders()
+        public async Task<IActionResult> GetAllOrders(
+     [FromQuery] string? status = null,
+     [FromQuery] string? searchTerm = null,
+     [FromQuery] string? sortColumn = null,
+     [FromQuery] string? sortDirection = "desc",
+     [FromQuery] DateTime? fromDate = null,
+     [FromQuery] DateTime? toDate = null,
+     [FromQuery] int page = 1,
+     [FromQuery] int pageSize = 10)
         {
-            var orders = await _orderService.GetAllOrders();
-            return Ok(orders);
+            try
+            {
+                var (orders, total) = await _orderService.GetFilteredAndPagedOrdersAsync(
+                    status, searchTerm, sortColumn, sortDirection, fromDate, toDate, page, pageSize);
+
+                return Ok(new { total, orders });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    message = "Đã xảy ra lỗi khi lấy danh sách đơn hàng.",
+                    detail = ex.Message
+                });
+            }
         }
+
+
+
+
+
+        //[HttpGet("GetAllOrders")]
+        //public async Task<IActionResult> GetAllOrders()
+        //{
+        //    var orders = await _orderService.GetAllOrders();
+        //    return Ok(orders);
+        //}
+
 
         [HttpGet("{orderId}")]
         public async Task<IActionResult> GetOrderWithDetails(int orderId)
@@ -126,6 +165,159 @@ namespace CB_Gift.Controllers
             {
                // _logger.LogError(ex, "An unexpected error occurred while deleting Order ID {OrderId}.", id);
                 return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn." });
+            }
+        }
+
+        [HttpPut("{orderId}/approve-shipping")]
+        public async Task<IActionResult> ApproveOrderForShipping([FromRoute] int orderId)
+        {
+            if (orderId <= 0)
+            {
+                return BadRequest("Invalid Order ID.");
+            }
+
+            try
+            {
+                var result = await _orderService.ApproveOrderForShippingAsync(orderId);
+
+                if (!result.IsSuccess)
+                {
+                    if (!result.OrderFound)
+                    {
+                        return NotFound($"Order with ID {orderId} not found.");
+                    }
+                    if (!result.CanApprove)
+                    {
+                        return BadRequest(result.ErrorMessage ?? "Order cannot be approved. Check product statuses.");
+                    }
+                    return BadRequest(result.ErrorMessage ?? "Failed to approve order.");
+                }
+
+                return Ok(new { message = $"Order {orderId} approved for shipping." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, "An unexpected error occurred while approving the order.");
+            }
+        }
+        /// <summary>
+        /// (SELLER) Gửi yêu cầu hủy một đơn hàng
+        /// </summary>
+        [HttpPost("{id}/request-cancellation")]
+        [Authorize(Roles = "Seller")]
+        public async Task<IActionResult> RequestOrderCancellation(int id, [FromBody] CancelRequestDto request)
+        {
+            try
+            {
+                var sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                await _cancellationService.RequestCancellationAsync(id, request, sellerId);
+                return Ok(new { message = "Đã gửi yêu cầu hủy đơn hàng." });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Lỗi hệ thống.", error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// (STAFF/MANAGER) Phê duyệt hoặc từ chối một yêu cầu hủy đơn hàng
+        /// </summary>
+        [HttpPost("{id}/review-cancellation")]
+        [Authorize(Roles = "Staff,Manager")]
+        public async Task<IActionResult> ReviewOrderCancellation(int id, [FromBody] ReviewCancelRequestDto request)
+        {
+            try
+            {
+                var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                await _cancellationService.ReviewCancellationAsync(id, request, staffId);
+
+                string message = request.Approved
+                    ? "Đã CHẤP NHẬN hủy đơn hàng."
+                    : "Đã TỪ CHỐI yêu cầu hủy đơn hàng.";
+
+                return Ok(new { message });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (ArgumentException ex) // Bắt lỗi thiếu lý do từ chối
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Lỗi hệ thống.", error = ex.Message });
+            }
+        }
+        [HttpPost("{id}/request-refund")]
+        [Authorize(Roles = "Seller")]
+        public async Task<IActionResult> RequestOrderRefund(int id, [FromBody] SellerRefundRequestDto request)
+        {
+            try
+            {
+                var sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                await _refundService.RequestRefundAsync(id, request, sellerId);
+                return Ok(new { message = "Đã gửi yêu cầu hoàn tiền thành công. Chờ Staff xem xét." });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Lỗi hệ thống.", error = ex.Message });
+            }
+        }
+
+        // (STAFF/MANAGER) PHÊ DUYỆT HOẶC TỪ CHỐI YÊU CẦU HOÀN TIỀN ===
+        // Lưu ý: Route này trỏ đến ID của Yêu cầu (RefundRequest), không phải ID của Order
+        [HttpPost("refund-requests/{refundId}/review")]
+        [Authorize(Roles = "Staff,Manager")]
+        public async Task<IActionResult> ReviewRefund(int refundId, [FromBody] StaffReviewRefundDto request)
+        {
+            try
+            {
+                var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                await _refundService.ReviewRefundAsync(refundId, request, staffId);
+
+                string message = request.Approved
+                    ? "Đã CHẤP NHẬN yêu cầu hoàn tiền."
+                    : "Đã TỪ CHỐI yêu cầu hoàn tiền.";
+
+                return Ok(new { message });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (ArgumentException ex) // Bắt lỗi thiếu lý do từ chối
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Lỗi hệ thống.", error = ex.Message });
             }
         }
     }

@@ -99,9 +99,9 @@ export default function SellerHeader() {
               <DropdownMenuItem onClick={() => setShowPasswordModal(true)}>
                 Change Password
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setShowTopUpModal(true)}>
+              {/* <DropdownMenuItem onClick={() => setShowTopUpModal(true)}>
                 Request Top-Up Money
-              </DropdownMenuItem>
+              </DropdownMenuItem> */}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout}>
                 Log out

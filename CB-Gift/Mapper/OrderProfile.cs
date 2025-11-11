@@ -38,7 +38,8 @@ namespace CB_Gift.Mapper
                     .ForMember(dest => dest.Price, opt => opt.MapFrom(src => src.ProductVariant.TotalCost))
                     .ForMember(dest => dest.Quantity, opt => opt.MapFrom(src => src.Quantity))
                     .ForMember(dest => dest.LinkImg, opt => opt.MapFrom(src => src.LinkImg))
-                    .ForMember(dest => dest.NeedDesign, opt => opt.MapFrom(src => src.NeedDesign));
+                    .ForMember(dest => dest.NeedDesign, opt => opt.MapFrom(src => src.NeedDesign))
+                    .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.ProductionStatus));
 
             // DTO → Entity (dùng khi tạo)
             CreateMap<OrderCreateRequest, Order>()

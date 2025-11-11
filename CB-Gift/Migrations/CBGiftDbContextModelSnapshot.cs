@@ -64,6 +64,12 @@ namespace CB_Gift.Migrations
                     b.Property<string>("PasswordHash")
                         .HasColumnType("longtext");
 
+                    b.Property<string>("PasswordResetOtp")
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime?>("PasswordResetOtpExpiry")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<string>("PhoneNumber")
                         .HasColumnType("longtext");
 
@@ -90,6 +96,56 @@ namespace CB_Gift.Migrations
                         .HasDatabaseName("UserNameIndex");
 
                     b.ToTable("AspNetUsers", (string)null);
+                });
+
+            modelBuilder.Entity("CB_Gift.Models.CancellationRequest", b =>
+                {
+                    b.Property<int>("CancellationRequestId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("CancellationRequestId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PreviousStatusOrder")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("RejectionReason")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestReason")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestedByUserId")
+                        .IsRequired()
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("ReviewedByStaffId")
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)");
+
+                    b.HasKey("CancellationRequestId");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("RequestedByUserId");
+
+                    b.HasIndex("ReviewedByStaffId");
+
+                    b.ToTable("CancellationRequests");
                 });
 
             modelBuilder.Entity("CB_Gift.Models.Category", b =>
@@ -142,6 +198,48 @@ namespace CB_Gift.Migrations
                     b.ToTable("DesignerSeller", (string)null);
                 });
 
+            modelBuilder.Entity("CB_Gift.Models.Discount", b =>
+                {
+                    b.Property<int>("DiscountId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("DiscountId"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<string>("DiscountType")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime?>("EndDate")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<decimal>("MinApplicableAmount")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<decimal>("Value")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.HasKey("DiscountId");
+
+                    b.ToTable("Discounts");
+                });
+
             modelBuilder.Entity("CB_Gift.Models.EndCustomer", b =>
                 {
                     b.Property<int>("CustId")
@@ -191,6 +289,175 @@ namespace CB_Gift.Migrations
                     b.HasKey("CustId");
 
                     b.ToTable("EndCustomer", (string)null);
+                });
+
+            modelBuilder.Entity("CB_Gift.Models.Invoice", b =>
+                {
+                    b.Property<int>("InvoiceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("InvoiceId"));
+
+                    b.Property<decimal>("AmountPaid")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("CreatedByStaffId")
+                        .IsRequired()
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<int?>("DiscountId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("DueDate")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("InvoiceNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<DateTime>("InvoicePeriodEnd")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime>("InvoicePeriodStart")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("PaymentLink")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<string>("SellerUserId")
+                        .IsRequired()
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<decimal>("TaxAmount")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.HasKey("InvoiceId");
+
+                    b.HasIndex("CreatedByStaffId");
+
+                    b.HasIndex("DiscountId");
+
+                    b.HasIndex("SellerUserId");
+
+                    b.ToTable("Invoices");
+                });
+
+            modelBuilder.Entity("CB_Gift.Models.InvoiceHistory", b =>
+                {
+                    b.Property<int>("HistoryId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("HistoryId"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("InvoiceId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("varchar(255)");
+
+                    b.HasKey("HistoryId");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("InvoiceHistories");
+                });
+
+            modelBuilder.Entity("CB_Gift.Models.InvoiceItem", b =>
+                {
+                    b.Property<int>("InvoiceItemId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("InvoiceItemId"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<int>("InvoiceId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("int");
+
+                    b.HasKey("InvoiceItemId");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("OrderId");
+
+                    b.ToTable("InvoiceItems");
+                });
+
+            modelBuilder.Entity("CB_Gift.Models.Notification", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("RedirectUrl")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("varchar(255)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("Notifications");
                 });
 
             modelBuilder.Entity("CB_Gift.Models.Order", b =>
@@ -320,9 +587,8 @@ namespace CB_Gift.Migrations
                         .HasColumnName("ProductVariantID");
 
                     b.Property<string>("ProductionStatus")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("varchar(100)");
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
 
                     b.Property<int>("Quantity")
                         .HasColumnType("int");
@@ -388,6 +654,41 @@ namespace CB_Gift.Migrations
                     b.ToTable("OrderDetailDesign", (string)null);
                 });
 
+            modelBuilder.Entity("CB_Gift.Models.OrderDetailLog", b =>
+                {
+                    b.Property<int>("OrderDetailLogId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("OrderDetailLogId"));
+
+                    b.Property<string>("ActorUserId")
+                        .IsRequired()
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<int>("OrderDetailId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("OrderDetailLogId");
+
+                    b.HasIndex("ActorUserId");
+
+                    b.HasIndex("OrderDetailId");
+
+                    b.ToTable("OrderDetailLogs");
+                });
+
             modelBuilder.Entity("CB_Gift.Models.OrderStatus", b =>
                 {
                     b.Property<int>("StatusId")
@@ -406,6 +707,53 @@ namespace CB_Gift.Migrations
                     b.HasKey("StatusId");
 
                     b.ToTable("OrderStatus", (string)null);
+                });
+
+            modelBuilder.Entity("CB_Gift.Models.Payment", b =>
+                {
+                    b.Property<int>("PaymentId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("PaymentId"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<int>("InvoiceId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<DateTime>("PaymentDate")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<string>("ProcessedByStaffId")
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("TransactionId")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.HasKey("PaymentId");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("ProcessedByStaffId");
+
+                    b.ToTable("Payments");
                 });
 
             modelBuilder.Entity("CB_Gift.Models.Plan", b =>
@@ -604,6 +952,64 @@ namespace CB_Gift.Migrations
                     b.ToTable("QC", (string)null);
                 });
 
+            modelBuilder.Entity("CB_Gift.Models.Refund", b =>
+                {
+                    b.Property<int>("RefundId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("RefundId"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("GatewayRefundId")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ProofUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestedBySellerId")
+                        .IsRequired()
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("ReviewedByStaffId")
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<string>("StaffRejectionReason")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.HasKey("RefundId");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("RequestedBySellerId");
+
+                    b.HasIndex("ReviewedByStaffId");
+
+                    b.ToTable("Refunds");
+                });
+
             modelBuilder.Entity("CB_Gift.Models.Tag", b =>
                 {
                     b.Property<int>("TagsId")
@@ -659,6 +1065,48 @@ namespace CB_Gift.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("UploadedImages");
+                });
+
+            modelBuilder.Entity("CB_Gift.Models.WebhookLog", b =>
+                {
+                    b.Property<int>("WebhookLogId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("WebhookLogId"));
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("PaymentGateway")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("ProcessingStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("RawPayload")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime>("ReceivedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int?>("RelatedInvoiceId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Signature")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
+                    b.HasKey("WebhookLogId");
+
+                    b.HasIndex("RelatedInvoiceId");
+
+                    b.ToTable("WebhookLogs");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -808,6 +1256,31 @@ namespace CB_Gift.Migrations
                     b.ToTable("ProductTag");
                 });
 
+            modelBuilder.Entity("CB_Gift.Models.CancellationRequest", b =>
+                {
+                    b.HasOne("CB_Gift.Models.Order", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CB_Gift.Data.AppUser", "RequestedByUser")
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CB_Gift.Data.AppUser", "ReviewedByStaff")
+                        .WithMany()
+                        .HasForeignKey("ReviewedByStaffId");
+
+                    b.Navigation("Order");
+
+                    b.Navigation("RequestedByUser");
+
+                    b.Navigation("ReviewedByStaff");
+                });
+
             modelBuilder.Entity("CB_Gift.Models.DesignerSeller", b =>
                 {
                     b.HasOne("CB_Gift.Data.AppUser", "DesignerUser")
@@ -825,6 +1298,78 @@ namespace CB_Gift.Migrations
                     b.Navigation("DesignerUser");
 
                     b.Navigation("SellerUser");
+                });
+
+            modelBuilder.Entity("CB_Gift.Models.Invoice", b =>
+                {
+                    b.HasOne("CB_Gift.Data.AppUser", "CreatedByStaff")
+                        .WithMany()
+                        .HasForeignKey("CreatedByStaffId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CB_Gift.Models.Discount", "AppliedDiscount")
+                        .WithMany()
+                        .HasForeignKey("DiscountId");
+
+                    b.HasOne("CB_Gift.Data.AppUser", "SellerUser")
+                        .WithMany()
+                        .HasForeignKey("SellerUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AppliedDiscount");
+
+                    b.Navigation("CreatedByStaff");
+
+                    b.Navigation("SellerUser");
+                });
+
+            modelBuilder.Entity("CB_Gift.Models.InvoiceHistory", b =>
+                {
+                    b.HasOne("CB_Gift.Models.Invoice", "Invoice")
+                        .WithMany("History")
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CB_Gift.Data.AppUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId");
+
+                    b.Navigation("Invoice");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("CB_Gift.Models.InvoiceItem", b =>
+                {
+                    b.HasOne("CB_Gift.Models.Invoice", "Invoice")
+                        .WithMany("Items")
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CB_Gift.Models.Order", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Invoice");
+
+                    b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("CB_Gift.Models.Notification", b =>
+                {
+                    b.HasOne("CB_Gift.Data.AppUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("CB_Gift.Models.Order", b =>
@@ -885,6 +1430,42 @@ namespace CB_Gift.Migrations
                     b.Navigation("OrderDetail");
                 });
 
+            modelBuilder.Entity("CB_Gift.Models.OrderDetailLog", b =>
+                {
+                    b.HasOne("CB_Gift.Data.AppUser", "ActorUser")
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CB_Gift.Models.OrderDetail", "OrderDetail")
+                        .WithMany()
+                        .HasForeignKey("OrderDetailId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ActorUser");
+
+                    b.Navigation("OrderDetail");
+                });
+
+            modelBuilder.Entity("CB_Gift.Models.Payment", b =>
+                {
+                    b.HasOne("CB_Gift.Models.Invoice", "Invoice")
+                        .WithMany("Payments")
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CB_Gift.Data.AppUser", "ProcessedByStaff")
+                        .WithMany()
+                        .HasForeignKey("ProcessedByStaffId");
+
+                    b.Navigation("Invoice");
+
+                    b.Navigation("ProcessedByStaff");
+                });
+
             modelBuilder.Entity("CB_Gift.Models.PlanDetail", b =>
                 {
                     b.HasOne("CB_Gift.Models.OrderDetail", "OrderDetail")
@@ -937,6 +1518,31 @@ namespace CB_Gift.Migrations
                     b.Navigation("PlanDetail");
                 });
 
+            modelBuilder.Entity("CB_Gift.Models.Refund", b =>
+                {
+                    b.HasOne("CB_Gift.Models.Order", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CB_Gift.Data.AppUser", "RequestedBySeller")
+                        .WithMany()
+                        .HasForeignKey("RequestedBySellerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CB_Gift.Data.AppUser", "ReviewedByStaff")
+                        .WithMany()
+                        .HasForeignKey("ReviewedByStaffId");
+
+                    b.Navigation("Order");
+
+                    b.Navigation("RequestedBySeller");
+
+                    b.Navigation("ReviewedByStaff");
+                });
+
             modelBuilder.Entity("CB_Gift.Models.UploadedImage", b =>
                 {
                     b.HasOne("CB_Gift.Data.AppUser", "User")
@@ -946,6 +1552,15 @@ namespace CB_Gift.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("CB_Gift.Models.WebhookLog", b =>
+                {
+                    b.HasOne("CB_Gift.Models.Invoice", "Invoice")
+                        .WithMany()
+                        .HasForeignKey("RelatedInvoiceId");
+
+                    b.Navigation("Invoice");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -1022,6 +1637,15 @@ namespace CB_Gift.Migrations
             modelBuilder.Entity("CB_Gift.Models.EndCustomer", b =>
                 {
                     b.Navigation("Orders");
+                });
+
+            modelBuilder.Entity("CB_Gift.Models.Invoice", b =>
+                {
+                    b.Navigation("History");
+
+                    b.Navigation("Items");
+
+                    b.Navigation("Payments");
                 });
 
             modelBuilder.Entity("CB_Gift.Models.Order", b =>

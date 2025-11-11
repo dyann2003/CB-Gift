@@ -31,5 +31,32 @@ namespace CB_Gift.Controllers
             var result = await _planService.GetPlansForStaffViewAsync(categoryId, selectedDate, status);
             return Ok(result);
         }
+
+        [HttpPut("update-status/{planDetailId}")]
+        public async Task<IActionResult> UpdateStatus(int planDetailId, [FromQuery] int newStatus)
+        {
+            // Kiểm tra giá trị newStatus hợp lệ
+            if (newStatus < 6 || newStatus > 8)
+            {
+                return BadRequest("Trạng thái mới không hợp lệ. Chỉ chấp nhận các giá trị 6, 7, hoặc 8.");
+            }
+
+            try
+            {
+                var success = await _planService.UpdatePlanDetailStatusAsync(planDetailId, newStatus);
+
+                if (!success)
+                {
+                    return NotFound($"Không tìm thấy PlanDetail với ID: {planDetailId}.");
+                }
+
+                return Ok(new { message = "Cập nhật trạng thái thành công." });
+            }
+            catch (System.Exception ex)
+            {
+                // Ghi log lỗi ở đây (ví dụ: dùng ILogger)
+                return StatusCode(500, "Đã xảy ra lỗi trong quá trình xử lý yêu cầu.");
+            }
+        }
     }
 }

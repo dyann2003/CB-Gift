@@ -20,6 +20,7 @@ builder.Services.AddControllers()
         x.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles);
 
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSignalR();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "CBGift API", Version = "v1" });
@@ -101,6 +102,7 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddHttpClient();
 
 // ================== CORS (cho Next.js FE) ==================
 builder.Services.AddCors(options =>
@@ -110,7 +112,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins("http://localhost:3000") // FE URL
               .AllowAnyHeader()
               .AllowAnyMethod()
-              .AllowCredentials();
+              .AllowCredentials();// SignalR
     });
 });
 
@@ -133,7 +135,13 @@ builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<ITagService, TagService>();
 builder.Services.AddScoped<IDesignerSellerService, DesignerSellerService>();
 builder.Services.AddScoped<IDesignerTaskService, DesignerTaskService>();
+builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+builder.Services.AddScoped<IAiStudioService, AiStudioService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<ICancellationService, CancellationService>();
+builder.Services.AddScoped<IRefundService, RefundService>();
 
+builder.Services.AddScoped<IManagementAccountService, ManagementAccountService>();
 // --- Quartz ---
 builder.Services.AddQuartz(q =>
 {
@@ -177,6 +185,10 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Map Hub tới một endpoint
+// Client sẽ kết nối tới URL "/notificationHub"
+app.MapHub<CB_Gift.Hubs.NotificationHub>("/notificationHub");
 
 // ================== Seed Roles + User ==================
 using (var scope = app.Services.CreateScope())

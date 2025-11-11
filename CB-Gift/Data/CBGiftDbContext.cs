@@ -26,7 +26,16 @@ namespace CB_Gift.Data
         public virtual DbSet<Qc> Qcs { get; set; }
         public virtual DbSet<Tag> Tags { get; set; }
         public virtual DbSet<UploadedImage> UploadedImages { get; set; }
-
+        public virtual DbSet<Invoice> Invoices { get; set; }
+        public virtual DbSet<InvoiceItem> InvoiceItems { get; set; }
+        public virtual DbSet<Payment> Payments { get; set; }
+        public virtual DbSet<InvoiceHistory> InvoiceHistories { get; set; }
+        public virtual DbSet<WebhookLog> WebhookLogs { get; set; }
+        public virtual DbSet<Notification> Notifications { get; set; }
+        public virtual DbSet<OrderDetailLog> OrderDetailLogs { get; set; }
+        public virtual DbSet<CancellationRequest> CancellationRequests { get; set; }
+        public virtual DbSet<Refund> Refunds { get; set; }
+        public virtual DbSet<Discount> Discounts { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -135,7 +144,7 @@ namespace CB_Gift.Data
                 entity.Property(e => e.ProductVariantId).HasColumnName("ProductVariantID");
                 entity.Property(e => e.ProductionStatus)
                     .HasConversion(new EnumToStringConverter<ProductionStatus>()) // dùng cho enum
-                    .HasMaxLength(100); 
+                    .HasMaxLength(200); 
                 entity.HasOne(d => d.Order).WithMany(p => p.OrderDetails).HasForeignKey(d => d.OrderId).OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("FK_OrderDetail_Order");
                 entity.HasOne(d => d.ProductVariant).WithMany(p => p.OrderDetails).HasForeignKey(d => d.ProductVariantId).OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("FK_OrderDetail_Variant");
             });

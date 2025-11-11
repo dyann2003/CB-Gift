@@ -47,6 +47,11 @@ namespace CB_Gift.DTOs
         public int StatusOrder { get; set; }
 
         public string? StatusOderName { get; set; }
+        public string? Reason { get; set; } // lý do Cancel, lý do Refund
+        public string? RejectionReason { get; set; } // lý do không được đồng ý
+        public int? LatestRefundId { get; set; }
+        public bool? IsRefundPending { get; set; }
+        public decimal? RefundAmount { get; set; }
 
     }
     public class OrderWithDetailsDto : OrderDto
@@ -74,6 +79,8 @@ namespace CB_Gift.DTOs
         public string Accessory { get; set; }
 
         public string Note { get; set; }
+
+        public ProductionStatus? Status { get; set; }
     }
     public class OrderCreateRequest
     {
