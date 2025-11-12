@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { apiClient } from "../../../lib/apiClient";
 // Import các components UI
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -70,7 +71,7 @@ export default function DesignAssignPage() {
 
     // --- HÀM GỌI API CẬP NHẬT TRẠNG THÁI (Đã sửa lỗi JSON input) ---
     const updateDesignStatusApi = async (orderDetailId, newStatusKey) => {
-        const url = `https://localhost:7015/api/designer/tasks/status/${orderDetailId}`; 
+        const url = `${apiClient}/api/designer/tasks/status/${orderDetailId}`; 
         
         try {
             const response = await fetch(url, {
@@ -171,7 +172,7 @@ export default function DesignAssignPage() {
             try {
                 setLoading(true);
                 
-                const res = await fetch("https://localhost:7015/api/designer/tasks", { 
+                const res = await fetch("${apiClient}/api/designer/tasks", { 
                     credentials: "include", 
                 });
                 

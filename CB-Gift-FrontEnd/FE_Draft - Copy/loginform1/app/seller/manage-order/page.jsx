@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import apiClient from "../../../lib/apiClient";
 import {
   Select,
   SelectContent,
@@ -304,7 +305,7 @@ export default function ManageOrder() {
     const formData = new FormData();
     formData.append("File", file);
     try {
-      const res = await fetch("https://localhost:7015/api/images/upload", {
+      const res = await fetch("${apiClient.defaults.baseURL}/api/images/upload", {
         method: "POST",
         credentials: "include",
         body: formData,
@@ -393,7 +394,7 @@ export default function ManageOrder() {
 
     try {
       const response = await fetch(
-        `https://localhost:7015/api/order/${order.id}/request-refund`,
+        `${apiClient.defaults.baseURL}/api/order/${order.id}/request-refund`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -455,7 +456,7 @@ export default function ManageOrder() {
     // Gọi API
     try {
       const response = await fetch(
-        `https://localhost:7015/api/Order/${order.id}/request-cancellation`,
+        `${apiClient.defaults.baseURL}/api/Order/${order.id}/request-cancellation`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -525,7 +526,7 @@ export default function ManageOrder() {
         params.append("fromDate", dateRange.from.toISOString());
       if (dateRange?.to) params.append("toDate", dateRange.to.toISOString());
 
-      const url = `https://localhost:7015/api/Seller?${params.toString()}`;
+      const url = `${apiClient.defaults.baseURL}/api/Seller?${params.toString()}`;
 
       // 3. Gọi API với URL có tham số
       const response = await fetch(url, {
@@ -618,7 +619,7 @@ export default function ManageOrder() {
 
   // fetchStats: async () => {
   //   try {
-  //     const res = await fetch("https://localhost:7015/api/Seller/stats", {
+  //     const res = await fetch("${apiClient.defaults.baseURL}/api/Seller/stats", {
   //       credentials: "include",
   //     });
   //     if (!res.ok) throw new Error("Failed to fetch stats");
@@ -632,7 +633,7 @@ export default function ManageOrder() {
   // ✅ Dù
   const fetchStats = async () => {
     try {
-      const res = await fetch("https://localhost:7015/api/Seller/stats", {
+      const res = await fetch("${apiClient.defaults.baseURL}/api/Seller/stats", {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch stats");
@@ -731,7 +732,7 @@ export default function ManageOrder() {
 
     // Nếu tất cả đều hợp lệ, fetch danh sách designer
     try {
-      const res = await fetch("https://localhost:7015/api/Seller/my-designer", {
+      const res = await fetch("${apiClient.defaults.baseURL}/api/Seller/my-designer", {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch designers");
@@ -756,7 +757,7 @@ export default function ManageOrder() {
       // ✅ Gọi API assign cho từng order
       for (const orderId of selectedOrders) {
         const res = await fetch(
-          `https://localhost:7015/api/Seller/orders/${orderId}/assign-designer`,
+          `${apiClient.defaults.baseURL}/api/Seller/orders/${orderId}/assign-designer`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -917,7 +918,7 @@ export default function ManageOrder() {
       // ✅ Gọi API xóa
 
       const response = await fetch(
-        `https://localhost:7015/api/Order/${orderId}`,
+        `${apiClient.defaults.baseURL}/api/Order/${orderId}`,
         {
           method: "DELETE",
           credentials: "include",
@@ -1010,7 +1011,7 @@ export default function ManageOrder() {
   const handleViewDetails = async (order) => {
     try {
       console.log("🧾 Selected order (before fetch):", order);
-      const res = await fetch(`https://localhost:7015/api/Seller/${order.id}`, {
+      const res = await fetch(`${apiClient.defaults.baseURL}/api/Seller/${order.id}`, {
         credentials: "include",
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1146,7 +1147,7 @@ export default function ManageOrder() {
         typeof orderId
       );
       const res = await fetch(
-        `https://localhost:7015/api/Seller/orders/${orderId}/approve-or-reject-design`,
+        `${apiClient.defaults.baseURL}/api/Seller/orders/${orderId}/approve-or-reject-design`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -1202,7 +1203,7 @@ export default function ManageOrder() {
         typeof orderId
       );
       const res = await fetch(
-        `https://localhost:7015/api/Seller/orders/${orderId}/approve-or-reject-design`,
+        `${apiClient.defaults.baseURL}/api/Seller/orders/${orderId}/approve-or-reject-design`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -1247,7 +1248,7 @@ export default function ManageOrder() {
     setIsSubmittingDetail(orderDetailId);
     try {
       const res = await fetch(
-        `https://localhost:7015/api/Seller/order/order-details/${orderDetailId}/design-status`,
+        `${apiClient.defaults.baseURL}/api/Seller/order/order-details/${orderDetailId}/design-status`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -1318,7 +1319,7 @@ export default function ManageOrder() {
 
     try {
       const res = await fetch(
-        `https://localhost:7015/api/Seller/order/order-details/${orderDetailId}/design-status`,
+        `${apiClient.defaults.baseURL}/api/Seller/order/order-details/${orderDetailId}/design-status`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -1399,7 +1400,7 @@ export default function ManageOrder() {
       for (const orderId of selectedOrders) {
         try {
           const res = await fetch(
-            `https://localhost:7015/api/Seller/orders/${orderId}/send-to-staff`,
+            `${apiClient.defaults.baseURL}/api/Seller/orders/${orderId}/send-to-staff`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },

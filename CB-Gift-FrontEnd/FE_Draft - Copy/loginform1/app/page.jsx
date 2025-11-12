@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { jwtDecode } from "jwt-decode";
+import apiClient from "../lib/apiClient";
 import {
   Dialog,
   DialogContent,
@@ -41,7 +42,6 @@ export default function LoginPage() {
   const [isOtpExpired, setIsOtpExpired] = useState(false);
   const [isOtpVerified, setIsOtpVerified] = useState(false);
   const router = useRouter();
-
   useEffect(() => {
     let interval;
     if (forgotPasswordStep === "otp" && otpCountdown > 0) {
@@ -67,7 +67,7 @@ export default function LoginPage() {
     }
 
     try {
-      const res = await fetch("https://localhost:7015/api/auth/login", {
+      const res = await fetch(`${apiClient.defaults.baseURL}/api/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -159,7 +159,7 @@ export default function LoginPage() {
 
     try {
       const res = await fetch(
-        "https://localhost:7015/api/auth/forgot-password",
+        "${apiClient.defaults.baseURL}/api/auth/forgot-password",
         {
           method: "POST",
           headers: {
@@ -208,7 +208,7 @@ export default function LoginPage() {
     setOtpError("");
 
     try {
-      const res = await fetch("https://localhost:7015/api/auth/verify-otp", {
+      const res = await fetch("${apiClient.defaults.baseURL}/api/auth/verify-otp", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -259,7 +259,7 @@ export default function LoginPage() {
 
     try {
       const res = await fetch(
-        "https://localhost:7015/api/auth/reset-password-with-otp",
+        "${apiClient.defaults.baseURL}/api/auth/reset-password-with-otp",
         {
           method: "POST",
           headers: {

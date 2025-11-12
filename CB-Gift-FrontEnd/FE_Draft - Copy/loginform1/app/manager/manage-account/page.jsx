@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {apiClient} from "../../../lib/apiClient";
+import { apiClient } from "../../lib/apiClient"
 import ManagerSidebar from "@/components/layout/manager/sidebar";
 import ManagerHeader from "@/components/layout/manager/header";
 import AccountDetailsModal from "@/components/modals/account-details-modal";

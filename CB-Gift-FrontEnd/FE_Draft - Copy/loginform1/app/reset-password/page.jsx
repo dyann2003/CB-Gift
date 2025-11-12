@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {apiClient} from "../../../lib/apiClient";
 import {
   Dialog,
   DialogContent,
@@ -66,7 +67,7 @@ export default function ResetPasswordPage() {
 
     try {
       const res = await fetch(
-        "https://localhost:7015/api/auth/reset-password",
+        "${apiClient}/api/auth/reset-password",
         {
           method: "POST",
           headers: {

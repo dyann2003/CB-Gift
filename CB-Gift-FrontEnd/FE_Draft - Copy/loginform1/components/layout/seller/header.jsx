@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import {apiClient} from "../../../lib/apiClient";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,7 +25,7 @@ export default function SellerHeader() {
     try {
       const token = localStorage.getItem("token");
 
-      const res = await fetch("https://localhost:7015/api/auth/logout", {
+      const res = await fetch("${apiClient}/api/auth/logout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
