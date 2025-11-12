@@ -809,7 +809,7 @@ export default function StaffManageOrder() {
                                       </Popover>
                                     
                                   {/* ✅ Nếu đơn đang yêu cầu Cancel */}
-                                  {(order.statusOderName === "HOLD" || order.statusOderName === "Cancel") && !order.isRefundPending && (
+                                  {(order.statusOderName === "Tạm Dừng/Chờ" || order.statusOderName === "Cancel") && !order.isRefundPending && (
                                     <>
                                       <Button
                                         variant="outline"
