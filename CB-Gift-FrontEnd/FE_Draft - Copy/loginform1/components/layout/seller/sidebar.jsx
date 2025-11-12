@@ -19,7 +19,7 @@ export default function SellerSidebar({ currentPage }) {
       label: "Manage Invoice",
       path: "/seller/manage-invoice",
     },
-    //{ id: "receive-bill", label: "Receive Bill", path: "/seller/receive-bill" },
+    { id: "receive-bill", label: "Receive Bill", path: "/seller/receive-bill" },
   ];
 
   const handleNavigation = (item) => {
