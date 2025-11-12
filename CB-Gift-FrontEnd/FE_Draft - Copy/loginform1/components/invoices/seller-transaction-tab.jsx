@@ -53,7 +53,65 @@ const transactionHistory = [
   },
 ];
 
-const SellerTransactionTab = ({ seller }) => {
+// [XÓA] mock 'transactionHistory'
+
+const SellerTransactionTab = ({ seller, onActionDone }) => {
+  // [THÊM] State cho API
+  const [transactions, setTransactions] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10); // Có thể thêm Select để đổi
+
+  const totalPages = Math.ceil(total / itemsPerPage);
+
+  // [THÊM] useEffect để tải lịch sử thanh toán hhhhhhhhhh
+  useEffect(() => {
+    if (!seller?.id) return;
+
+    const fetchTransactions = async () => {
+      setLoading(true);
+      setError(null);
+      const params = new URLSearchParams({
+        page: currentPage,
+        pageSize: itemsPerPage,
+      });
+
+      try {
+        const response = await fetch(
+          `https://localhost:7015/api/invoices/seller-payments/${seller.id}?${params.toString()}`,
+          { credentials: "include" }
+        );
+        if (!response.ok) throw new Error("Failed to fetch payment history.");
+        const data = await response.json();
+        setTransactions(data.items || []);
+        setTotal(data.total || 0);
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTransactions();
+  }, [seller, currentPage, itemsPerPage, onActionDone]); // [SỬA] Tải lại khi onActionDone thay đổi
+
+  // Hàm format tiền tệ
+  const formatCurrency = (value) => {
+    if (value === 0) return "0";
+    if (!value) return "-";
+    if (value < 1_000_000) {
+      return new Intl.NumberFormat("vi-VN").format(value);
+    }
+    return (value / 1_000_000).toFixed(1) + "M";
+  };
+  
+  // [SỬA] Cập nhật các thẻ tóm tắt (Summary Cards)
+  // GHI CHÚ: Các thẻ này nên được tính toán từ API riêng,
+  // vì dữ liệu phân trang không đại diện cho toàn bộ lịch sử.
+  // Tạm thời ẩn đi để tránh hiển thị sai.
+  
   return (
     <div className="space-y-4">
       <div className="mb-4">

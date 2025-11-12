@@ -1,6 +1,26 @@
 "use client";
 
 const SellerInfoTab = ({ seller }) => {
+  
+  // [SỬA] Thêm hàm helper để tính toán an toàn
+  const getDebtRatio = () => {
+    if (!seller.totalSales || seller.totalSales === 0) {
+      return 0; // Tránh chia cho 0
+    }
+    return (seller.totalDebt / seller.totalSales) * 100;
+  };
+
+  // Hàm format tiền tệ hhhhhhhhhh
+  const formatCurrency = (value) => {
+    if (value === 0) return "0";
+    if (!value) return "-";
+    if (value < 1_000_000) {
+      return new Intl.NumberFormat("vi-VN").format(value);
+    }
+    return (value / 1_000_000).toFixed(1) + "M";
+  };
+
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-8">

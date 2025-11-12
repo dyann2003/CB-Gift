@@ -11,29 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const months = [
-  {
-    id: 1,
-    name: "January 2025",
-    status: "paid",
-    paid: true,
-    totalAmount: 8_500_000,
-  },
-  {
-    id: 2,
-    name: "December 2024",
-    status: "partial",
-    paid: false,
-    totalAmount: 7_200_000,
-  },
-  {
-    id: 3,
-    name: "November 2024",
-    status: "unpaid",
-    paid: false,
-    totalAmount: 6_800_000,
-  },
-];
+// [XÓA] mock 'months' và 'generateOrders'hhhhhhhhhhhh
 
 const generateOrders = (monthId, sellerId) => {
   const orders = [];
