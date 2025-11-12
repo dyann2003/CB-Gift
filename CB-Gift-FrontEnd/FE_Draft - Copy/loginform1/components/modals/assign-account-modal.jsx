@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -17,140 +17,149 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
-import { Search, Plus, XCircle } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
+import { UserPlus, Save, X, AlertCircle, XCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
-export default function AddRelationshipModal({ isOpen, onClose, onAdd }) {
-  const [sellers, setSellers] = useState([]);
-  const [designers, setDesigners] = useState([]);
-  const [selectedSeller, setSelectedSeller] = useState("");
-  const [selectedDesigner, setSelectedDesigner] = useState("");
-  const [sellerSearch, setSellerSearch] = useState("");
-  const [designerSearch, setDesignerSearch] = useState("");
-  const [loading, setLoading] = useState(false);
+export default function AssignAccountModal({
+  isOpen,
+  onClose,
+  onAssignAccount,
+}) {
+  const [formData, setFormData] = useState({
+    fullName: "",
+    email: "",
+    username: "",
+    role: "",
+    department: "",
+    notes: "",
+  });
 
-  // Popup UI state
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showError, setShowError] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [errors, setErrors] = useState({});
 
-  /* ------------------- SỬA 1: Reset khi modal mở ------------------- */
-  useEffect(() => {
-    if (isOpen) {
-      fetchSellers();
-      fetchDesigners();
-      setShowSuccess(false);
-      setShowError(false);
-      setErrorMessage("");
-      setSelectedSeller("");
-      setSelectedDesigner("");
-      setSellerSearch("");
-      setDesignerSearch("");
-    }
-  }, [isOpen]);
+  const validateForm = () => {
+    const newErrors = {};
+    if (!formData.fullName.trim()) newErrors.fullName = "Full name is required";
+    if (!formData.email.trim()) newErrors.email = "Email is required";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email))
+      newErrors.email = "Please enter a valid email address";
+    if (!formData.username.trim()) newErrors.username = "Username is required";
+    else if (formData.username.length < 3)
+      newErrors.username = "Username must be at least 3 characters";
+    if (!formData.role) newErrors.role = "Role is required";
 
-  const fetchSellers = async () => {
-    try {
-      const res = await fetch("https://localhost:7015/api/Auth/all-sellers", {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to load sellers");
-      const data = await res.json();
-      setSellers(data);
-    } catch (err) {
-      console.error("Error loading sellers:", err);
-      setShowError(true);
-      setErrorMessage("Unable to load sellers. Please try again later.");
-    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
-  const fetchDesigners = async () => {
-    try {
-      const res = await fetch("https://localhost:7015/api/Auth/all-designers", {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to load designers");
-      const data = await res.json();
-      setDesigners(data);
-    } catch (err) {
-      console.error("Error loading designers:", err);
-      setShowError(true);
-      setErrorMessage("Unable to load designers. Please try again later.");
-    }
+  const handleInputChange = (field, value) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: "" }));
   };
-
-  const filteredSellers = sellers.filter((s) =>
-    (s.sellerName || "").toLowerCase().includes(sellerSearch.toLowerCase())
-  );
-
-  const filteredDesigners = designers.filter((d) =>
-    (d.designerName || "").toLowerCase().includes(designerSearch.toLowerCase())
-  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!validateForm()) return;
 
-    if (!selectedSeller || !selectedDesigner) {
-      setErrorMessage("Please select both a seller and a designer.");
-      setShowError(true);
-      return;
-    }
-
-    setLoading(true);
+    setIsSubmitting(true);
     setShowError(false);
+    setErrorMessage("");
 
     try {
-      const body = {
-        sellerUserId: selectedSeller,
-        designerUserId: selectedDesigner,
-      };
+      console.log("[Step 1] Register & send credentials...");
 
-      const res = await fetch(
-        "https://localhost:7015/api/manager/assignments",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify(body),
-        }
-      );
+      const registerRes = await fetch("https://localhost:7015/api/Auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include", // 👈 để cookie được gửi
+        body: JSON.stringify({ email: formData.email }),
+      });
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || "Failed to create relationship.");
+      const registerData = await registerRes.json().catch(() => ({}));
+      if (!registerRes.ok) {
+        throw new Error(registerData.message || "Failed to register user");
       }
 
-      /* ------------------- HIỂN THỊ SUCCESS ------------------- */
-      setShowSuccess(true);
-      onAdd(); // refresh danh sách
+      // ✅ Format role (chữ cái đầu viết hoa)
+      const formattedRole =
+        formData.role.charAt(0).toUpperCase() + formData.role.slice(1).toLowerCase();
 
-      /* ------------------- SỬA 2: Tự đóng sau 2s (không gọi handleClose ngay) ------------------- */
-      setTimeout(() => {
-        // Đóng modal và reset success
-        setShowSuccess(false);
-        onClose();
-      }, 2000);
-    } catch (error) {
-      console.error("Create relationship error:", error);
-      setErrorMessage(error.message || "Failed to create relationship.");
+      console.log("[Step 2] Save user management info...");
+
+      const managementRes = await fetch("https://localhost:7015/api/management/accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include", // 👈 quan trọng!
+        body: JSON.stringify({
+          email: formData.email,
+          fullName: formData.fullName,
+          roles: [formattedRole],
+          isActive: true,
+          department: formData.department || null,
+          notes: formData.notes || null,
+        }),
+      });
+
+      // ⚠️ Tránh lỗi khi server trả không phải JSON
+      const managementData = await managementRes.json().catch(() => ({}));
+      const msg = (managementData.message || "").toLowerCase();
+
+      if (managementRes.status === 401) {
+        throw new Error("Unauthorized (HTTP 401). Please log in as Manager again.");
+      }
+
+      // ✅ Nếu duplicate → bỏ qua
+      if (!managementRes.ok) {
+        if (
+          managementRes.status === 400 ||
+          managementRes.status === 409 ||
+          msg.includes("exists") ||
+          msg.includes("already")
+        ) {
+          console.warn("⚠️ Account already exists in management → continue");
+        } else {
+          throw new Error(managementData.message || "Failed to save account.");
+        }
+      }
+
+      // ✅ Success
+      const newAccount = {
+        id: managementData.data?.id || crypto.randomUUID(),
+        email: formData.email,
+        fullName: formData.fullName,
+        role: formattedRole,
+        status: "Active",
+        createdDate: new Date().toISOString().split("T")[0],
+        lastLogin: "Never",
+      };
+
+      onAssignAccount(newAccount);
+      setShowSuccess(true);
+    } catch (err) {
+      console.error("[Error] Assign account failed:", err);
+      setErrorMessage(err.message || "Unexpected error occurred.");
       setShowError(true);
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
-  /* ------------------- SỬA 3: handleClose chỉ reset khi không ở success ------------------- */
   const handleClose = () => {
-    if (loading) return;
-
-    // Nếu đang hiện success → để setTimeout đóng, không làm gì ở đây
-    if (showSuccess) return;
-
-    // Reset form khi đóng bình thường
-    setSelectedSeller("");
-    setSelectedDesigner("");
-    setSellerSearch("");
-    setDesignerSearch("");
+    if (isSubmitting) return;
+    setFormData({
+      fullName: "",
+      email: "",
+      username: "",
+      role: "",
+      department: "",
+      notes: "",
+    });
+    setErrors({});
     setShowError(false);
     setShowSuccess(false);
     onClose();
@@ -158,10 +167,10 @@ export default function AddRelationshipModal({ isOpen, onClose, onAdd }) {
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl p-6">
-        {/* ------------------- SUCCESS POPUP ------------------- */}
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+        {/* ✅ SUCCESS */}
         {showSuccess && (
-          <div className="p-6 text-center bg-green-50 border border-green-200 rounded-lg animate-fadeIn">
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-center">
             <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
               <svg
                 className="w-6 h-6 text-green-600"
@@ -169,41 +178,27 @@ export default function AddRelationshipModal({ isOpen, onClose, onAdd }) {
                 stroke="currentColor"
                 viewBox="0 0 24 24"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h3 className="text-lg font-semibold text-green-800 mb-2">
-              Relationship Created
-            </h3>
-            <p className="text-green-700 mb-4">
-              The seller-designer relationship has been successfully created.
+            <h3 className="text-lg font-semibold text-green-800 mb-2">Success</h3>
+            <p className="text-green-700 text-sm mb-4">
+              Account created and credentials sent via email successfully!
             </p>
-            {/* Người dùng có thể bấm OK để đóng ngay, hoặc đợi 2s */}
-            <Button
-              onClick={() => {
-                setShowSuccess(false);
-                onClose();
-              }}
-              className="bg-green-600 hover:bg-green-700 text-white"
-            >
+            <Button onClick={handleClose} className="bg-green-600 hover:bg-green-700 text-white">
               OK
             </Button>
           </div>
         )}
 
-        {/* ------------------- ERROR POPUP ------------------- */}
-        {showError && !showSuccess && (
-          <div className="p-6 text-center bg-red-50 border border-red-200 rounded-lg animate-fadeIn">
+        {/* ❌ ERROR */}
+        {showError && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-center">
             <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
               <XCircle className="w-6 h-6 text-red-600" />
             </div>
             <h3 className="text-lg font-semibold text-red-800 mb-2">Error</h3>
-            <p className="text-red-700 mb-4">{errorMessage}</p>
+            <p className="text-red-700 text-sm mb-4">{errorMessage}</p>
             <Button
               onClick={() => setShowError(false)}
               variant="outline"
@@ -214,109 +209,125 @@ export default function AddRelationshipModal({ isOpen, onClose, onAdd }) {
           </div>
         )}
 
-        {/* ------------------- FORM ------------------- */}
+        {/* FORM */}
         {!showSuccess && !showError && (
-          <form onSubmit={handleSubmit} className="space-y-6 animate-fadeIn">
+          <form onSubmit={handleSubmit} className="space-y-6">
             <DialogHeader>
-              <DialogTitle className="text-xl flex items-center gap-2">
-                <Plus className="h-5 w-5" />
-                Create Relationship
+              <DialogTitle className="flex items-center gap-2 text-xl">
+                <UserPlus className="h-5 w-5" />
+                Assign New Account
               </DialogTitle>
             </DialogHeader>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Seller */}
-              <Card>
-                <CardContent className="p-4 space-y-3">
-                  <Label className="text-sm font-medium">Select Seller</Label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
-                    <Input
-                      placeholder="Search sellers..."
-                      value={sellerSearch}
-                      onChange={(e) => setSellerSearch(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                  <Select
-                    value={selectedSeller}
-                    onValueChange={setSelectedSeller}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose a seller" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {filteredSellers.map((seller) => (
-                        <SelectItem
-                          key={seller.sellerId}
-                          value={seller.sellerId}
-                        >
-                          {seller.sellerName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </CardContent>
-              </Card>
+            {/* Personal Info */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Personal Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Full Name *</Label>
+                  <Input
+                    value={formData.fullName}
+                    onChange={(e) => handleInputChange("fullName", e.target.value)}
+                    className={errors.fullName ? "border-red-500" : ""}
+                  />
+                  {errors.fullName && <p className="text-sm text-red-500">{errors.fullName}</p>}
+                </div>
+                <div>
+                  <Label>Email *</Label>
+                  <Input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => handleInputChange("email", e.target.value)}
+                    className={errors.email ? "border-red-500" : ""}
+                  />
+                  {errors.email && <p className="text-sm text-red-500">{errors.email}</p>}
+                </div>
+              </div>
 
-              {/* Designer */}
-              <Card>
-                <CardContent className="p-4 space-y-3">
-                  <Label className="text-sm font-medium">Select Designer</Label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
-                    <Input
-                      placeholder="Search designers..."
-                      value={designerSearch}
-                      onChange={(e) => setDesignerSearch(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                  <Select
-                    value={selectedDesigner}
-                    onValueChange={setSelectedDesigner}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose a designer" />
+              <div>
+                <Label>Username *</Label>
+                <Input
+                  value={formData.username}
+                  onChange={(e) => handleInputChange("username", e.target.value)}
+                  className={errors.username ? "border-red-500" : ""}
+                />
+                {errors.username && <p className="text-sm text-red-500">{errors.username}</p>}
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Role + Department */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Role Assignment</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Role *</Label>
+                  <Select value={formData.role} onValueChange={(v) => handleInputChange("role", v)}>
+                    <SelectTrigger className={errors.role ? "border-red-500" : ""}>
+                      <SelectValue placeholder="Select role" />
                     </SelectTrigger>
                     <SelectContent>
-                      {filteredDesigners.map((designer) => (
-                        <SelectItem
-                          key={designer.designerId}
-                          value={designer.designerId}
-                        >
-                          {designer.designerName}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="Manager">Manager</SelectItem>
+                      <SelectItem value="Designer">Designer</SelectItem>
+                      <SelectItem value="QC">QC</SelectItem>
+                      <SelectItem value="Seller">Seller</SelectItem>
+                      <SelectItem value="Staff">Staff</SelectItem>
                     </SelectContent>
                   </Select>
-                </CardContent>
-              </Card>
+                  {errors.role && <p className="text-sm text-red-500">{errors.role}</p>}
+                </div>
+
+                <div>
+                  <Label>Department (Optional)</Label>
+                  <Input
+                    value={formData.department}
+                    onChange={(e) => handleInputChange("department", e.target.value)}
+                  />
+                </div>
+              </div>
             </div>
+
+            <Separator />
+
+            {/* Notes */}
+            <div>
+              <h3 className="text-lg font-semibold">Additional Information</h3>
+              <Textarea
+                placeholder="Add any additional notes..."
+                value={formData.notes}
+                onChange={(e) => handleInputChange("notes", e.target.value)}
+                rows={3}
+              />
+            </div>
+
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                After creating the account, credentials will be sent to the provided email.
+              </AlertDescription>
+            </Alert>
 
             <div className="flex justify-end gap-3 pt-4">
               <Button
                 type="button"
                 variant="outline"
                 onClick={handleClose}
-                disabled={loading}
+                disabled={isSubmitting}
               >
+                <X className="h-4 w-4 mr-2" />
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                disabled={loading}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {loading ? (
+              <Button type="submit" disabled={isSubmitting} className="bg-blue-600 hover:bg-blue-700">
+                {isSubmitting ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                     Creating...
                   </>
                 ) : (
                   <>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Relationship
+                    <Save className="h-4 w-4 mr-2" />
+                    Create & Send
                   </>
                 )}
               </Button>
