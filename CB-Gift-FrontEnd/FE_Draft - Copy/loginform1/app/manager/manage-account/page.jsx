@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { apiClient } from "../../lib/apiClient"
+import  apiClient  from "../../../lib/apiClient";
 import ManagerSidebar from "@/components/layout/manager/sidebar";
 import ManagerHeader from "@/components/layout/manager/header";
 import AccountDetailsModal from "@/components/modals/account-details-modal";
@@ -76,7 +76,7 @@ export default function ManageAccount() {
       if (statusFilter !== "all")
         params.append("isActive", statusFilter === "active" ? "true" : "false");
 
-      const url = `${apiClient}/api/management/accounts?${params.toString()}`;
+      const url = `${apiClient.defaults.baseURL}/api/management/accounts?${params.toString()}`;
       console.log("[v0] Fetching accounts from:", url);
 
       const response = await fetch(url, {
@@ -195,7 +195,7 @@ export default function ManageAccount() {
   const handleViewDetails = async (account) => {
     try {
       const response = await fetch(
-        `${apiClient}/api/management/accounts/${account.id}`,
+        `${apiClient.defaults.baseURL}/api/management/accounts/${account.id}`,
         {
           credentials: "include",
         }
@@ -288,7 +288,7 @@ export default function ManageAccount() {
       );
 
       const response = await fetch(
-        "${apiClient}/api/management/accounts",
+        `${apiClient.defaults.baseURL}/api/management/accounts`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },

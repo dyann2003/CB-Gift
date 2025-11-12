@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import apiClient from "../../lib/apiClient";
 import { useRef } from "react";
 import {
   Select,
@@ -146,7 +147,7 @@ export default function MakeManualModal({ isOpen, onClose }) {
     setLoadingProducts(true);
     setProductsError(null);
     try {
-      const res = await fetch("https://localhost:7015/api/Product", {
+      const res = await fetch(`${apiClient.defaults.baseURL}/api/Product`, {
         credentials: "include",
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -166,7 +167,7 @@ export default function MakeManualModal({ isOpen, onClose }) {
     formData.append("File", file);
 
     try {
-      const res = await fetch("https://localhost:7015/api/images/upload", {
+      const res = await fetch(`${apiClient.defaults.baseURL}/api/images/upload`, {
         method: "POST",
         credentials: "include",
         body: formData,
@@ -328,7 +329,7 @@ export default function MakeManualModal({ isOpen, onClose }) {
     }
 
     try {
-      const res = await fetch(`https://localhost:7015/api/Product/${id}`, {
+      const res = await fetch(`${apiClient.defaults.baseURL}/api/Product/${id}`, {
         credentials: "include",
       });
       if (!res.ok) {
@@ -463,7 +464,7 @@ export default function MakeManualModal({ isOpen, onClose }) {
     console.log(JSON.stringify(orderPayload, null, 2));
 
     try {
-      const res = await fetch("https://localhost:7015/api/Order/make-order", {
+      const res = await fetch(`${apiClient.defaults.baseURL}/api/Order/make-order`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

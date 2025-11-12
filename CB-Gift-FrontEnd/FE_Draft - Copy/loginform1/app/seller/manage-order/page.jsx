@@ -305,7 +305,7 @@ export default function ManageOrder() {
     const formData = new FormData();
     formData.append("File", file);
     try {
-      const res = await fetch("${apiClient.defaults.baseURL}/api/images/upload", {
+      const res = await fetch(`${apiClient.defaults.baseURL}/api/images/upload`, {
         method: "POST",
         credentials: "include",
         body: formData,
@@ -633,7 +633,7 @@ export default function ManageOrder() {
   // ✅ Dù
   const fetchStats = async () => {
     try {
-      const res = await fetch("${apiClient.defaults.baseURL}/api/Seller/stats", {
+      const res = await fetch(`${apiClient.defaults.baseURL}/api/Seller/stats`, {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch stats");
@@ -732,7 +732,7 @@ export default function ManageOrder() {
 
     // Nếu tất cả đều hợp lệ, fetch danh sách designer
     try {
-      const res = await fetch("${apiClient.defaults.baseURL}/api/Seller/my-designer", {
+      const res = await fetch(`${apiClient.defaults.baseURL}/api/Seller/my-designer`, {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch designers");

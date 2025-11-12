@@ -1,5 +1,11 @@
 "use client";
-import {apiClient} from "../../lib/apiClient";
+
+import { useState, useEffect } from "react";
+import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import apiClient from "../../lib/apiClient";
+
+// [XÓA] mock 'transactionHistory'
 
 const SellerTransactionTab = ({ seller, onActionDone }) => {
   // [THÊM] State cho API
@@ -12,7 +18,7 @@ const SellerTransactionTab = ({ seller, onActionDone }) => {
 
   const totalPages = Math.ceil(total / itemsPerPage);
 
-  // [THÊM] useEffect để tải lịch sử thanh toán hhhhhhhhhh
+  // [THÊM] useEffect để tải lịch sử thanh toán
   useEffect(() => {
     if (!seller?.id) return;
 
@@ -26,7 +32,7 @@ const SellerTransactionTab = ({ seller, onActionDone }) => {
 
       try {
         const response = await fetch(
-          `${apiClient}/api/invoices/seller-payments/${seller.id}?${params.toString()}`,
+          `https://localhost:7015/api/invoices/seller-payments/${seller.id}?${params.toString()}`,
           { credentials: "include" }
         );
         if (!response.ok) throw new Error("Failed to fetch payment history.");
@@ -59,13 +65,13 @@ const SellerTransactionTab = ({ seller, onActionDone }) => {
   // Tạm thời ẩn đi để tránh hiển thị sai.
   
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 p-4">
       <div className="mb-4">
         <h3 className="text-lg font-semibold text-gray-900 mb-2">
           Payment History
         </h3>
         <p className="text-sm text-gray-600">
-          View payment transaction history by month
+          View payment transaction history
         </p>
       </div>
 
@@ -74,86 +80,109 @@ const SellerTransactionTab = ({ seller, onActionDone }) => {
           <thead>
             <tr className="bg-blue-100">
               <th className="px-4 py-3 text-left font-semibold text-gray-700">
-                Transaction ID
+                Payment ID
               </th>
               <th className="px-4 py-3 text-left font-semibold text-gray-700">
-                Month
+                Invoice #
               </th>
               <th className="px-4 py-3 text-left font-semibold text-gray-700">
                 Date
               </th>
               <th className="px-4 py-3 text-left font-semibold text-gray-700">
-                Type
+                Method
               </th>
               <th className="px-4 py-3 text-left font-semibold text-gray-700">
-                Payment Method
+                Status
               </th>
               <th className="px-4 py-3 text-right font-semibold text-gray-700">
                 Amount Paid
               </th>
               <th className="px-4 py-3 text-right font-semibold text-gray-700">
-                Remaining
+                Invoice Remaining
               </th>
             </tr>
           </thead>
           <tbody>
-            {transactionHistory.map((transaction) => (
-              <tr
-                key={transaction.id}
-                className={`border-t border-gray-200 ${
-                  transaction.status === "paid"
-                    ? "bg-green-50 hover:bg-green-100"
-                    : "bg-yellow-50 hover:bg-yellow-100"
-                }`}
-              >
-                <td className="px-4 py-3 font-semibold text-blue-600">
-                  {transaction.id}
-                </td>
-                <td className="px-4 py-3 text-gray-700">{transaction.month}</td>
-                <td className="px-4 py-3 text-gray-600">{transaction.date}</td>
-                <td className="px-4 py-3 text-gray-700">{transaction.type}</td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`px-2 py-1 rounded text-xs font-semibold ${
-                      transaction.status === "paid"
-                        ? "bg-green-200 text-green-800"
-                        : "bg-yellow-200 text-yellow-800"
-                    }`}
-                  >
-                    {transaction.paymentMethod}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-right font-semibold text-green-600">
-                  {(transaction.amount / 1_000_000).toFixed(1)}M
-                </td>
-                <td className="px-4 py-3 text-right font-semibold text-red-600">
-                  {(transaction.remaining / 1_000_000).toFixed(1)}M
-                </td>
-              </tr>
-            ))}
+            {loading ? (
+              <tr><td colSpan="7" className="p-8 text-center"><Loader2 className="h-6 w-6 mx-auto animate-spin" /></td></tr>
+            ) : error ? (
+              <tr><td colSpan="7" className="p-8 text-center text-red-500">Error: {error}</td></tr>
+            ) : transactions.length === 0 ? (
+              <tr><td colSpan="7" className="p-8 text-center text-gray-500">No transactions found.</td></tr>
+            ) : (
+              transactions.map((t) => (
+                <tr
+                  key={t.paymentId}
+                  className={`border-t border-gray-200 ${
+                    t.status === "Completed"
+                      ? "bg-green-50 hover:bg-green-100"
+                      : "bg-yellow-50 hover:bg-yellow-100"
+                  }`}
+                >
+                  <td className="px-4 py-3 font-semibold text-blue-600">
+                    {t.paymentId}
+                  </td>
+                  <td className="px-4 py-3 text-gray-700">{t.invoiceNumber}</td>
+                  <td className="px-4 py-3 text-gray-600">{new Date(t.paymentDate).toLocaleDateString()}</td>
+                  <td className="px-4 py-3 text-gray-700">{t.paymentMethod}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-semibold ${
+                        t.status === "Completed"
+                          ? "bg-green-200 text-green-800"
+                          // Thêm các trạng thái khác nếu có (Pending, Failed)
+                          : "bg-yellow-200 text-yellow-800"
+                      }`}
+                    >
+                      {t.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold text-green-600">
+                    {formatCurrency(t.amount)}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold text-red-600">
+                    {formatCurrency(t.invoiceRemaining)}
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
 
-      {/* Summary */}
+      {/* Pagination */}
+       {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-4">
+          <div className="text-sm text-gray-600">
+            Showing page {currentPage} of {totalPages} (Total: {total} payments)
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Summary - Tạm thời ẩn vì cần API tổng hợp */}
+      {/*
       <div className="grid grid-cols-3 gap-4 mt-6">
-        <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-          <p className="text-xs text-gray-600 mb-1 font-semibold">Fully Paid</p>
-          <p className="text-lg font-bold text-green-600">2 months</p>
-        </div>
-        <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-          <p className="text-xs text-gray-600 mb-1 font-semibold">
-            Partial Payment
-          </p>
-          <p className="text-lg font-bold text-yellow-600">3 months</p>
-        </div>
-        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-          <p className="text-xs text-gray-600 mb-1 font-semibold">
-            Total Current Debt
-          </p>
-          <p className="text-lg font-bold text-blue-600">12.04M</p>
-        </div>
+        ...
       </div>
+      */}
     </div>
   );
 };

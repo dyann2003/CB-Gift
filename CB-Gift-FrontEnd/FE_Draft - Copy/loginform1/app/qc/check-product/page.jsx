@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {apiClient} from "../../../lib/apiClient";
+import apiClient from "../../../lib/apiClient";
 // --- UI Components ---
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -106,7 +106,7 @@ export default function CheckProduct() {
       setError(null);
 
       const response = await fetch(
-        "${apiClient}/api/Order/GetAllOrders"
+        `${apiClient.defaults.baseURL}/api/Order/GetAllOrders`
       );
 
       if (!response.ok) {
@@ -240,7 +240,7 @@ export default function CheckProduct() {
       try {
         setLoading(true); // Indicate loading state during API call
         const response = await fetch(
-          `${apiClient}/api/Order/${orderId}/approve-shipping`,
+          `${apiClient.defaults.baseURL}/api/Order/${orderId}/approve-shipping`,
           {
             method: "PUT",
             headers: {

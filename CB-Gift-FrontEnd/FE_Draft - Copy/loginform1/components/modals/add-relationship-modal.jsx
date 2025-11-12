@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import apiClient from "../../lib/apiClient";
 import {
   Select,
   SelectContent,
@@ -43,10 +44,10 @@ export default function AddRelationshipModal({ isOpen, onClose, onAdd }) {
     setLoadingData(true);
     try {
       const [sellerRes, designerRes] = await Promise.all([
-        fetch("https://localhost:7015/api/Auth/all-sellers", {
+        fetch(`${apiClient.defaults.baseURL}/api/Auth/all-sellers`, {
           credentials: "include",
         }),
-        fetch("https://localhost:7015/api/Auth/all-designers", {
+        fetch(`${apiClient.defaults.baseURL}/api/Auth/all-designers`, {
           credentials: "include",
         }),
       ]);
@@ -95,7 +96,7 @@ export default function AddRelationshipModal({ isOpen, onClose, onAdd }) {
       });
 
       const res = await fetch(
-        "https://localhost:7015/api/manager/assignments",
+        `${apiClient.defaults.baseURL}/api/manager/assignments`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

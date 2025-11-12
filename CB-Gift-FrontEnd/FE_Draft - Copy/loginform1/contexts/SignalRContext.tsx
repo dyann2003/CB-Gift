@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import * as signalR from "@microsoft/signalr";
 import { HubConnection, HubConnectionState } from "@microsoft/signalr";
+import apiClient from "../lib/apiClient";
 
 const SignalRContext = createContext<HubConnection | null>(null);
 
@@ -26,7 +27,7 @@ export const SignalRProvider = ({
     }
 
     const newConnection = new signalR.HubConnectionBuilder()
-      .withUrl("https://localhost:7015/notificationHub", {
+      .withUrl(`${apiClient.defaults.baseURL}/notificationHub`, {
         accessTokenFactory: () => token,
       })
       .withAutomaticReconnect()

@@ -159,7 +159,7 @@ export default function LoginPage() {
 
     try {
       const res = await fetch(
-        "${apiClient.defaults.baseURL}/api/auth/forgot-password",
+        `${apiClient.defaults.baseURL}/api/auth/forgot-password`,
         {
           method: "POST",
           headers: {
@@ -208,7 +208,7 @@ export default function LoginPage() {
     setOtpError("");
 
     try {
-      const res = await fetch("${apiClient.defaults.baseURL}/api/auth/verify-otp", {
+      const res = await fetch(`${apiClient.defaults.baseURL}/api/auth/verify-otp`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -259,7 +259,7 @@ export default function LoginPage() {
 
     try {
       const res = await fetch(
-        "${apiClient.defaults.baseURL}/api/auth/reset-password-with-otp",
+        `${apiClient.defaults.baseURL}/api/auth/reset-password-with-otp`,
         {
           method: "POST",
           headers: {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {apiClient} from "../../../lib/apiClient";
+import apiClient from "../../../lib/apiClient";
 // Import các components UI
 import { Input } from "@/components/ui/input";
 import {
@@ -61,7 +61,7 @@ export default function DesignerDashboard() {
             try {
                 setLoading(true);
                 
-                const res = await fetch("${apiClient}/api/designer/tasks", { 
+                const res = await fetch(`${apiClient.defaults.baseURL}/api/designer/tasks`, { 
                     credentials: "include", 
                 });
                 

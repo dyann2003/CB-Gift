@@ -6,7 +6,7 @@ import StaffHeader from "@/components/layout/staff/header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import InvoiceDetailsModal from "@/components/modals/InvoiceDetailsModal";
-import {apiClient} from "../../../lib/apiClient";
+import apiClient from "../../../lib/apiClient";
 import {
   Table,
   TableBody,
@@ -89,7 +89,7 @@ export default function PrinterBillPage() {
       try {
         // Gọi API GetUniqueSellers bạn vừa tạo
         const response = await fetch(
-          "${apiClient}/api/Order/GetUniqueSellers?status=SHIPPED"
+          `${apiClient.defaults.baseURL}/api/Order/GetUniqueSellers?status=SHIPPED`
         );
         if (!response.ok) {
           throw new Error("Failed to fetch sellers");
@@ -148,7 +148,7 @@ export default function PrinterBillPage() {
 
         // 6. Gọi API với tất cả tham số
         const response = await fetch(
-          `${apiClient}/api/Order/GetAllOrdersForInvoice?${params.toString()}`
+          `${apiClient.defaults.baseURL}/api/Order/GetAllOrdersForInvoice?${params.toString()}`
         );
 
         if (!response.ok) {
@@ -233,7 +233,7 @@ export default function PrinterBillPage() {
 
     try {
       const response = await fetch(
-        `${apiClient}/api/Order/GetAllOrdersForInvoice?${params.toString()}`
+        `${apiClient.defaults.baseURL}/api/Order/GetAllOrdersForInvoice?${params.toString()}`
       );
       if (!response.ok) throw new Error("Failed to fetch data for export");
 
@@ -352,7 +352,7 @@ export default function PrinterBillPage() {
         notes: printerBillForm.notes || "Generated from Printer Bill page",
       };
 
-      const response = await fetch("${apiClient}/api/invoices", {
+      const response = await fetch(`${apiClient.defaults.baseURL}/api/invoices`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -404,7 +404,7 @@ export default function PrinterBillPage() {
     setInvoicesLoading(true);
     setInvoicesError(null);
     try {
-      const response = await fetch("${apiClient}/api/invoices/all", {
+      const response = await fetch(`${apiClient.defaults.baseURL}/api/invoices/all`, {
         credentials: "include", // Quan trọng để xác thực
       });
       if (!response.ok) {
@@ -437,7 +437,7 @@ export default function PrinterBillPage() {
     // Gọi API để lấy dữ liệu chi tiết đầy đủ
     try {
       const response = await fetch(
-        `${apiClient}/api/invoices/${invoiceId}`,
+        `${apiClient.defaults.baseURL}/api/invoices/${invoiceId}`,
         {
           credentials: "include",
         }

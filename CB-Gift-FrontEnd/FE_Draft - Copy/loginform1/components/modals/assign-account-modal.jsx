@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { apiClient } from "../../lib/apiClient";
+import apiClient from "../../lib/apiClient";
 import {
   Select,
   SelectContent,
@@ -74,7 +74,7 @@ export default function AssignAccountModal({
     try {
       console.log("[Step 1] Register & send credentials...");
 
-      const registerRes = await fetch("${apiClient}/api/Auth/register", {
+      const registerRes = await fetch(`${apiClient.defaults.baseURL}/api/Auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include", // 👈 để cookie được gửi
@@ -92,7 +92,7 @@ export default function AssignAccountModal({
 
       console.log("[Step 2] Save user management info...");
 
-      const managementRes = await fetch("${apiClient}/api/management/accounts", {
+      const managementRes = await fetch(`${apiClient.defaults.baseURL}/api/management/accounts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include", // 👈 quan trọng!
@@ -417,7 +417,7 @@ export default function AssignAccountModal({
     try {
       console.log("[Step 1] Register & send credentials...");
 
-      const registerRes = await fetch("${apiClient}/api/Auth/register", {
+      const registerRes = await fetch(`${apiClient.defaults.baseURL}/api/Auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include", // 👈 để cookie được gửi
@@ -435,7 +435,7 @@ export default function AssignAccountModal({
 
       console.log("[Step 2] Save user management info...");
 
-      const managementRes = await fetch("${apiClient}/api/management/accounts", {
+      const managementRes = await fetch(`${apiClient.defaults.baseURL}/api/management/accounts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include", // 👈 quan trọng!
