@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import {apiClient} from "../../../lib/apiClient";
 import {
   Dialog,
   DialogContent,
@@ -104,7 +105,7 @@ export default function AccountDetailsModal({
       );
 
       const response = await fetch(
-        "https://localhost:7015/api/management/accounts/roles",
+        "${apiClient}/api/management/accounts/roles",
         {
           method: "PUT",
           headers: {
@@ -171,7 +172,7 @@ export default function AccountDetailsModal({
       );
 
       const response = await fetch(
-        "https://localhost:7015/api/management/accounts",
+        "${apiClient}/api/management/accounts",
         {
           method: "PUT",
           headers: {
