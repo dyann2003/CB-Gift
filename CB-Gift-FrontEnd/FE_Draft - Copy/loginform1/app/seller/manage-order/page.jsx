@@ -6,7 +6,7 @@ import SellerHeader from "@/components/layout/seller/header";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import React from "react";
-import { RotateCcw, XCircle, MoreVertical } from "lucide-react";
+import { RotateCcw, XCircle, MoreVertical, CheckCircle2 } from "lucide-react";
 import Swal from "sweetalert2";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -330,19 +330,19 @@ export default function ManageOrder() {
     let proofUrl = null;
 
     const { value: reason } = await Swal.fire({
-      title: `Refund order #${order.orderId}`,
+      title: `Hoàn tiền đơn #${order.orderId}`,
       html: `
       <textarea id="refundReason" class="swal2-textarea" placeholder="Nhập lý do hoàn tiền (tối thiểu 5 ký tự)"></textarea>
       <input type="file" id="refundImageInput" accept="image/*" style="margin-top: 10px;" />
       <div id="uploadStatus" style="margin-top:10px; display:none;">
         <div class="swal2-loader" style="display:inline-block;"></div>
-        <span>Loading images...</span>
+        <span>Đang tải ảnh...</span>
       </div>
       <img id="refundImagePreview" style="display:none; margin-top: 10px; max-width:100%; max-height:150px; border-radius: 5px;" />
     `,
       showCancelButton: true,
-      confirmButtonText: "Submit request",
-      cancelButtonText: "Cancel",
+      confirmButtonText: "Gửi yêu cầu",
+      cancelButtonText: "Hủy",
       confirmButtonColor: "#d97706",
       cancelButtonColor: "#6b7280",
 
@@ -425,24 +425,23 @@ export default function ManageOrder() {
 
   const openCancelPopup = async (order) => {
     const { value: reason } = await Swal.fire({
-      title: `Cancel order #${order.orderId}`,
+      title: `Hủy đơn #${order.orderId}`,
       input: "text",
-      inputLabel: "Enter reason for cancellation",
-      inputPlaceholder:
-        "For example: Customer changed his mind, wrong information...",
+      inputLabel: "Nhập lý do hủy đơn",
+      inputPlaceholder: "Ví dụ: Khách đổi ý, sai thông tin...",
       inputAttributes: {
         maxlength: 200,
         autocapitalize: "off",
         autocorrect: "off",
       },
       showCancelButton: true,
-      confirmButtonText: "Submit request",
-      cancelButtonText: "Cancel",
+      confirmButtonText: "Gửi yêu cầu",
+      cancelButtonText: "Hủy",
       confirmButtonColor: "#d33",
       cancelButtonColor: "#3085d6",
       preConfirm: (value) => {
         if (!value || value.trim().length < 5) {
-          Swal.showValidationMessage("Reason must be at least 5 characters!");
+          Swal.showValidationMessage("Lý do phải có ít nhất 5 ký tự!");
           return false;
         }
         return value;
@@ -476,8 +475,8 @@ export default function ManageOrder() {
       // Thành công
       Swal.fire({
         icon: "success",
-        title: "Success!",
-        text: "Cancellation request has been sent.",
+        title: "Thành công!",
+        text: "Yêu cầu hủy đã được gửi.",
         timer: 2000,
         showConfirmButton: false,
       });
@@ -792,94 +791,66 @@ export default function ManageOrder() {
     }
   };
 
-  const handleExport = () => {
-    // Vì FE chỉ có dữ liệu 1 trang, cần gọi 1 API BE không phân trang để export toàn bộ
-    alert(
-      "Chức năng export đang sử dụng dữ liệu lọc hiện tại. Nếu muốn export toàn bộ, cần có API riêng!"
-    );
+  const handleExport = async () => {
+    try {
+      // Xây query params giống fetchOrders để export theo cùng bộ lọc hiện tại
+      const selectedStatConfigInList = STATS_CONFIG.find(
+        (stat) => stat.title === selectedStat
+      );
+      const statusFilter =
+        selectedStatConfig?.statusFilter ||
+        selectedStatConfigInList?.statusFilter ||
+        (selectedStat !== "Total Order" ? selectedStat : null);
 
-    // Logic export hiện tại đang dùng orders (chỉ 1 trang) - cần sửa nếu muốn export full
-    if (!paginatedOrders || paginatedOrders.length === 0) {
-      alert("❌ Không có đơn hàng nào để export!");
-      return;
-    }
-
-    const exportData = [];
-
-    paginatedOrders.forEach((order) => {
-      const products = order.products || [];
-
-      products.forEach((p) => {
-        exportData.push({
-          OrderID: order.id,
-          OrderCode: order.orderId,
-          OrderDate: formatMySQLDate(order.orderDate),
-          CustomerName: order.customerName || order.customerInfo?.name || "",
-          Phone: order.phone || order.customerInfo?.phone || "",
-          Email: order.email || order.customerInfo?.email || "",
-          Address: order.address || order.customerInfo?.address || "",
-          Size: p.size || "",
-          ProductName: p.name || "",
-          Quantity: p.quantity || 0,
-          Price: p.price || 0,
-          Accessory: p.accessory || "",
-          PaymentStatus: p.paymentStatus || "",
-          Note: order.orderNotes || "",
-          LinkImg: order.uploadedFiles?.linkImg?.url || "",
-          LinkThanksCard: order.uploadedFiles?.linkThanksCard?.url || "",
-          LinkFileDesign: order.uploadedFiles?.linkFileDesign?.url || "",
-          Status: order.status || "",
-          TotalAmount: order.totalAmount || "",
-          OrderNotes: order.orderNotes || "",
-          TimeCreated: order.timeCreated || "",
-        });
+      const params = new URLSearchParams({
+        // note: export không dùng page/pageSize, BE sẽ ignore hoặc trả full
+        searchTerm: searchTerm || "",
+        sortColumn: sortColumn || "orderDate",
+        sortDirection: sortDirection || "desc",
       });
-      // Nếu order không có product nào, vẫn export 1 dòng tổng
-      if (products.length === 0) {
-        exportData.push({
-          OrderID: order.id,
-          OrderCode: order.orderId,
-          OrderDate: formatMySQLDate(order.orderDate),
-          CustomerName: order.customerName || order.customerInfo?.name || "",
-          Phone: order.phone || order.customerInfo?.phone || "",
 
-          Email: order.email || order.customerInfo?.email || "",
-          Address: order.address || order.customerInfo?.address || "",
-          ProductName: "",
-          Quantity: "",
-          Price: "",
-          Size: "",
-          Accessory: "",
-          Note: order.orderNotes || "",
-
-          LinkImg: order.uploadedFiles?.linkImg?.url || "",
-          LinkThanksCard: order.uploadedFiles?.linkThanksCard?.url || "",
-          LinkFileDesign: order.uploadedFiles?.linkFileDesign?.url || "",
-          Status: order.status || "",
-          TotalAmount: order.totalAmount || "",
-          OrderNotes: order.orderNotes || "",
-          TimeCreated: order.timeCreated || "",
-        });
+      if (statusFilter && selectedStat !== "Total Order") {
+        params.append("status", statusFilter);
       }
-    });
+      if (dateRange?.from)
+        params.append("fromDate", dateRange.from.toISOString());
+      if (dateRange?.to) params.append("toDate", dateRange.to.toISOString());
 
-    console.log("📦 Export Data:", exportData);
-    const worksheet = XLSX.utils.json_to_sheet(exportData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Orders");
-    const excelBuffer = XLSX.write(workbook, {
-      bookType: "xlsx",
-      type: "array",
-    });
-    const blob = new Blob([excelBuffer], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
-    const fileName = `Orders_${new Date().toISOString().slice(0, 10)}.xlsx`;
-    saveAs(blob, fileName);
+      const url = `https://localhost:7015/api/Seller/export?${params.toString()}`;
 
-    alert(
-      `✅ Đã export ${exportData.length} dòng dữ liệu từ ${paginatedOrders.length} đơn hàng!`
-    );
+      // Gọi API để nhận file - server trả file xlsx
+      const res = await fetch(url, {
+        method: "GET",
+        credentials: "include", // giữ auth cookie
+      });
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(errText || `Export failed: ${res.status}`);
+      }
+
+      const blob = await res.blob();
+      const fileName = `Orders_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+      // Dùng file-saver (bạn đang import saveAs ở trên)
+      saveAs(blob, fileName);
+
+      // Thông báo thành công
+      Swal.fire({
+        icon: "success",
+        title: "Export completed",
+        text: "File đã được tải về.",
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      console.error("Export failed:", err);
+      Swal.fire({
+        icon: "error",
+        title: "Export failed",
+        text: err.message || "Có lỗi khi xuất file.",
+      });
+    }
   };
 
   // Helper: định dạng MySQL
@@ -1272,7 +1243,7 @@ export default function ManageOrder() {
         throw new Error(data.message || `HTTP ${res.status}`);
       }
 
-      setSuccessMessage(`✅ Details successfully approved #${orderDetailId}!`);
+      setSuccessMessage(`✅ Đã duyệt thành công chi tiết #${orderDetailId}!`);
       setShowSuccessDialog(true);
       setIsDialogOpen(false);
       setTimeout(() => fetchOrders(), 1500);
@@ -1288,23 +1259,20 @@ export default function ManageOrder() {
   const handleRejectOrderDetail = async (orderDetailId) => {
     // Hiển thị modal nhập lý do từ chối
     const { value: reason } = await Swal.fire({
-      title: `Reject application details `,
+      title: `Từ chối chi tiết đơn `,
       input: "textarea",
-      inputPlaceholder:
-        "Enter reason for rejection (at least 10 characters)...",
+      inputPlaceholder: "Nhập lý do từ chối (ít nhất 10 ký tự)...",
       inputAttributes: {
         "aria-label": "Reason",
       },
       showCancelButton: true,
-      confirmButtonText: "Submit request",
-      cancelButtonText: "Cancel",
+      confirmButtonText: "Gửi yêu cầu",
+      cancelButtonText: "Hủy",
       confirmButtonColor: "#d33",
       cancelButtonColor: "#6c757d",
       preConfirm: (value) => {
         if (!value || value.trim().length < 10) {
-          Swal.showValidationMessage(
-            "Rejection reason must be 10 characters or more!"
-          );
+          Swal.showValidationMessage("Lý do từ chối phải từ 10 ký tự trở lên!");
           return false;
         }
         return value;
@@ -1345,8 +1313,8 @@ export default function ManageOrder() {
       // ✅ Thành công
       await Swal.fire({
         icon: "success",
-        title: "Request sent!",
-        text: `Request to redo details #${orderDetailId} has been sent successfully.`,
+        title: "Đã gửi yêu cầu!",
+        text: `Yêu cầu làm lại chi tiết #${orderDetailId} đã được gửi thành công.`,
         timer: 2000,
         showConfirmButton: false,
       });
@@ -1452,6 +1420,13 @@ export default function ManageOrder() {
       text: `Successfully imported ${importedData.length} orders!`,
     });
     setShowImportModal(false);
+  };
+
+  const hasDesignFile = (order) => {
+    if (!order.products || order.products.length === 0) return false;
+    return order.products.some(
+      (p) => p.linkFileDesign && p.linkFileDesign.trim() !== ""
+    );
   };
 
   return (
@@ -1855,6 +1830,9 @@ export default function ManageOrder() {
                           <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
                             Payment Status
                           </TableHead>
+                          <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
+                            Exist File Design
+                          </TableHead>
                           <TableHead
                             className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap cursor-pointer hover:bg-blue-200 transition-colors"
                             onClick={() => handleSort("totalAmount")}
@@ -1919,6 +1897,13 @@ whitespace-nowrap"
                                 </TableCell>
                                 <TableCell className="text-slate-600 whitespace-nowrap">
                                   {order.paymentStatus}
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap">
+                                  {hasDesignFile(order) ? (
+                                    <CheckCircle2 className="w-5 h-5 text-green-600" />
+                                  ) : (
+                                    <XCircle className="w-5 h-5 text-red-600" />
+                                  )}
                                 </TableCell>
                                 <TableCell className="font-medium text-slate-900 whitespace-nowrap">
                                   {order.totalAmount}
@@ -2534,6 +2519,8 @@ whitespace-nowrap"
                                                                       "/placeholder.svg" ||
                                                                       "/placeholder.svg" ||
                                                                       "/placeholder.svg" ||
+                                                                      "/placeholder.svg" ||
+                                                                      "/placeholder.svg" ||
                                                                       "/placeholder.svg"
                                                                     }
                                                                     alt="Design File"
@@ -2634,6 +2621,8 @@ whitespace-nowrap"
                                                                       "/placeholder.svg" ||
                                                                       "/placeholder.svg" ||
                                                                       "/placeholder.svg" ||
+                                                                      "/placeholder.svg" ||
+                                                                      "/placeholder.svg" ||
                                                                       "/placeholder.svg"
                                                                     }
                                                                     alt="Thanks Card"
@@ -2730,6 +2719,8 @@ whitespace-nowrap"
                                                                   <img
                                                                     src={
                                                                       product.linkImg ||
+                                                                      "/placeholder.svg" ||
+                                                                      "/placeholder.svg" ||
                                                                       "/placeholder.svg" ||
                                                                       "/placeholder.svg" ||
                                                                       "/placeholder.svg" ||
@@ -3188,6 +3179,8 @@ whitespace-nowrap"
                                                     src={
                                                       item.linkImg ||
                                                       "/placeholder.svg" ||
+                                                      "/placeholder.svg" ||
+                                                      "/placeholder.svg" ||
                                                       "/placeholder.svg"
                                                     }
                                                     alt={
@@ -3484,52 +3477,6 @@ whitespace-nowrap"
               className="bg-red-600 hover:bg-red-700"
             >
               Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={isAssignPopupOpen} onOpenChange={setIsAssignPopupOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Assign Designer</DialogTitle>
-          </DialogHeader>
-
-          {designers.length > 0 ? (
-            <div className="space-y-3">
-              <Label>Select a designer:</Label>
-              <Select
-                onValueChange={(value) => setSelectedDesignerId(value)}
-                value={selectedDesignerId}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose designer..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {designers.map((d) => (
-                    <SelectItem key={d.designerUserId} value={d.designerUserId}>
-                      {d.designerName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          ) : (
-            <p>No designers found for this seller.</p>
-          )}
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsAssignPopupOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              className="bg-indigo-600 text-white"
-              onClick={handleConfirmAssignDesigner}
-              disabled={!selectedDesignerId}
-            >
-              Assign
             </Button>
           </DialogFooter>
         </DialogContent>

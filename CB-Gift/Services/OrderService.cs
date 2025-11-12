@@ -993,9 +993,64 @@ namespace CB_Gift.Services
             return (orders, total);
         }
 
+        public async Task<List<OrderWithDetailsDto>> GetFilteredOrdersForSellerAsync(
+    string sellerUserId,
+    string? status,
+    string? searchTerm,
+    string? sortColumn,
+    string? sortDirection,
+    DateTime? fromDate,
+    DateTime? toDate)
+        {
+            var query = _context.Orders
+                .Include(o => o.EndCustomer)
+                .Include(o => o.StatusOrderNavigation)
+                .Include(o => o.OrderDetails)
+                    .ThenInclude(od => od.ProductVariant)
+                .Where(o => o.SellerUserId == sellerUserId)
+                .AsQueryable();
 
+            if (!string.IsNullOrEmpty(status))
+                query = query.Where(o => o.StatusOrderNavigation.NameVi == status);
 
+            if (!string.IsNullOrEmpty(searchTerm))
+            {
+                string term = searchTerm.ToLower();
+                query = query.Where(o =>
+                    (o.OrderCode != null && o.OrderCode.ToLower().Contains(term)) ||
+                    (o.EndCustomer != null && o.EndCustomer.Name.ToLower().Contains(term))
+                );
+            }
 
+            if (fromDate.HasValue)
+                query = query.Where(o => o.OrderDate >= fromDate.Value);
+
+            if (toDate.HasValue)
+                query = query.Where(o => o.OrderDate <= toDate.Value);
+
+            // Sắp xếp (giống logic trước)
+            if (!string.IsNullOrEmpty(sortColumn))
+            {
+                query = sortColumn.ToLower() switch
+                {
+                    "orderid" => (sortDirection.ToLower() == "asc" ? query.OrderBy(o => o.OrderCode) : query.OrderByDescending(o => o.OrderCode)),
+                    "orderdate" => (sortDirection.ToLower() == "asc" ? query.OrderBy(o => o.OrderDate) : query.OrderByDescending(o => o.OrderDate)),
+                    "customername" => (sortDirection.ToLower() == "asc" ? query.OrderBy(o => o.EndCustomer.Name) : query.OrderByDescending(o => o.EndCustomer.Name)),
+                    "totalamount" => (sortDirection.ToLower() == "asc" ? query.OrderBy(o => o.TotalCost) : query.OrderByDescending(o => o.TotalCost)),
+                    _ => query.OrderByDescending(o => o.CreationDate ?? o.OrderDate)
+                };
+            }
+            else
+            {
+                query = query.OrderByDescending(o => o.OrderDate);
+            }
+
+            var list = await query
+                .ProjectTo<OrderWithDetailsDto>(_mapper.ConfigurationProvider)
+                .ToListAsync();
+
+            return list;
+        }
 
 
     }

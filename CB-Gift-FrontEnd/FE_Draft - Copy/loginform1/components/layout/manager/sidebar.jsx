@@ -29,6 +29,16 @@ export default function ManagerSidebar({ currentPage, setCurrentPage }) {
       path: "/manager/manage-topup",
     },
     {
+      id: "manage-catalog",
+      label: "Manage Catalog",
+      path: "/manager/manage-catalog",
+    },
+    {
+      id: "manage-category",
+      label: "Manage Category",
+      path: "/manager/manage-category",
+    },
+    {
       id: "report-analyst",
       label: "Report and Analyst",
       path: "/manager/report-analyst",

@@ -55,5 +55,15 @@ namespace CB_Gift.Services.IService
         Task<bool> SellerApproveOrderDetailDesignAsync(int orderDetailId, ProductionStatus action, string sellerId, string? reason);
         Task<bool> SendOrderToReadyProdAsync(int orderId, string sellerId);
         Task<ApproveOrderResult> ApproveOrderForShippingAsync(int orderId);
+
+        Task<List<OrderWithDetailsDto>> GetFilteredOrdersForSellerAsync(
+            string sellerUserId,
+            string? status,
+            string? searchTerm,
+            string? sortColumn,
+            string? sortDirection,
+            DateTime? fromDate,
+            DateTime? toDate);
+
     }
 }
