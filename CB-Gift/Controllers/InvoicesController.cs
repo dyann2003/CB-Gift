@@ -66,6 +66,20 @@ namespace CB_Gift.Controllers
             var invoices = await _invoiceService.GetInvoicesForSellerAsync(sellerId);
             return Ok(invoices);
         }
+        [HttpGet("myinvoices")]
+        [Authorize(Roles = "Seller")]
+        public async Task<IActionResult> GetMyInvoices(
+            [FromQuery] string? status = null,
+            [FromQuery] string? searchTerm = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10)
+        {
+            var sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(sellerId)) return Unauthorized();
+
+            var result = await _invoiceService.GetInvoicesForSellerPageAsync(sellerId, status, searchTerm, page, pageSize);
+            return Ok(result);
+        }
 
         /// <summary>
         /// Lấy thông tin chi tiết của một hóa đơn cụ thể bằng ID.
@@ -98,16 +112,21 @@ namespace CB_Gift.Controllers
         // GET: /api/invoices/all
         [HttpGet("all")]
         [Authorize(Roles = "Staff, Admin, Manager")]
-        public async Task<IActionResult> GetAllInvoices()
+        public async Task<IActionResult> GetAllInvoices(
+            [FromQuery] string? status = null,
+            [FromQuery] string? searchTerm = null,
+            [FromQuery] string? sellerId = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10)
         {
             try
             {
-                var invoices = await _invoiceService.GetAllInvoicesAsync();
-                return Ok(invoices);
+                var result = await _invoiceService.GetAllInvoicesAsync(status, searchTerm, sellerId, page, pageSize);
+                return Ok(result); 
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn.", error = ex.Message });
+                return StatusCode(500, new { message = "Đã xảy ra lỗi.", error = ex.Message }); 
             }
         }
     }

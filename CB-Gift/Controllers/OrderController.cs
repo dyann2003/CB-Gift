@@ -320,5 +320,51 @@ namespace CB_Gift.Controllers
                 return StatusCode(500, new { message = "Lỗi hệ thống.", error = ex.Message });
             }
         }
+        [HttpGet("GetAllOrdersForInvoice")]
+        public async Task<IActionResult> GetAllOrders(
+            [FromQuery] string? status = null,
+            [FromQuery] string? searchTerm = null,
+            [FromQuery] string? seller = null,
+            [FromQuery] string? sortColumn = null,
+            [FromQuery] string? sortDirection = "desc",
+            [FromQuery] DateTime? fromDate = null,
+            [FromQuery] DateTime? toDate = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10)
+        {
+            try
+            {
+                var (orders, total) = await _orderService.GetFilteredAndPagedOrdersForInvoiceAsync(
+                    status, searchTerm, seller, sortColumn, sortDirection, fromDate, toDate, page, pageSize);
+
+                return Ok(new { total, orders });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    message = "Đã xảy ra lỗi khi lấy danh sách đơn hàng.",
+                    detail = ex.Message
+                });
+            }
+        }
+
+        [HttpGet("GetUniqueSellers")]
+        public async Task<IActionResult> GetUniqueSellers([FromQuery] string? status = null)
+        {
+            try
+            {
+                var sellerNames = await _orderService.GetUniqueSellersAsync(status);
+                return Ok(sellerNames);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    message = "Đã xảy ra lỗi khi lấy danh sách sellers.",
+                    detail = ex.Message
+                });
+            }
+        }
     }
 }

@@ -1,9 +1,11 @@
 ﻿using CB_Gift.Data;
 using CB_Gift.DTOs;
 using CB_Gift.Services.Email;
+using CB_Gift.Services.IService;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace CB_Gift.Controllers;
 
@@ -18,19 +20,22 @@ public class AuthController : ControllerBase
     private readonly ITokenService _tokens;
     private readonly IAccountService _accountService;
     private readonly IConfiguration _config;
+    private readonly IInvoiceService _invoiceService;
 
     public AuthController(
         SignInManager<AppUser> signIn,
         UserManager<AppUser> users,
         ITokenService tokens,
         IConfiguration config,
-        IAccountService accountService)
+        IAccountService accountService,
+        IInvoiceService invoiceService)
     {
         _signIn = signIn;
         _users = users;
         _tokens = tokens;
         _config = config;
         _accountService = accountService;
+        _invoiceService = invoiceService;
     }
 
     // POST: /api/auth/login
@@ -252,6 +257,22 @@ public class AuthController : ControllerBase
             });
         }
     }
+    [HttpGet("status")] // check xem trạng thái của seller có hóa đơn nào quá hạn thanh toán không!
+    [Authorize(Roles = "Seller")] // Chỉ Seller mới gọi
+    public async Task<IActionResult> GetAccountStatus()
+    {
+        var sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(sellerId))
+        {
+            return Unauthorized();
+        }
+
+        // Gọi service để kiểm tra
+        var statusCheck = await _invoiceService.CheckForOverdueInvoiceAsync(sellerId);
+
+        return Ok(statusCheck);
+    }
+
 
 
 
