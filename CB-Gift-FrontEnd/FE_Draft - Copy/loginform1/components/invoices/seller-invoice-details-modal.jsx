@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, DollarSign, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {apiClient} from "../../lib/apiClient";
 import {
   Select,
   SelectContent,
@@ -17,7 +18,7 @@ export default function SellerInvoiceDetailsModal({
   onClose,
   onPayment,
 }) {
-  // [THÊM] State để lưu trữ dữ liệu chi tiết từ API hhhhhhhhhh
+  // [THÊM] State để lưu trữ dữ liệu chi tiết từ API
   const [detailedInvoice, setDetailedInvoice] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -35,7 +36,7 @@ export default function SellerInvoiceDetailsModal({
         setDetailedInvoice(null); // Xóa dữ liệu cũ
         try {
           const response = await fetch(
-            `https://localhost:7015/api/invoices/${invoice.invoiceId}`,
+            `${apiClient}/api/invoices/${invoice.invoiceId}`,
             {
               credentials: "include", // Cần cho [Authorize]
             }

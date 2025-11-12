@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react"
 import { Upload, Download, Sparkles, AlertCircle, Image as ImageIcon, Wand2, CircleCheck } from "lucide-react"
-import { apiClient } from "../../lib/apiClient"
+import { apiClient } from "../../lib/apiClient";
 
 import {
   STYLE_OPTIONS,

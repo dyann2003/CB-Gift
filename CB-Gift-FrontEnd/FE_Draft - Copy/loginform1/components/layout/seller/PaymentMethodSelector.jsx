@@ -5,6 +5,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react"; // Dùng cho nút loading
+import {apiClient} from "../../../lib/apiClient";
 
 // Component này sẽ là một modal
 export default function PaymentMethodSelector({ invoice, onClose }) {
@@ -68,7 +69,7 @@ export default function PaymentMethodSelector({ invoice, onClose }) {
 
     try {
       const response = await fetch(
-        "https://localhost:7015/api/invoices/create-payment-link",
+        "${apiClient}/api/invoices/create-payment-link",
         {
           method: "POST",
           headers: {

@@ -1,59 +1,5 @@
 "use client";
-
-const transactionHistory = [
-  {
-    id: "TH-001",
-    month: "January 2025",
-    date: "15/01/2025",
-    type: "Payment",
-    paymentMethod: "Full Payment",
-    amount: 8_500_000,
-    remaining: 0,
-    status: "paid",
-  },
-  {
-    id: "TH-002",
-    month: "December 2024",
-    date: "20/12/2024",
-    type: "Partial Payment",
-    paymentMethod: "50%",
-    amount: 3_600_000,
-    remaining: 3_600_000,
-    status: "partial",
-  },
-  {
-    id: "TH-003",
-    month: "November 2024",
-    date: "15/11/2024",
-    type: "Partial Payment",
-    paymentMethod: "30%",
-    amount: 2_040_000,
-    remaining: 4_760_000,
-    status: "partial",
-  },
-  {
-    id: "TH-004",
-    month: "October 2024",
-    date: "05/10/2024",
-    type: "Payment",
-    paymentMethod: "Full Payment",
-    amount: 5_200_000,
-    remaining: 0,
-    status: "paid",
-  },
-  {
-    id: "TH-005",
-    month: "September 2024",
-    date: "28/09/2024",
-    type: "Partial Payment",
-    paymentMethod: "20%",
-    amount: 920_000,
-    remaining: 3_680_000,
-    status: "partial",
-  },
-];
-
-// [XÓA] mock 'transactionHistory'
+import {apiClient} from "../../lib/apiClient";
 
 const SellerTransactionTab = ({ seller, onActionDone }) => {
   // [THÊM] State cho API
@@ -80,7 +26,7 @@ const SellerTransactionTab = ({ seller, onActionDone }) => {
 
       try {
         const response = await fetch(
-          `https://localhost:7015/api/invoices/seller-payments/${seller.id}?${params.toString()}`,
+          `${apiClient}/api/invoices/seller-payments/${seller.id}?${params.toString()}`,
           { credentials: "include" }
         );
         if (!response.ok) throw new Error("Failed to fetch payment history.");

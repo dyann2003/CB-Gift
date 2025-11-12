@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import {apiClient} from "../../../lib/apiClient";
 import {
   Dialog,
   DialogContent,
@@ -71,7 +72,7 @@ export default function StaffManageOrder() {
         setIsLoading(true);
         setError(null);
         const response = await fetch(
-          `https://localhost:7015/api/Order/GetAllOrders?sortDirection=${sortDirection}&page=${page}&pageSize=${itemsPerPage}`
+          `${apiClient}/api/Order/GetAllOrders?sortDirection=${sortDirection}&page=${page}&pageSize=${itemsPerPage}`
         );
         if (!response.ok) {
           throw new Error(`Failed to fetch orders: ${response.statusText}`);
@@ -175,7 +176,7 @@ export default function StaffManageOrder() {
   const reviewCancellation = async (orderId, approved, rejectionReason = "") => {
     try {
       const res = await fetch(
-        `https://localhost:7015/api/order/${orderId}/review-cancellation`,
+        `${apiClient}/api/order/${orderId}/review-cancellation`,
         {
           method: "POST",
           headers: {
@@ -292,7 +293,7 @@ export default function StaffManageOrder() {
   };
    // ✅ API approve/reject refund trực tiếp trong page.jsx
   const reviewRefund = async (refundId, approved, rejectionReason = null) => {
-    const res = await fetch(`https://localhost:7015/api/orders/${refundId}/review-refund`, {
+    const res = await fetch(`${apiClient}/api/orders/${refundId}/review-refund`, {
       method: "POST",
       credentials: "include",
       headers: {
@@ -324,7 +325,7 @@ export default function StaffManageOrder() {
     if (res.isConfirmed) {
       try {
         const response = await fetch(
-          `https://localhost:7015/api/Order/refund-requests/${refundId}/review`,
+          `${apiClient}/api/Order/refund-requests/${refundId}/review`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -363,7 +364,7 @@ export default function StaffManageOrder() {
 
   try {
     const response = await fetch(
-      `https://localhost:7015/api/Order/refund-requests/${refundId}/review`,
+      `${apiClient}/api/Order/refund-requests/${refundId}/review`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -809,7 +810,7 @@ export default function StaffManageOrder() {
                                       </Popover>
                                     
                                   {/* ✅ Nếu đơn đang yêu cầu Cancel */}
-                                  {(order.statusOderName === "Tạm Dừng/Chờ" || order.statusOderName === "Cancel") && !order.isRefundPending && (
+                                  {(order.statusOderName === "HOLD" || order.statusOderName === "Cancel") && !order.isRefundPending && (
                                     <>
                                       <Button
                                         variant="outline"
