@@ -10,7 +10,6 @@ using System.Linq.Expressions;
 using Net.payOS;
 using Net.payOS.Types;
 using Newtonsoft.Json;
-using System.Globalization;
 
 namespace CB_Gift.Services;
 
@@ -658,7 +657,7 @@ public class InvoiceService : IInvoiceService
             OverdueInvoiceId = overdueInvoice.InvoiceId
         };
     }
-    public async Task<PaginatedResult<SellerReceivablesDto>> GetSellerReceivablesAsync(
+     public async Task<PaginatedResult<SellerReceivablesDto>> GetSellerReceivablesAsync(
     string? searchTerm, string? sortColumn, string? sortDirection, int page, int pageSize)
     {
         // 1. Lấy thông tin tổng hợp từ Invoices, nhóm theo Seller
@@ -860,4 +859,6 @@ public class InvoiceService : IInvoiceService
         // 3. Gọi hàm tạo hóa đơn gốc (mà bạn đã cung cấp)
         return await CreateInvoiceAsync(createInvoiceRequest, staffId);
     }
+
+
 }

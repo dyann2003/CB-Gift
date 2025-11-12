@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import {apiClient} from "../../../lib/apiClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -52,7 +53,7 @@ export default function ManageRelationshipPage() {
 
       if (sellerFilter !== "all") params.append("sellerId", sellerFilter);
 
-      const url = `https://localhost:7015/api/manager/assignments/all?${params.toString()}`;
+      const url = `${apiClient}/api/manager/assignments/all?${params.toString()}`;
       const response = await fetch(url, { credentials: "include" });
 
       if (!response.ok)
@@ -95,7 +96,7 @@ export default function ManageRelationshipPage() {
 
     try {
       const res = await fetch(
-        "https://localhost:7015/api/manager/assignments",
+        "${apiClient}/api/manager/assignments",
         {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },

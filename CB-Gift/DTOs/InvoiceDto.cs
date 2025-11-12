@@ -74,8 +74,8 @@ namespace CB_Gift.DTOs
         public string Id { get; set; }
         public string Name { get; set; }
         public string Email { get; set; }
-        public string? Phone { get; set; }
-     //   public string Address { get; set; }
+        public string Phone { get; set; }
+        public string Address { get; set; }
         public decimal TotalDebt { get; set; } // Công nợ (Receivables)
         public decimal TotalSales { get; set; } // Tổng doanh số
     }
