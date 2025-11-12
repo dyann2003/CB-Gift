@@ -10,6 +10,7 @@ using System.Linq.Expressions;
 using Net.payOS;
 using Net.payOS.Types;
 using Newtonsoft.Json;
+using System.Globalization;
 
 namespace CB_Gift.Services;
 
@@ -656,5 +657,207 @@ public class InvoiceService : IInvoiceService
             HasOverdueInvoice = true,
             OverdueInvoiceId = overdueInvoice.InvoiceId
         };
+    }
+    public async Task<PaginatedResult<SellerReceivablesDto>> GetSellerReceivablesAsync(
+    string? searchTerm, string? sortColumn, string? sortDirection, int page, int pageSize)
+    {
+        // 1. Lấy thông tin tổng hợp từ Invoices, nhóm theo Seller
+        // GHI CHÚ: 'g' là một nhóm các hóa đơn của 1 seller
+        var sellerStats = _context.Invoices
+            .GroupBy(i => i.SellerUserId)
+            .Select(g => new
+            {
+                SellerId = g.Key,
+                // Tổng doanh số (tổng giá trị tất cả hóa đơn)
+                TotalSales = g.Sum(i => i.TotalAmount),
+                // Tổng công nợ (chỉ tính các hóa đơn chưa trả xong)
+                TotalDebt = g.Sum(i => (i.Status == "Issued" || i.Status == "PartiallyPaid")
+                                        ? (i.TotalAmount - i.AmountPaid)
+                                        : 0)
+            });
+
+        // 2. Join với bảng Users để lấy thông tin chi tiết của Seller
+        // Giả định: Bảng User của bạn là 'Users' và có 'FullName', 'PhoneNumber'
+        var query = _context.Users
+            .Join(sellerStats,
+                  user => user.Id,       // Key từ bảng Users
+                  stats => stats.SellerId, // Key từ bảng sellerStats
+                  (user, stats) => new SellerReceivablesDto
+                  {
+                      Id = user.Id,
+                      Name = user.FullName, 
+                      Email = user.Email,
+                      Phone = user.PhoneNumber, 
+                      TotalSales = stats.TotalSales,
+                      TotalDebt = stats.TotalDebt
+                  });
+
+        // 3. Áp dụng tìm kiếm (Search)
+        if (!string.IsNullOrEmpty(searchTerm))
+        {
+            query = query.Where(s =>
+                s.Name.Contains(searchTerm) ||
+                s.Email.Contains(searchTerm) ||
+                s.Phone.Contains(searchTerm)
+            );
+        }
+
+        // 4. Áp dụng Sắp xếp (Sorting) - (Bạn có thể mở rộng sau)
+        // Mặc định sắp xếp theo công nợ giảm dần
+        query = query.OrderByDescending(s => s.TotalDebt);
+
+        // 5. Phân trang
+        var total = await query.CountAsync();
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return new PaginatedResult<SellerReceivablesDto>
+        {
+            Items = items,
+            Total = total,
+            Page = page,
+            PageSize = pageSize
+        };
+    }
+    // [CẬP NHẬT] - Logic cho tab "Payment History"
+    public async Task<PaginatedResult<PaymentSummaryDto>> GetPaymentsForSellerAsync(string sellerId, int page, int pageSize)
+    {
+        var query = _context.Payments
+            .Include(p => p.Invoice)
+            .Where(p => p.Invoice.SellerUserId == sellerId)
+            .OrderByDescending(p => p.PaymentDate);
+
+        var total = await query.CountAsync();
+
+        var payments = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(p => new PaymentSummaryDto
+            {
+                PaymentId = p.PaymentId,
+                InvoiceId = p.InvoiceId,
+                InvoiceNumber = p.Invoice.InvoiceNumber,
+                PaymentDate = p.PaymentDate,
+                Amount = p.Amount,
+                PaymentMethod = p.PaymentMethod,
+                Status = p.Status, // Trạng thái của Payment
+                TransactionId = p.TransactionId,
+                InvoiceTotal = p.Invoice.TotalAmount,
+                InvoiceStatus = p.Invoice.Status, // Trạng thái của Invoice (Paid, Partial)
+                InvoiceRemaining = p.Invoice.TotalAmount - p.Invoice.AmountPaid
+            })
+            .AsNoTracking()
+            .ToListAsync();
+
+        return new PaginatedResult<PaymentSummaryDto> { Items = payments, Total = total, Page = page, PageSize = pageSize };
+    }
+
+    // [THÊM MỚI] - Logic cho tab "Sales History" (Lấy danh sách các tháng)
+    public async Task<List<SellerMonthlySalesDto>> GetSellerMonthlySalesAsync(string sellerId)
+    {
+        // 1. Lấy tất cả các order "Đã Ship" (SHIPPED) của seller
+        var ordersInMonth = await _context.Orders
+            .Include(o => o.StatusOrderNavigation) // Cần để lọc theo Code
+            .Where(o => o.SellerUserId == sellerId && o.StatusOrderNavigation.Code == "SHIPPED")
+            .Select(o => new
+            {
+                o.OrderId,
+                o.OrderDate,
+                o.TotalCost,
+                // Kiểm tra xem order này đã nằm trong invoice nào chưa
+                IsInvoiced = _context.InvoiceItems.Any(ii => ii.OrderId == o.OrderId)
+            })
+            .ToListAsync();
+
+        // 2. Nhóm bằng code C#
+        var monthlyGroups = ordersInMonth
+            .GroupBy(o => new { o.OrderDate.Year, o.OrderDate.Month })
+            .Select(g => new SellerMonthlySalesDto
+            {
+                Year = g.Key.Year,
+                Month = g.Key.Month,
+                MonthName = new DateTime(g.Key.Year, g.Key.Month, 1).ToString("MMMM yyyy", CultureInfo.InvariantCulture),
+                TotalAmount = g.Sum(o => o.TotalCost ?? 0),
+                // Logic xác định trạng thái của tháng
+                Status = g.All(o => o.IsInvoiced) ? "Invoiced" // Tất cả đã được lập hóa đơn
+                       : g.Any(o => o.IsInvoiced) ? "PartiallyInvoiced" // Một phần đã lập
+                       : "Uninvoiced" // Chưa lập
+            })
+            .OrderByDescending(m => m.Year)
+            .ThenByDescending(m => m.Month)
+            .ToList();
+
+        return monthlyGroups;
+    }
+
+    // [THÊM MỚI] - Logic cho tab "Sales History" (Lấy order của 1 tháng)
+    public async Task<PaginatedResult<SellerOrderDto>> GetSellerOrdersForMonthAsync(string sellerId, int year, int month, int page, int pageSize)
+    {
+        var query = _context.Orders
+            .Include(o => o.EndCustomer)
+            .Include(o => o.StatusOrderNavigation)
+            .Where(o =>
+                o.SellerUserId == sellerId &&
+                o.OrderDate.Year == year &&
+                o.OrderDate.Month == month &&
+                o.StatusOrderNavigation.Code == "SHIPPED"
+            )
+            .OrderByDescending(o => o.OrderDate);
+
+        var total = await query.CountAsync();
+
+        var orders = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(o => new SellerOrderDto
+            {
+                OrderId = o.OrderId,
+                OrderCode = o.OrderCode,
+                OrderDate = o.OrderDate,
+                CustomerName = o.EndCustomer.Name, // Giả định tên khách hàng
+                TotalCost = o.TotalCost ?? 0,
+                OrderStatus = o.StatusOrderNavigation.Code // Giả định tên trạng thái
+            })
+            .ToListAsync();
+
+        return new PaginatedResult<SellerOrderDto> { Items = orders, Total = total, Page = page, PageSize = pageSize };
+    }
+
+    // [THÊM MỚI] - Logic cho nút "Create Monthly Receipt"
+    public async Task<Invoice> CreateInvoiceForMonthAsync(CreateMonthlyInvoiceRequest request, string staffId)
+    {
+        // 1. Tìm tất cả các Order ID "Đã Ship" CHƯA được lập hóa đơn
+        var orderIdsToInvoice = await _context.Orders
+            .Include(o => o.StatusOrderNavigation) // Cần để lọc "SHIPPED"
+            .Where(o =>
+                o.SellerUserId == request.SellerId &&
+                o.OrderDate.Year == request.Year &&
+                o.OrderDate.Month == request.Month &&
+                o.StatusOrderNavigation.Code == "SHIPPED" &&
+                !_context.InvoiceItems.Any(ii => ii.OrderId == o.OrderId) // CHƯA CÓ HÓA ĐƠN
+            )
+            .Select(o => o.OrderId)
+            .ToListAsync();
+
+        if (orderIdsToInvoice == null || !orderIdsToInvoice.Any())
+        {
+            throw new InvalidOperationException("Không có đơn hàng 'Đã Ship' nào mới (chưa lập hóa đơn) trong tháng này.");
+        }
+
+        // 2. Tạo request DTO cho hàm CreateInvoiceAsync CŨ
+        var createInvoiceRequest = new CreateInvoiceRequest
+        {
+
+            SellerId = request.SellerId,
+            OrderIds = orderIdsToInvoice,
+            Notes = request.Notes ?? $"Hóa đơn tổng hợp tháng {request.Month}/{request.Year}",
+            StartDate = new DateTime(request.Year, request.Month, 1),
+            EndDate = new DateTime(request.Year, request.Month, 1).AddMonths(1).AddDays(-1)
+        };
+
+        // 3. Gọi hàm tạo hóa đơn gốc (mà bạn đã cung cấp)
+        return await CreateInvoiceAsync(createInvoiceRequest, staffId);
     }
 }
