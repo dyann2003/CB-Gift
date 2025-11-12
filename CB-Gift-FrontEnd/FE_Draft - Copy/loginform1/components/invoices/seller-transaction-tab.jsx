@@ -17,7 +17,7 @@ const SellerTransactionTab = ({ seller, onActionDone }) => {
 
   const totalPages = Math.ceil(total / itemsPerPage);
 
-  // [THÊM] useEffect để tải lịch sử thanh toán
+  // [THÊM] useEffect để tải lịch sử thanh toán hhhhhhhhhh
   useEffect(() => {
     if (!seller?.id) return;
 

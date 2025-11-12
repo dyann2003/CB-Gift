@@ -10,7 +10,7 @@ const SellerInfoTab = ({ seller }) => {
     return (seller.totalDebt / seller.totalSales) * 100;
   };
 
-  // Hàm format tiền tệ
+  // Hàm format tiền tệ hhhhhhhhhh
   const formatCurrency = (value) => {
     if (value === 0) return "0";
     if (!value) return "-";

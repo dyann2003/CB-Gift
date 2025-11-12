@@ -17,7 +17,7 @@ export default function SellerInvoiceDetailsModal({
   onClose,
   onPayment,
 }) {
-  // [THÊM] State để lưu trữ dữ liệu chi tiết từ API
+  // [THÊM] State để lưu trữ dữ liệu chi tiết từ API hhhhhhhhhh
   const [detailedInvoice, setDetailedInvoice] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
