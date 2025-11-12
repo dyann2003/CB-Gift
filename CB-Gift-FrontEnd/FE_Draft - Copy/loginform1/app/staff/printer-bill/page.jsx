@@ -59,6 +59,7 @@ export default function PrinterBillPage() {
   const [dateRange, setDateRange] = useState({ from: null, to: null });
   const [page, setPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalOrders, setTotalOrders] = useState(0);
   const [sortColumn, setSortColumn] = useState(null);
   const [sortDirection, setSortDirection] = useState("asc");
   const [selectedOrders, setSelectedOrders] = useState(new Set());
@@ -81,102 +82,104 @@ export default function PrinterBillPage() {
   });
   const [pendingPrintAction, setPendingPrintAction] = useState(null);
 
-  // Fetch orders with "Đã Kiểm tra Chất lượng" status
+  // [MỚI] useEffect 1: Fetch danh sách Sellers (chạy 1 lần)
+  useEffect(() => {
+    const fetchSellers = async () => {
+      try {
+        // Gọi API GetUniqueSellers bạn vừa tạo
+        const response = await fetch(
+          "https://localhost:7015/api/Order/GetUniqueSellers?status=SHIPPED"
+        );
+        if (!response.ok) {
+          throw new Error("Failed to fetch sellers");
+        }
+        const sellerData = await response.json();
+        setSellers(sellerData);
+      } catch (e) {
+        console.error("[v1] Failed to fetch sellers:", e);
+        setSellers([]); // Nếu lỗi thì trả về mảng rỗng
+      }
+    };
+    fetchSellers();
+  }, []); // dependency rỗng, chỉ chạy 1 lần khi component mount
+
+  // [MỚI] useEffect 2: Fetch Orders dựa trên TẤT CẢ state (filter, sort, pagination)
   useEffect(() => {
     const fetchOrders = async () => {
       setLoading(true);
       setError(null);
-
+      
       try {
+        const params = new URLSearchParams();
+
+        // 1. Thêm Status (luôn là "Đã Ship" theo logic cũ của bạn [cite: 19])
+        params.append("status", "SHIPPED");
+
+        // 2. Thêm Filters (Search, Date)
+        if (searchTerm) {
+          params.append("searchTerm", searchTerm);
+        }
+        if (dateRange.from) {
+          params.append("fromDate", dateRange.from.toISOString());
+        }
+        if (dateRange.to) {
+          // Gửi lên là NGÀY TIẾP THEO lúc 00:00
+          // để logic BE (OrderDate < toDate) hoạt động đúng
+          let toDateEnd = new Date(dateRange.to);
+          toDateEnd.setDate(toDateEnd.getDate() + 1);
+          params.append("toDate", toDateEnd.toISOString().split('T')[0]); // Gửi dạng YYYY-MM-DD
+        }
+
+        // 3. Thêm Filter Seller (MỚI)
+        if (selectedSeller !== "all") {
+          params.append("seller", selectedSeller);
+        }
+
+        // 4. Thêm Sắp xếp (Sort)
+        if (sortColumn) {
+          params.append("sortColumn", sortColumn);
+          params.append("sortDirection", sortDirection);
+        }
+
+        // 5. Thêm Phân trang (Pagination)
+        params.append("page", page);
+        params.append("pageSize", itemsPerPage);
+
+        // 6. Gọi API với tất cả tham số
         const response = await fetch(
-          "https://localhost:7015/api/Order/GetAllOrders"
+          `https://localhost:7015/api/Order/GetAllOrdersForInvoice?${params.toString()}`
         );
 
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+          throw new Error(`HTTP error! status: ${response.status}`); 
         }
 
         const data = await response.json();
 
-        // ✅ API mới trả về { total, orders }
-        const orders = data.orders || [];
+        // 7. Cập nhật state với dữ liệu API trả về
+        setOrders(data.orders || []);
+        setTotalOrders(data.total || 0); // <-- Cập nhật state mới
 
-        // ✅ Lọc đơn có statusOderName = "Đã Ship"
-        const filteredOrders = orders.filter(
-          (order) =>
-            order.statusOderName?.toLowerCase().trim() ===
-            "đã ship".toLowerCase()
-        );
-
-        setOrders(filteredOrders);
-
-        // ✅ Lấy danh sách Seller duy nhất
-        const uniqueSellers = [
-          ...new Set(filteredOrders.map((o) => o.sellerName).filter(Boolean)),
-        ];
-        setSellers(uniqueSellers);
       } catch (e) {
-        console.error("[v0] Failed to fetch orders:", e);
-        setError("Could not load orders. Please try again later.");
+        console.error("[v1] Failed to fetch orders:", e); 
+        setError("Could not load orders. Please try again later."); 
       } finally {
-        setLoading(false);
+        setLoading(false); 
       }
     };
 
     fetchOrders();
-  }, []);
+    
+    // Dependency array: Bất cứ khi nào 1 trong các giá trị này thay đổi,
+    // useEffect sẽ chạy lại và gọi API
+  }, [page, itemsPerPage, searchTerm, dateRange, sortColumn, sortDirection, selectedSeller]);
+  
 
-  // Filter and search logic
-  const filteredOrders = orders.filter((order) => {
-    const matchesSearch =
-      order.orderCode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customerName?.toLowerCase().includes(searchTerm.toLowerCase());
+  const totalPages = Math.ceil(totalOrders / itemsPerPage); 
+  const paginatedOrders = orders; 
 
-    const matchesSeller =
-      selectedSeller === "all" || order.sellerName === selectedSeller;
-
-    let matchesDateRange = true;
-    if (dateRange.from && dateRange.to) {
-      const orderDate = new Date(order.orderDate);
-      matchesDateRange =
-        orderDate >= dateRange.from && orderDate <= dateRange.to;
-    } else if (dateRange.from) {
-      const orderDate = new Date(order.orderDate);
-      matchesDateRange =
-        orderDate.toDateString() === dateRange.from.toDateString();
-    }
-
-    return matchesSearch && matchesSeller && matchesDateRange;
-  });
-
-  // Sort logic
-  const sortedOrders = [...filteredOrders].sort((a, b) => {
-    if (!sortColumn) return 0;
-
-    let aValue, bValue;
-
-    if (sortColumn === "orderDate") {
-      aValue = new Date(a.orderDate).getTime();
-      bValue = new Date(b.orderDate).getTime();
-    } else if (sortColumn === "customerName") {
-      aValue = a.customerName?.toLowerCase() || "";
-      bValue = b.customerName?.toLowerCase() || "";
-    } else if (sortColumn === "totalCost") {
-      aValue = Number.parseFloat(a.totalCost || 0);
-      bValue = Number.parseFloat(b.totalCost || 0);
-    }
-
-    if (sortDirection === "asc") {
-      return aValue > bValue ? 1 : -1;
-    } else {
-      return aValue < bValue ? 1 : -1;
-    }
-  });
-
-  const totalPages = Math.ceil(sortedOrders.length / itemsPerPage);
   const startIndex = (page - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedOrders = sortedOrders.slice(startIndex, endIndex);
 
   const handleSort = (column) => {
     if (sortColumn === column) {
@@ -203,23 +206,61 @@ export default function PrinterBillPage() {
     setPage(1);
   };
 
-  const handleExport = () => {
-    const exportData = sortedOrders.map((order) => ({
-      "Order ID": order.orderCode,
-      "Customer Name": order.customerName,
-      "Seller Name": order.sellerName,
-      "Order Date": format(new Date(order.orderDate), "MMM dd, yyyy"),
-      "Payment Status": order.paymentStatus,
-      "Total Amount": order.totalCost,
-    }));
+  const handleExport = async () => {
+    // 1. Tạo params giống hệt như fetchOrders, nhưng KHÔNG CÓ phân trang
+    const params = new URLSearchParams();
+    params.append("status", "Đã Ship");
+    if (searchTerm) params.append("searchTerm", searchTerm);
+    if (dateRange.from) params.append("fromDate", dateRange.from.toISOString());
+    if (dateRange.to) {
+      let toDateEnd = new Date(dateRange.to);
+      toDateEnd.setDate(toDateEnd.getDate() + 1);
+      params.append("toDate", toDateEnd.toISOString().split('T')[0]);
+    }
+    if (selectedSeller !== "all") {
+      params.append("seller", selectedSeller);
+    }
+    if (sortColumn) {
+      params.append("sortColumn", sortColumn);
+      params.append("sortDirection", sortDirection);
+    }
+    
+    // Yêu cầu tất cả dữ liệu (đặt pageSize rất lớn)
+    params.append("page", "1");
+    // Lấy số lượng totalOrders (nếu > 0) hoặc 1 giá trị lớn
+    params.append("pageSize", totalOrders > 0 ? totalOrders : 10000); 
 
-    const worksheet = XLSX.utils.json_to_sheet(exportData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Printer Bills");
-    saveAs(
-      new Blob([XLSX.write(workbook, { bookType: "xlsx", type: "array" })]),
-      `printer-bills-${format(new Date(), "yyyy-MM-dd")}.xlsx`
-    );
+    try {
+      const response = await fetch(
+        `https://localhost:7015/api/Order/GetAllOrdersForInvoice?${params.toString()}`
+      );
+      if (!response.ok) throw new Error("Failed to fetch data for export");
+
+      const data = await response.json();
+      const allOrdersForExport = data.orders || [];
+
+      // 2. Tiếp tục logic export cũ với dữ liệu vừa fetch
+      const exportData = allOrdersForExport.map((order) => ({
+        "Order ID": order.orderCode,
+        "Customer Name": order.customerName,
+        "Seller Name": order.sellerName,
+        "Order Date": format(new Date(order.orderDate), "MMM dd, yyyy"),
+        "Payment Status": order.paymentStatus,
+        "Total Amount": order.totalCost,
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(exportData); 
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Printer Bills");
+      saveAs(
+        new Blob([XLSX.write(workbook, { bookType: "xlsx", type: "array" })]),
+        `printer-bills-${format(new Date(), "yyyy-MM-dd")}.xlsx`
+      ); 
+
+    } catch (e) {
+      console.error("Export failed", e);
+      alert("Could not export data. Please try again.");
+    }
   };
 
   const handleSelectOrder = (orderId) => {
@@ -244,6 +285,12 @@ export default function PrinterBillPage() {
   const handleViewDetails = (order) => {
     setSelectedOrderDetails(order);
     setIsDetailsOpen(true);
+  };
+  const handlePageSizeChange = (e) => {
+    // Cập nhật state itemsPerPage với giá trị mới (chuyển sang Number)
+    setItemsPerPage(Number(e.target.value));
+    // Quan trọng: Reset về trang 1
+    setPage(1);
   };
 
   const handlePrintBill = (order) => {
@@ -411,14 +458,14 @@ export default function PrinterBillPage() {
   const stats = [
     {
       title: "Total Orders",
-      value: orders.length,
+      value: totalOrders,
       color: "bg-blue-50 border-blue-200",
       icon: Package,
       iconColor: "text-blue-500",
     },
     {
       title: "Shipped",
-      value: orders.length,
+      value: totalOrders,
       color: "bg-emerald-50 border-emerald-200",
       icon: CheckCircle,
       iconColor: "text-emerald-500",
@@ -883,12 +930,42 @@ export default function PrinterBillPage() {
                   </div>
 
                   {/* Pagination */}
-                  {totalPages > 1 && (
+                  {totalPages >= 1 && (
                     <div className="flex items-center justify-between p-4 border-t border-gray-200">
-                      <div className="text-sm text-gray-600">
-                        Page {page} of {totalPages} ({sortedOrders.length} total
-                        orders)
+                      
+                    
+                      <div className="flex items-center gap-4">
+                        
+                        {/* Text hiển thị trang */}
+                        <div className="text-sm text-gray-600">
+                          Page {page} of {totalPages} ({totalOrders} total
+                          orders)
+                        </div>
+
+                        {/* [THÊM] Dropdown chọn Page Size */}
+                        <div className="flex items-center gap-2">
+                          <label
+                            htmlFor="itemsPerPage"
+                            className="text-sm font-medium text-gray-600"
+                          >
+                            Page Size:
+                          </label>
+                          <select
+                            id="itemsPerPage"
+                            value={itemsPerPage}
+                            onChange={handlePageSizeChange} // <-- Dùng hàm handler mới
+                            className="px-2 py-1 border border-gray-300 rounded-md bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value={10}>10</option>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                          </select>
+                        </div>
+
                       </div>
+
+                      {/* Các nút Previous/Next (giữ nguyên) */}
                       <div className="flex gap-2">
                         <Button
                           variant="outline"

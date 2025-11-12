@@ -1,0 +1,50 @@
+# ----- Giai đoạn 1: Build Next.js with pnpm -----
+FROM node:18-alpine AS build
+
+# Kích hoạt Corepack
+RUN corepack enable
+
+# Đường dẫn tới dự án con
+ARG PROJECT_PATH="CB-Gift-FrontEnd/FE_Draft - Copy/loginform1"
+WORKDIR /app
+
+# Sao chép toàn bộ code của dự án con
+COPY ${PROJECT_PATH} .
+
+# CÀI ĐẶT SAU:
+# Thêm CI=true để ngăn lỗi TTY
+RUN CI=true pnpm install --frozen-lockfile  # <-- SỬA LỖI Ở ĐÂY
+
+# BUILD:
+RUN pnpm build
+
+# ----- Giai đoạn 2: Runner (Chạy Next.js) -----
+FROM node:18-alpine
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Kích hoạt Corepack
+RUN corepack enable
+
+# Sao chép các file build quan trọng
+COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=build /app/.next ./.next
+COPY --from=build /app/public ./public
+
+# Sao chép các file config
+COPY --from=build /app/next.config.mjs ./next.config.mjs
+COPY --from=build /app/postcss.config.js ./postcss.config.js
+COPY --from=build /app/tailwind.config.js ./tailwind.config.js
+
+# Cài đặt CHỈ production dependencies
+# Thêm CI=true ở đây để đảm bảo an toàn
+RUN CI=true pnpm install --prod --frozen-lockfile # <-- SỬA LỖI Ở ĐÂY
+
+# Mở port 3000
+EXPOSE 3000
+ENV PORT 3000
+
+# Lệnh chạy app
+CMD ["pnpm", "start"]

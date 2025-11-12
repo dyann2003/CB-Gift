@@ -5,6 +5,8 @@ using CB_Gift.Models;
 using CB_Gift.Services.IService;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using System.Linq;
+using System.Linq.Expressions;
 using Net.payOS;
 using Net.payOS.Types;
 using Newtonsoft.Json;
@@ -312,14 +314,118 @@ public class InvoiceService : IInvoiceService
             .AsNoTracking()
             .ToListAsync();
     }
-    public async Task<IEnumerable<Invoice>> GetAllInvoicesAsync()
+    public async Task<PaginatedResult<InvoiceSummaryDto>> GetInvoicesForSellerPageAsync(
+    string sellerId, string? status, string? searchTerm, int page, int pageSize)
     {
-        return await _context.Invoices
-            .Include(i => i.SellerUser)
-            .Include(i => i.AppliedDiscount) // [THAY ĐỔI] Thêm chiết khấu vào list
+        // 1. Bắt đầu với IQueryable<Invoice> cơ bản
+        var query = _context.Invoices.AsQueryable();
+
+        // 2. Áp dụng TẤT CẢ các bộ lọc (filter) TRƯỚC
+
+        // Luôn lọc theo sellerId
+        query = query.Where(i => i.SellerUserId == sellerId);
+
+        if (!string.IsNullOrEmpty(status))
+        {
+            query = query.Where(i => i.Status == status);
+        }
+
+        if (!string.IsNullOrEmpty(searchTerm))
+        {
+            query = query.Where(i => i.InvoiceNumber.Contains(searchTerm));
+        }
+
+        // 3. Lấy tổng số (total) SAU KHI đã lọc
+        var total = await query.CountAsync();
+
+        // 4. BÂY GIỜ mới áp dụng Include, Sắp xếp, Phân trang, và Chọn cột
+        var invoices = await query
+            .Include(i => i.AppliedDiscount) // <-- Include ở đây
             .OrderByDescending(i => i.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(i => new InvoiceSummaryDto // Ánh xạ thủ công
+            {
+                InvoiceId = i.InvoiceId,
+                InvoiceNumber = i.InvoiceNumber,
+                SellerUserId = i.SellerUserId,
+                SellerName = null, // Không cần tên của chính mình
+                CreatedAt = i.CreatedAt,
+                DueDate = i.DueDate,
+                TotalAmount = i.TotalAmount,
+                AmountPaid = i.AmountPaid,
+                Status = i.Status
+            })
             .AsNoTracking()
             .ToListAsync();
+
+        return new PaginatedResult<InvoiceSummaryDto> { Items = invoices, Total = total, Page = page, PageSize = pageSize };
+    }
+    /* public async Task<IEnumerable<Invoice>> GetAllInvoicesAsync()
+     {
+         return await _context.Invoices
+             .Include(i => i.SellerUser)
+             .Include(i => i.AppliedDiscount) // [THAY ĐỔI] Thêm chiết khấu vào list
+             .OrderByDescending(i => i.CreatedAt)
+             .AsNoTracking()
+             .ToListAsync();
+     }*/
+    public async Task<PaginatedResult<InvoiceSummaryDto>> GetAllInvoicesAsync(
+    string? status, string? searchTerm, string? sellerId, int page, int pageSize)
+    {
+        // 1. Bắt đầu với IQueryable<Invoice> cơ bản
+        var query = _context.Invoices.AsQueryable();
+
+        // 2. Áp dụng TẤT CẢ các bộ lọc (filter) TRƯỚC
+        if (!string.IsNullOrEmpty(status))
+        {
+            // Giờ đây query = query.Where() là hợp lệ (IQueryable = IQueryable)
+            query = query.Where(i => i.Status == status);
+        }
+
+        if (!string.IsNullOrEmpty(sellerId))
+        {
+            // Hợp lệ
+            query = query.Where(i => i.SellerUserId == sellerId);
+        }
+
+        if (!string.IsNullOrEmpty(searchTerm))
+        {
+            // Hợp lệ
+            // GHI CHÚ: Vì SellerUser chưa được Include,
+            // EF Core sẽ tự động tạo JOIN khi cần thiết cho .Where() này
+            query = query.Where(i =>
+                i.InvoiceNumber.Contains(searchTerm) ||
+                (i.SellerUser != null && i.SellerUser.FullName.Contains(searchTerm))
+            );
+        }
+
+        // 3. Lấy tổng số (total) SAU KHI đã lọc
+        var total = await query.CountAsync();
+
+        // 4. BÂY GIỜ mới áp dụng Include, Sắp xếp, Phân trang, và Chọn cột
+        var invoices = await query
+            .Include(i => i.SellerUser)       // <-- Include ở đây
+            .Include(i => i.AppliedDiscount)  // <-- Include ở đây
+            .OrderByDescending(i => i.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(i => new InvoiceSummaryDto // Ánh xạ thủ công
+            {
+                InvoiceId = i.InvoiceId,
+                InvoiceNumber = i.InvoiceNumber,
+                SellerUserId = i.SellerUserId,
+                SellerName = i.SellerUser.FullName,
+                CreatedAt = i.CreatedAt,
+                DueDate = i.DueDate,
+                TotalAmount = i.TotalAmount,
+                AmountPaid = i.AmountPaid,
+                Status = i.Status
+            })
+            .AsNoTracking()
+            .ToListAsync();
+
+        return new PaginatedResult<InvoiceSummaryDto> { Items = invoices, Total = total, Page = page, PageSize = pageSize };
     }
 
     public async Task<int> LogWebhookAsync(string gateway, string payload, string signature)
@@ -520,5 +626,35 @@ public class InvoiceService : IInvoiceService
         {
             _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho SendPaymentUpdateNotificationsAsync (InvoiceID: {InvoiceId})", invoice.InvoiceId);
         }
+    }
+    public async Task<OverdueCheckDto> CheckForOverdueInvoiceAsync(string sellerId)
+    {
+        var now = DateTime.UtcNow; // Dùng UtcNow để nhất quán
+
+        // Tìm hóa đơn CŨ NHẤT (OrderBy DueDate)
+        // đáp ứng cả 3 điều kiện:
+        var overdueInvoice = await _context.Invoices
+            .Where(i =>
+                // 1. Là của seller này
+                i.SellerUserId == sellerId &&
+                // 2. Chưa thanh toán xong
+                (i.Status == "Issued" || i.Status == "PartiallyPaid") &&
+                // 3. Đã quá hạn
+                i.DueDate < now
+            )
+            .OrderBy(i => i.DueDate) // Lấy hóa đơn cũ nhất
+            .Select(i => new { i.InvoiceId }) // Chỉ cần lấy ID
+            .FirstOrDefaultAsync();
+
+        if (overdueInvoice == null)
+        {
+            return new OverdueCheckDto { HasOverdueInvoice = false };
+        }
+
+        return new OverdueCheckDto
+        {
+            HasOverdueInvoice = true,
+            OverdueInvoiceId = overdueInvoice.InvoiceId
+        };
     }
 }

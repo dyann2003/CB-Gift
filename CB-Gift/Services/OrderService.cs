@@ -9,7 +9,8 @@ using CB_Gift.Services.IService;
 using CloudinaryDotNet.Core;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
-using System.Linq; // Cần thiết cho các thao tác LINQ
+using System.Linq;
+using System.Linq.Expressions; // Cần thiết cho các thao tác LINQ
 
 namespace CB_Gift.Services
 {
@@ -991,6 +992,120 @@ namespace CB_Gift.Services
                 .ToListAsync();
 
             return (orders, total);
+        }
+        public async Task<(IEnumerable<OrderWithDetailsDto> Orders, int Total)> GetFilteredAndPagedOrdersForInvoiceAsync(
+            string? status, // status theo CODE
+            string? searchTerm,
+            string? seller, 
+            string? sortColumn,
+            string? sortDirection,
+            DateTime? fromDate,
+            DateTime? toDate,
+            int page,
+            int pageSize)
+        {
+            // Bắt đầu query
+            var query = _context.Orders
+                .Include(o => o.EndCustomer)
+                .Include(o => o.StatusOrderNavigation)
+                .Include(o=>o.SellerUser)
+                .Include(o => o.OrderDetails)
+                    .ThenInclude(od => od.ProductVariant)
+                .AsQueryable();
+
+            // 1. Lọc theo Status
+            if (!string.IsNullOrEmpty(status))
+            {
+                query = query.Where(o => o.StatusOrderNavigation.Code == status);
+            }
+
+            // 2. Lọc theo Search Term
+            if (!string.IsNullOrEmpty(searchTerm))
+            {
+                query = query.Where(o =>
+                    o.OrderCode.Contains(searchTerm) ||
+                    o.EndCustomer.Name.Contains(searchTerm));
+            }
+
+            // 3. Lọc theo Date Range
+            if (fromDate.HasValue)
+            {
+                query = query.Where(o => o.OrderDate >= fromDate.Value);
+            }
+            if (toDate.HasValue)
+            {
+                // Logic < toDate (đã +1 ngày ở frontend)
+                query = query.Where(o => o.OrderDate < toDate.Value);
+            }
+
+            var projectedQuery = query
+                .ProjectTo<OrderWithDetailsDto>(_mapper.ConfigurationProvider);
+
+            if (!string.IsNullOrEmpty(seller))
+            {
+                projectedQuery = projectedQuery.Where(dto => dto.SellerName == seller);
+            }
+
+            // 5. Lấy tổng số (sau khi đã lọc)
+            int total = await projectedQuery.CountAsync();
+
+            // 6. Sắp xếp (Sorting)
+            // Triển khai sắp xếp động
+            if (!string.IsNullOrEmpty(sortColumn))
+            {
+                // Mặc định là 'asc' nếu không có sortDirection
+                var isAscending = sortDirection?.ToLower() == "asc";
+
+                // Sử dụng Expression để sắp xếp động an toàn
+                // Thêm các cột bạn muốn hỗ trợ
+                Expression<Func<OrderWithDetailsDto, object>> keySelector = sortColumn.ToLower() switch
+                {
+                    "orderdate" => dto => dto.OrderDate,
+                    "customername" => dto => dto.CustomerName,
+                    "totalcost" => dto => dto.TotalCost,
+                    _ => dto => dto.OrderDate // Mặc định
+                };
+
+                projectedQuery = isAscending
+                    ? projectedQuery.OrderBy(keySelector)
+                    : projectedQuery.OrderByDescending(keySelector);
+            }
+            else
+            {
+                // Sắp xếp mặc định
+                projectedQuery = projectedQuery.OrderByDescending(dto => dto.OrderDate);
+            }
+
+            // 7. Phân trang (Pagination)
+            var orders = await projectedQuery
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return (orders, total);
+        }
+
+        public async Task<IEnumerable<string>> GetUniqueSellersAsync(string? status)
+        {
+            // Logic này được chuyển từ controller (ở câu trả lời trước)
+            var query = _context.Orders
+                .Include(o => o.StatusOrderNavigation)
+                .AsQueryable();
+
+            if (!string.IsNullOrEmpty(status))
+            {
+                query = query.Where(o => o.StatusOrderNavigation.Code == status);
+            }
+
+            var sellerNames = await query
+                .ProjectTo<OrderWithDetailsDto>(_mapper.ConfigurationProvider)
+                .Select(dto => dto.SellerName)
+                .Where(name => !string.IsNullOrEmpty(name))
+                .Distinct()
+                .OrderBy(name => name)
+                .ToListAsync();
+
+            return sellerNames;
         }
 
 
