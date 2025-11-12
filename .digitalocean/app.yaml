@@ -1,15 +1,15 @@
 # Tên của App trên DigitalOcean
 name: cb-gift-app
 
-# --- Cấu hình kho code (GitHub) cho TOÀN BỘ App ---
-github:
-  repo: dyann2003/CB-Gift
-  branch: main # <-- ĐỔI TÊN BRANCH NẾU CẦN
-
-# --- Danh sách các component (container) ---
+# Danh sách các component (container)
 services:
 # --- Component 1: Backend API ---
 - name: api
+  # Lấy code từ gốc
+  github:
+    repo: dyann2003/CB-Gift
+    branch: main # <-- ĐỔI TÊN BRANCH NẾU CẦN (ví dụ: Fix_DockerFile)
+    
   # Cấu hình build cho backend
   dockerfile_path: Dockerfile # <-- Trỏ tới file backend
   
@@ -54,7 +54,7 @@ services:
     value: "T1OlrM_QFoOP5frzKncwEoyQNRo"
     type: SECRET
   - key: PayOS__ClientId
-    value: "922abe15-a1cc-446e-98d9-4452f98d9-4452f9958748"
+    value: "922abe15-a1cc-446e-98d9-4452f9958748"
   - key: PayOS__ApiKey
     value: "85b05501-0365-4b65-8dc9-e17d7d89b1c2"
     type: SECRET
@@ -68,8 +68,14 @@ services:
     value: "sk-9JH5wIDlWnF3LPO55SWGKPVQv6Q01dGq0qYdvIe7Z7RVvHiC"
     type: SECRET
 
+
 # --- Component 2: Frontend Client ---
 - name: client
+  # Lấy code từ gốc
+  github:
+    repo: dyann2003/CB-Gift
+    branch: main # <-- ĐỔI TÊN BRANCH NẾU CẦN
+  
   # Cấu hình build cho frontend
   dockerfile_path: Dockerfile.frontend # <-- Trỏ tới file frontend
   
