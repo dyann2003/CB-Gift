@@ -27,5 +27,24 @@ namespace CB_Gift.Services.IService
         int pageSize
         );
         Task<OverdueCheckDto> CheckForOverdueInvoiceAsync(string sellerId);
+        Task<PaginatedResult<SellerReceivablesDto>> GetSellerReceivablesAsync(
+        string? searchTerm,
+        string? sortColumn,
+        string? sortDirection,
+        int page,
+        int pageSize
+        );
+        // [API CHO TAB "SALES HISTORY" - LIST CÁC THÁNG]
+        Task<List<SellerMonthlySalesDto>> GetSellerMonthlySalesAsync(string sellerId);
+
+        // [API CHO TAB "SALES HISTORY" - LIST ORDER KHI MỞ RỘNG]
+        Task<PaginatedResult<SellerOrderDto>> GetSellerOrdersForMonthAsync(string sellerId, int year, int month, int page, int pageSize);
+
+        // [API CHO NÚT "CREATE MONTHLY RECEIPT"]
+        Task<Invoice> CreateInvoiceForMonthAsync(CreateMonthlyInvoiceRequest request, string staffId);
+
+        // [API CHO TAB "PAYMENT HISTORY"]
+        //huy
+        Task<PaginatedResult<PaymentSummaryDto>> GetPaymentsForSellerAsync(string sellerId, int page, int pageSize);
     }
 }
