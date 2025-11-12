@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
-import {apiClient} from "../../../lib/apiClient";
+import apiClient from "../../../../lib/apiClient";
 
 export default function QrCodePage() {
   const params = useParams()
@@ -21,7 +21,7 @@ export default function QrCodePage() {
       setError(null)
 
       try {
-        const response = await fetch(`${apiClient}/api/QrCode/${orderDetailId}`)
+        const response = await fetch(`${apiClient.defaults.baseURL}/api/QrCode/${orderDetailId}`)
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
         const data = await response.json()
         console.log("Fetched QR code data:", data)

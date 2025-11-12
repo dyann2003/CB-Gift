@@ -149,8 +149,17 @@ export default function LoginPage() {
   };
 
   const handleSendResetEmail = async () => {
+    // 1.  Kiểm tra email rỗng
     if (!forgotPasswordEmail) {
-      setError("Please enter your email");
+      setError("Please enter your email"); 
+      setOpen(true);
+      return;
+    }
+
+    // 2. Thêm validation định dạng email bằng Regex
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(forgotPasswordEmail)) {
+      setError("Please enter a valid email address"); // Thêm validate
       setOpen(true);
       return;
     }
@@ -173,12 +182,13 @@ export default function LoginPage() {
 
       if (!res.ok) {
         const err = await res.json();
-        setError(err.message || "Failed to send reset link");
+        setError(err.message || "Sending request failed. Please try again.");
         setOpen(true);
         setIsLoading(false);
         return;
       }
 
+      // Xử lý khi thành công...
       setForgotPasswordStep("otp");
       setOtp("");
       setOtpError("");
@@ -186,7 +196,7 @@ export default function LoginPage() {
       setIsOtpExpired(false);
       setIsOtpVerified(false);
     } catch (error) {
-      setError("Something went wrong!");
+      setError("An error has occurred! Please try again.");
       setOpen(true);
     } finally {
       setIsLoading(false);

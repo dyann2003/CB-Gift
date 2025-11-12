@@ -726,7 +726,7 @@ export default function StaffManageOrder() {
                                 {/* Hiển thị Status Badge */}
                                 {getStatusBadge(order)}
 
-                                 {(order.statusOrder === 17 || order.statusOrder === 18) ? (
+                                 {(order.statusOrder === 17 || order.statusOrder === 18 || order.statusOrder === 16) ? (
                                   order.reason && (
                                     <div className="text-xs text-gray-600 mt-1">
                                       <span className="font-medium text-gray-700">Reason:</span> {order.reason}

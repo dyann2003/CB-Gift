@@ -127,33 +127,52 @@ namespace CB_Gift.Services
         public async Task<ServiceResult<ForgotPasswordDto>> SendPasswordResetOtpAsync(ForgotPasswordDto dto)
         {
             var user = await _userManager.FindByEmailAsync(dto.Email);
-            if (user == null || !(await _userManager.IsEmailConfirmedAsync(user)))
+            if (user == null)
             {
-                // Vẫn trả về thông báo thành công chung để tránh lộ thông tin email nào đã đăng ký
-                return new ServiceResult<ForgotPasswordDto> { Success = true, Message = "If your email is registered, you will receive an OTP." };
+                return new ServiceResult<ForgotPasswordDto>
+                {
+                    Success = false,
+                    Message = "This email is not registered in our system."
+                };
+            }
+
+            if (!await _userManager.IsEmailConfirmedAsync(user))
+            {
+                return new ServiceResult<ForgotPasswordDto>
+                {
+                    Success = false,
+                    Message = "Your email address has not been verified. Please check your inbox."
+                };
             }
 
             if (!user.IsActive)
             {
-                return new ServiceResult<ForgotPasswordDto> { Success = false, Message = "User is inactive." };
+                return new ServiceResult<ForgotPasswordDto>
+                {
+                    Success = false,
+                    Message = "Your account has been deactivated. Please contact support."
+                };
             }
-
-            // Tạo OTP và set thời gian hết hạn (2 phút)
             var otp = GenerateRandomOtp(6);
             user.PasswordResetOtp = otp;
-            user.PasswordResetOtpExpiry = DateTime.UtcNow.AddMinutes(2); // Yêu cầu 2 phút
+            user.PasswordResetOtpExpiry = DateTime.UtcNow.AddMinutes(2);
 
-            // Lưu OTP vào database
             var updateResult = await _userManager.UpdateAsync(user);
             if (!updateResult.Succeeded)
             {
-                return new ServiceResult<ForgotPasswordDto> { Success = false, Message = "Failed to update OTP." };
+                return new ServiceResult<ForgotPasswordDto>
+                {
+                    Success = false,
+                    Message = "Failed to update OTP. Please try again later."
+                };
             }
-
-            // Gửi email chứa OTP
             await SendResetPasswordEmailAsync(user.Email, otp);
 
-            return new ServiceResult<ForgotPasswordDto> { Success = true, Message = "OTP has been sent to your email." };
+            return new ServiceResult<ForgotPasswordDto>
+            {
+                Success = true,
+                Message = "An OTP has been sent to your email address."
+            };
         }
 
         public async Task SendResetPasswordEmailAsync(string email, string otp)
