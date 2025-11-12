@@ -69,4 +69,36 @@ namespace CB_Gift.DTOs
         [JsonProperty("desc")]
         public string Desc { get; set; }
     }
+    public class SellerReceivablesDto
+    {
+        public string Id { get; set; }
+        public string Name { get; set; }
+        public string Email { get; set; }
+        public string Phone { get; set; }
+        public string Address { get; set; }
+        public decimal TotalDebt { get; set; } // Công nợ (Receivables)
+        public decimal TotalSales { get; set; } // Tổng doanh số
+    }
+    public class InvoiceSummaryDto
+    {
+        public int InvoiceId { get; set; }
+        public string InvoiceNumber { get; set; }
+        public string SellerUserId { get; set; }
+        public string SellerName { get; set; } // Lấy từ join
+        public DateTime CreatedAt { get; set; }
+        public DateTime DueDate { get; set; }
+        public decimal TotalAmount { get; set; }
+        public decimal AmountPaid { get; set; }
+        public decimal RemainingBalance => TotalAmount - AmountPaid;
+        public string Status { get; set; }
+    }
+    public class OverdueCheckDto
+    {
+        // Cho biết có hóa đơn quá hạn hay không
+        public bool HasOverdueInvoice { get; set; }
+
+        // ID của hóa đơn quá hạn (để frontend có thể gọi chi tiết)
+        public int? OverdueInvoiceId { get; set; }
+    }
+
 }

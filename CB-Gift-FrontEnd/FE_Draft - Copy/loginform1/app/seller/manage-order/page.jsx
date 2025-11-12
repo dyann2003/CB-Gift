@@ -1457,12 +1457,12 @@ export default function ManageOrder() {
   return (
     <div className="flex h-screen bg-blue-50">
       {/* changed from bg-slate-50 to bg-blue-50 */}
-      <SellerSidebar
+      {/* <SellerSidebar
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}
-      />
+      /> */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <SellerHeader />
+        
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">
           <div className="space-y-6">
             {/* Welcome Header */}
