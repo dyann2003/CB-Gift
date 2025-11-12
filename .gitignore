@@ -59,32 +59,37 @@ Thumbs.db
 # Entity Framework
 *.efmodel
 
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# === PHẦN ĐÃ SỬA VÀ BỔ SUNG ===
 
-# dependencies
-/node_modules
+# Node.js
+# Bỏ qua TẤT CẢ thư mục node_modules
+**/node_modules
 
-# next.js
+# Next.js
 /.next/
 /out/
 
-# production
+# Production
 /build
 
-# debug
+# Debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files
-.env*
-
-# vercel
+# Vercel
 .vercel
 
-# typescript
+# TypeScript
 *.tsbuildinfo
 next-env.d.ts
-"CB-Gift/appsettings.json" 
-"CB-Gift/appsettings.json" 
+
+# Bỏ qua các file môi trường
+# Đây là các file chứa bí mật (API keys, connection strings)
+.env
+.env.local
+
+# Bỏ qua các file cài đặt local của .NET
+# Bạn nên đặt connection string local của mình ở đây
+**/appsettings.Development.json

@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  # Dịch vụ Backend API
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend # 👈 Chỉ tới file backend
+    image: cb-gift-api
+    container_name: cb-gift-api
+    ports:
+      - "8080:8080" # Map port 8080 của host vào port 8080 của .NET
+    restart: unless-stopped
+    # environment:
+      # - ConnectionStrings__DefaultConnection=... 
+
+  # Dịch vụ Frontend Client
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend # 👈 Chỉ tới file frontend
+    image: cb-gift-client
+    container_name: cb-gift-client
+    ports:
+      - "3000:80" # Map port 3000 của host vào port 80 của Nginx
+    restart: unless-stopped
+    depends_on:
+      - api
