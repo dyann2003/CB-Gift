@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input"; // [SỬA] Thêm Input
 import StaffSidebar from "@/components/layout/staff/sidebar";
 import StaffHeader from "@/components/layout/staff/header";
+import apiClient from "../../../lib/apiClient";
 import SellerDetailModal from "@/components/invoices/seller-detail-modal";
 import {
   Select,
@@ -48,9 +49,9 @@ export default function ManageInvoicePage() {
         
         // Gọi API mới bạn đã tạo ở Phần 1
         const response = await fetch(
-          `https://localhost:7015/api/invoices/seller-receivables1?${params.toString()}`,
+          `${apiClient.defaults.baseURL}/api/invoices/seller-receivables1?${params.toString()}`,
           {
-            credentials: "include", // Thêm nếu Staff cần xác thực
+            credentials: "include", 
           }
         );
 
@@ -83,7 +84,7 @@ export default function ManageInvoicePage() {
       // (Cách này không tối ưu nếu có hàng nghìn seller, nhưng sẽ chạy)
       try {
         const response = await fetch(
-          `https://localhost:7015/api/invoices/seller-receivables1?page=1&pageSize=10000`, // Lấy tất cả
+          `${apiClient.defaults.baseURL}/api/invoices/seller-receivables1?page=1&pageSize=10000`, // Lấy tất cả
           { credentials: "include" }
         );
         const data = await response.json();

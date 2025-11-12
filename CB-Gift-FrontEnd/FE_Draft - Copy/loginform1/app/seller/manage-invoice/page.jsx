@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import { CheckCircle, Clock, AlertCircle, Loader2 } from "lucide-react"; // Thêm Loader2
 import { Button } from "@/components/ui/button";
-//import SellerHeader from "@/components/layout/seller/header";
-//import SellerSidebar from "@/components/layout/seller/sidebar";
+import SellerHeader from "@/components/layout/seller/header";
+import SellerSidebar from "@/components/layout/seller/sidebar";
 import SellerInvoiceList from "@/components/invoices/seller-invoice-list";
 import SellerInvoiceDetailsModal from "@/components/invoices/seller-invoice-details-modal";
 import apiClient from "../../../lib/apiClient";
@@ -298,7 +298,6 @@ export default function SellerManageInvoice() {
     <div className="flex h-screen bg-gray-50">
       
       <div className="flex-1 flex flex-col overflow-hidden">
-        
         <main className="flex-1 overflow-y-auto p-6">
           <div className="max-w-6xl mx-auto space-y-6">
             <div className="bg-white p-6 rounded-lg shadow-sm border-b-4 border-b-blue-500">

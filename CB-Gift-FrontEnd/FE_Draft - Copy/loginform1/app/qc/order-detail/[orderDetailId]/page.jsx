@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label"; // ⭐ ĐẢM BẢO BẠN ĐÃ IMPORT LABEL
 import { Loader2 } from "lucide-react"; // ⭐ ĐẢM BẢO BẠN ĐÃ IMPORT LOADER
-import apiClient from "../../../lib/apiClient";
+import apiClient from "../../../../lib/apiClient";
 
 // --- Giữ nguyên hàm map status cũ của bạn ---
 const mapProductionStatusToString = (statusId) => {

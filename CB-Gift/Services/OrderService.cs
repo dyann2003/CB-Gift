@@ -983,7 +983,39 @@ namespace CB_Gift.Services
                 query = query.Where(o => o.OrderDate >= fromDate && o.OrderDate <= toDate);
 
             int total = await query.CountAsync();
+            // --- 3. SẮP XẾP (SORTING) ---
+            // Kiểm tra hướng sắp xếp
+            bool isAscending = string.Equals(sortDirection, "asc", StringComparison.OrdinalIgnoreCase);
 
+            // Ánh xạ 'sortColumn' string sang biểu thức OrderBy
+            // Chúng ta gán lại biến 'query' với phiên bản đã được sắp xếp
+            switch (sortColumn?.ToLower())
+            {
+                case "ordercode":
+                    query = isAscending
+                        ? query.OrderBy(o => o.OrderCode)
+                        : query.OrderByDescending(o => o.OrderCode);
+                    break;
+
+                case "customername": // Sắp xếp theo bảng quan hệ
+                    query = isAscending
+                        ? query.OrderBy(o => o.EndCustomer.Name)
+                        : query.OrderByDescending(o => o.EndCustomer.Name);
+                    break;
+
+                case "totalcost":
+                    query = isAscending
+                        ? query.OrderBy(o => o.TotalCost)
+                        : query.OrderByDescending(o => o.TotalCost);
+                    break;
+
+                case "orderdate":
+                default: // Mặc định sắp xếp theo OrderDate (ngày đặt hàng)
+                    query = isAscending
+                        ? query.OrderBy(o => o.OrderDate)
+                        : query.OrderByDescending(o => o.OrderDate);
+                    break;
+            }
             var orders = await query
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
