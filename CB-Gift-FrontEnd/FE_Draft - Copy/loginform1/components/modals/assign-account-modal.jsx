@@ -17,12 +17,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-<<<<<<< HEAD
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { UserPlus, Save, X, AlertCircle, XCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-// huuyy
 export default function AssignAccountModal({
   isOpen,
   onClose,
@@ -36,7 +34,6 @@ export default function AssignAccountModal({
     department: "",
     notes: "",
   });
-=======
 import { Card, CardContent } from "@/components/ui/card";
 import { Search, Plus, XCircle } from "lucide-react";
 
@@ -48,7 +45,6 @@ export default function AddRelationshipModal({ isOpen, onClose, onAdd }) {
   const [sellerSearch, setSellerSearch] = useState("");
   const [designerSearch, setDesignerSearch] = useState("");
   const [loading, setLoading] = useState(false);
->>>>>>> 5543927d83f7bde58c0772fb8b9dd0346ad9bc2a
 
   // Popup UI state
   const [showSuccess, setShowSuccess] = useState(false);
