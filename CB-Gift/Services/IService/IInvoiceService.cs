@@ -44,6 +44,7 @@ namespace CB_Gift.Services.IService
         Task<Invoice> CreateInvoiceForMonthAsync(CreateMonthlyInvoiceRequest request, string staffId);
 
         // [API CHO TAB "PAYMENT HISTORY"]
+        //huy
         Task<PaginatedResult<PaymentSummaryDto>> GetPaymentsForSellerAsync(string sellerId, int page, int pageSize);
     }
 }

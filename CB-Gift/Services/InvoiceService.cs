@@ -43,7 +43,7 @@ public class InvoiceService : IInvoiceService
         try
         {
             List<Order> uninvoicedOrders;
-
+            //huy
             // KỊCH BẢN 1: TẠO HÓA ĐƠN THEO DANH SÁCH ORDER ID
             if (request.OrderIds != null && request.OrderIds.Any())
             {

@@ -110,8 +110,8 @@ namespace CB_Gift.DTOs
         // Trạng thái của tháng: "Invoiced", "PartiallyInvoiced", "Uninvoiced"
         public string Status { get; set; }
     }
-
-    // DTO cho tab "Sales History" (khi mở rộng 1 tháng)
+    //huy
+    // DTO cho tab "Sales History" (khi mở rộng 1 tháng) 
     public class SellerOrderDto
     {
         public int OrderId { get; set; }
