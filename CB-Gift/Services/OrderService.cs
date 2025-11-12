@@ -985,13 +985,71 @@ namespace CB_Gift.Services
             int total = await query.CountAsync();
 
             var orders = await query
-                .OrderByDescending(o => o.CreationDate)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ProjectTo<OrderWithDetailsDto>(_mapper.ConfigurationProvider)
-                .ToListAsync();
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(o => new OrderWithDetailsDto
+            {
+                OrderId = o.OrderId,
+                OrderCode = o.OrderCode,
+                OrderDate = o.OrderDate,
+                CustomerId = o.EndCustomerId,
+                CustomerName = o.EndCustomer.Name,
+                Phone = o.EndCustomer.Phone,
+                Email = o.EndCustomer.Email,
+                Address = o.EndCustomer.Address,
+                SellerId = o.SellerUserId,
+                CreationDate = o.CreationDate ?? o.OrderDate,
+                TotalCost = o.TotalCost,
+                PaymentStatus = o.PaymentStatus,
+                ProductionStatus = o.ProductionStatus,
+                ActiveTTS = o.ActiveTts,
+                Tracking = o.Tracking,
+                StatusOrder = o.StatusOrder,
+                StatusOderName = o.StatusOrderNavigation.Code,
 
-            return (orders, total);
+                // --- ⭐ THÊM LOGIC TÍNH TOÁN CÁC TRƯỜNG MỚI ---
+
+                // Lấy lý do YÊU CẦU (của Seller)
+                Reason = (o.StatusOrder == 17) // 17 = CANCELLED
+                    ? (from cr in _context.CancellationRequests
+                       where cr.OrderId == o.OrderId
+                       orderby cr.CreatedAt descending
+                       select cr.RequestReason).FirstOrDefault()
+                : (o.StatusOrder == 18) // 18 = REFUNDED
+                    ? (from rf in _context.Refunds
+                       where rf.OrderId == o.OrderId
+                       orderby rf.CreatedAt descending
+                       select rf.Reason).FirstOrDefault()
+                : null,
+
+                // Lấy lý do TỪ CHỐI (của Staff)
+                RejectionReason = (
+                    (from cr in _context.CancellationRequests
+                     where cr.OrderId == o.OrderId && cr.Status == "Rejected"
+                     orderby cr.ReviewedAt descending
+                     select cr.RejectionReason).FirstOrDefault()
+                ) ?? (
+                    (from rf in _context.Refunds
+                     where rf.OrderId == o.OrderId && rf.Status == "Rejected"
+                     orderby rf.ReviewedAt descending
+                     select rf.StaffRejectionReason).FirstOrDefault()
+                ),
+
+                // Lấy thông tin Refund mới nhất (nếu có)
+                LatestRefundId = (from rf in _context.Refunds
+                                  where rf.OrderId == o.OrderId
+                                  orderby rf.CreatedAt descending
+                                  select (int?)rf.RefundId).FirstOrDefault(), // (int?) để cho phép null
+
+                RefundAmount = (from rf in _context.Refunds
+                                where rf.OrderId == o.OrderId
+                                orderby rf.CreatedAt descending
+                                select (decimal?)rf.Amount).FirstOrDefault(), // (decimal?) để cho phép null
+
+                // ⭐ ĐÁNH DẤU TRUE NẾU CÓ 1 YÊU CẦU ĐANG "PENDING"
+                IsRefundPending = _context.Refunds.Any(r => r.OrderId == o.OrderId && r.Status == "Pending")
+             }).ToListAsync();
+             return (orders, total);
         }
         public async Task<(IEnumerable<OrderWithDetailsDto> Orders, int Total)> GetFilteredAndPagedOrdersForInvoiceAsync(
             string? status, // status theo CODE
