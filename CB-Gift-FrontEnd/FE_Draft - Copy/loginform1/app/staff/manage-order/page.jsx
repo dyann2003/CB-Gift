@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import {apiClient} from "../../../lib/apiClient";
+import apiClient from "../../../lib/apiClient";
 import {
   Dialog,
   DialogContent,
@@ -72,7 +72,7 @@ export default function StaffManageOrder() {
         setIsLoading(true);
         setError(null);
         const response = await fetch(
-          `${apiClient}/api/Order/GetAllOrders?sortDirection=${sortDirection}&page=${page}&pageSize=${itemsPerPage}`
+          `${apiClient.defaults.baseURL}/api/Order/GetAllOrders?sortDirection=${sortDirection}&page=${page}&pageSize=${itemsPerPage}`
         );
         if (!response.ok) {
           throw new Error(`Failed to fetch orders: ${response.statusText}`);
@@ -176,7 +176,7 @@ export default function StaffManageOrder() {
   const reviewCancellation = async (orderId, approved, rejectionReason = "") => {
     try {
       const res = await fetch(
-        `${apiClient}/api/order/${orderId}/review-cancellation`,
+        `${apiClient.defaults.baseURL}/api/order/${orderId}/review-cancellation`,
         {
           method: "POST",
           headers: {
@@ -293,7 +293,7 @@ export default function StaffManageOrder() {
   };
    // ✅ API approve/reject refund trực tiếp trong page.jsx
   const reviewRefund = async (refundId, approved, rejectionReason = null) => {
-    const res = await fetch(`${apiClient}/api/orders/${refundId}/review-refund`, {
+    const res = await fetch(`${apiClient.defaults.baseURL}/api/orders/${refundId}/review-refund`, {
       method: "POST",
       credentials: "include",
       headers: {
@@ -325,7 +325,7 @@ export default function StaffManageOrder() {
     if (res.isConfirmed) {
       try {
         const response = await fetch(
-          `${apiClient}/api/Order/refund-requests/${refundId}/review`,
+          `${apiClient.defaults.baseURL}/api/Order/refund-requests/${refundId}/review`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -364,7 +364,7 @@ export default function StaffManageOrder() {
 
   try {
     const response = await fetch(
-      `${apiClient}/api/Order/refund-requests/${refundId}/review`,
+      `${apiClient.defaults.baseURL}/api/Order/refund-requests/${refundId}/review`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

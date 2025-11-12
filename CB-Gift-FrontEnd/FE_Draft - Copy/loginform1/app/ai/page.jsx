@@ -128,7 +128,7 @@ export default function Home() {
         Quality: selectedQuality
       })
 
-      const response = await fetch("${apiClient}/api/AiStudio/generate", {
+      const response = await fetch(`${apiClient.defaults.baseURL}/api/AiStudio/generate`, {
         method: "POST",
         body: formData,
       })

@@ -28,6 +28,18 @@ namespace CB_Gift.Services.IService
         );
         Task<OverdueCheckDto> CheckForOverdueInvoiceAsync(string sellerId);
         Task<PaginatedResult<SellerReceivablesDto>> GetSellerReceivablesAsync(
+         string? searchTerm,
+         string? sortColumn,
+         string? sortDirection,
+         int page,
+         int pageSize,
+         // [THÊM MỚI] Các filter theo khoảng giá trị
+         decimal? minDebt,
+         decimal? maxDebt,
+         decimal? minSales,
+         decimal? maxSales
+     );
+        Task<PaginatedResult<SellerReceivablesDto>> GetSellerReceivables1Async(
         string? searchTerm,
         string? sortColumn,
         string? sortDirection,

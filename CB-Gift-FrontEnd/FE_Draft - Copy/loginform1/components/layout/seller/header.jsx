@@ -25,7 +25,7 @@ export default function SellerHeader() {
     try {
       const token = localStorage.getItem("token");
 
-      const res = await fetch("${apiClient}/api/auth/logout", {
+      const res = await fetch(`${apiClient.defaults.baseURL}/api/auth/logout`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

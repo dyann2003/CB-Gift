@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 //import SellerSidebar from "@/components/layout/seller/sidebar";
 import SellerInvoiceList from "@/components/invoices/seller-invoice-list";
 import SellerInvoiceDetailsModal from "@/components/invoices/seller-invoice-details-modal";
-import {apiClient} from "../../../lib/apiClient";
+import apiClient from "../../../lib/apiClient";
 
 // [XÓA] Toàn bộ mockInvoices
 
@@ -73,7 +73,7 @@ const PaymentMethodSelector = ({ invoice, onClose }) => {
 
     try {
       const response = await fetch(
-        "${apiClient}/api/invoices/create-payment-link",
+        `${apiClient.defaults.baseURL}/api/invoices/create-payment-link`,
         {
           method: "POST",
           headers: {
@@ -226,7 +226,7 @@ export default function SellerManageInvoice() {
         // Gọi API lấy TẤT CẢ hóa đơn (không phân trang) để tính stats
         // Gợi ý: Nên tạo một API /my-stats riêng để hiệu quả hơn
         const response = await fetch(
-          "${apiClient}/api/invoices/myinvoices?page=1&pageSize=5000", // size 5000 để lọc stats
+          `${apiClient.defaults.baseURL}/api/invoices/myinvoices?page=1&pageSize=5000`, // size 5000 để lọc stats
           {
             credentials: "include",
           }

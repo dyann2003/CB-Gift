@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label"; // ⭐ ĐẢM BẢO BẠN ĐÃ IMPORT LABEL
 import { Loader2 } from "lucide-react"; // ⭐ ĐẢM BẢO BẠN ĐÃ IMPORT LOADER
-import { apiClient } from "../../lib/apiClient";
+import apiClient from "../../../lib/apiClient";
 
 // --- Giữ nguyên hàm map status cũ của bạn ---
 const mapProductionStatusToString = (statusId) => {
@@ -70,7 +70,7 @@ export default function OrderDetailPage() {
 
     const fetchOrderDetail = async () => {
       try {
-        const response = await fetch(`${apiClient}/api/OrderDetail/${orderDetailId}`);
+        const response = await fetch(`${apiClient.defaults.baseURL}/api/OrderDetail/${orderDetailId}`);
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -90,7 +90,7 @@ export default function OrderDetailPage() {
 
   const fetchLatestData = async () => {
     try {
-        const updatedResponse = await fetch(`${apiClient}/api/OrderDetail/${orderDetailId}`);
+        const updatedResponse = await fetch(`${apiClient.defaults.baseURL}/api/OrderDetail/${orderDetailId}`);
         if (updatedResponse.ok) {
             const updatedData = await updatedResponse.json();
             setOrderDetail(updatedData);
@@ -105,7 +105,7 @@ export default function OrderDetailPage() {
     setIsSubmitting(true);
     try {
       // Gọi API mới của QC (dùng POST)
-      const response = await fetch(`${apiClient}/api/OrderDetail/${orderDetailId}/accept`, {
+      const response = await fetch(`${apiClient.defaults.baseURL}/api/OrderDetail/${orderDetailId}/accept`, {
         method: "POST", // API của QC dùng POST
         headers: {
           "Content-Type": "application/json",
@@ -143,7 +143,7 @@ export default function OrderDetailPage() {
     setIsSubmitting(true);
     try {
       // 3. Gọi API mới của QC (dùng POST)
-      const response = await fetch(`${apiClient}/api/OrderDetail/${orderDetailId}/reject`, {
+      const response = await fetch(`${apiClient.defaults.baseURL}/api/OrderDetail/${orderDetailId}/reject`, {
         method: "POST", // API của QC dùng POST
         headers: {
           "Content-Type": "application/json",
@@ -198,7 +198,7 @@ export default function OrderDetailPage() {
   const productImageUrl = orderDetail.linkImg
     ? orderDetail.linkImg.startsWith("http")
       ? orderDetail.linkImgd // Sửa lỗi 'linkImgd' thành 'linkImg'
-      : `${apiClient}/${orderDetail.linkImg}`
+      : `${apiClient.defaults.baseURL}/${orderDetail.linkImg}`
     : null
 
   const statusString = mapProductionStatusToString(orderDetail.productionStatus);

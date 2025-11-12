@@ -5,7 +5,7 @@ import Link from "next/link";
 import StaffSidebar from "@/components/layout/staff/sidebar";
 import StaffHeader from "@/components/layout/staff/header";
 import { Layers } from "lucide-react"; // Import thêm icon cho nút mới
-import {apiClient} from "../../../lib/apiClient";
+import apiClient from "../../../lib/apiClient";
 
 const FilterIcon = () => (
   <svg
@@ -118,7 +118,7 @@ export default function NeedsProductionPage() {
 
       try {
         const response = await fetch(
-          `${apiClient}/api/plan/staff-view?${params.toString()}`
+          `${apiClient.defaults.baseURL}/api/plan/staff-view?${params.toString()}`
         );
         if (!response.ok)
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -138,7 +138,7 @@ export default function NeedsProductionPage() {
     setIsGrouping(true); // Bắt đầu loading
     try {
       const response = await fetch(
-        "${apiClient}/api/plan/group-submitted",
+        `${apiClient.defaults.baseURL}/api/plan/group-submitted`,
         {
           method: "POST",
         }
@@ -165,7 +165,7 @@ export default function NeedsProductionPage() {
   const handleUpdateStatus = async (planDetailId, newStatus) => {
     try {
       const response = await fetch(
-        `${apiClient}/api/plan/update-status/${planDetailId}?newStatus=${newStatus}`,
+        `${apiClient.defaults.baseURL}/api/plan/update-status/${planDetailId}?newStatus=${newStatus}`,
         {
           method: "PUT",
           headers: {

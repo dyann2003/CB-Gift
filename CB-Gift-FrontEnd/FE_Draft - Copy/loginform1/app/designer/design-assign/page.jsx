@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {apiClient} from "../../../lib/apiClient";
+import apiClient from "../../../lib/apiClient";
 // Import các components UI
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -239,7 +239,7 @@ export default function DesignAssignPage() {
   const fetchMyImages = async () => {
     try {
       // SỬA URL API THÀNH '/api/images/my-images'
-      const res = await fetch("${apiClient}/api/images/my-images", {
+      const res = await fetch(`${apiClient.defaults.baseURL}/api/images/my-images`, {
         credentials: "include",
       });
 
@@ -274,7 +274,7 @@ export default function DesignAssignPage() {
       return false;
     }
 
-    const url = `${apiClient}/api/designer/tasks/status/${orderDetailId}`;
+    const url = `${apiClient.defaults.baseURL}/api/designer/tasks/status/${orderDetailId}`;
 
     try {
       const response = await fetch(url, {
@@ -349,7 +349,7 @@ export default function DesignAssignPage() {
     // VÌ NÓ ĐÃ ĐƯỢC THỰC HIỆN TRONG HÀM handleDesignFileChange
 
     const orderDetailId = selectedOrder.id;
-    const url = `${apiClient}/api/designer/tasks/${orderDetailId}/upload`;
+    const url = `${apiClient.defaults.baseURL}/api/designer/tasks/${orderDetailId}/upload`;
 
     setLoading(true); // Bật loading
 
@@ -555,7 +555,7 @@ export default function DesignAssignPage() {
   const fetchTasks = async () => {
     try {
       setLoading(true);
-      const res = await fetch("${apiClient}/api/designer/tasks", {
+      const res = await fetch(`${apiClient.defaults.baseURL}/api/designer/tasks`, {
         credentials: "include",
       });
 

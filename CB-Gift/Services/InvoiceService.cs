@@ -10,6 +10,7 @@ using System.Linq.Expressions;
 using Net.payOS;
 using Net.payOS.Types;
 using Newtonsoft.Json;
+using System.Globalization;
 
 namespace CB_Gift.Services;
 
@@ -657,8 +658,93 @@ public class InvoiceService : IInvoiceService
             OverdueInvoiceId = overdueInvoice.InvoiceId
         };
     }
-     public async Task<PaginatedResult<SellerReceivablesDto>> GetSellerReceivablesAsync(
-    string? searchTerm, string? sortColumn, string? sortDirection, int page, int pageSize)
+    // [CẬP NHẬT] - Logic cho GetSellerReceivablesAsync
+    public async Task<PaginatedResult<SellerReceivablesDto>> GetSellerReceivablesAsync(
+        string? searchTerm, string? sortColumn, string? sortDirection, int page, int pageSize,
+        decimal? minDebt, decimal? maxDebt, decimal? minSales, decimal? maxSales // [THÊM MỚI] Nhận tham số
+    )
+    {
+        // 1. Lấy thông tin tổng hợp từ Invoices, nhóm theo Seller
+        var sellerStats = _context.Invoices
+            .GroupBy(i => i.SellerUserId)
+            .Select(g => new
+            {
+                SellerId = g.Key,
+                TotalSales = g.Sum(i => i.TotalAmount),
+                TotalDebt = g.Sum(i => (i.Status == "Issued" || i.Status == "PartiallyPaid")
+                                        ? (i.TotalAmount - i.AmountPaid)
+                                        : 0)
+            });
+
+        // 2. Join với bảng Users để lấy thông tin chi tiết của Seller
+        var query = _context.Users
+            .Join(sellerStats,
+                  user => user.Id,
+                  stats => stats.SellerId,
+                  (user, stats) => new SellerReceivablesDto
+                  {
+                      Id = user.Id,
+                      Name = user.FullName,
+                      Email = user.Email,
+                      Phone = user.PhoneNumber,
+                      TotalSales = stats.TotalSales,
+                      TotalDebt = stats.TotalDebt
+                  });
+
+        // 3. Áp dụng tìm kiếm (Search)
+        if (!string.IsNullOrEmpty(searchTerm))
+        {
+            query = query.Where(s =>
+                s.Id.Contains(searchTerm) ||
+                s.Name.Contains(searchTerm) ||
+                s.Email.Contains(searchTerm) ||
+                s.Phone.Contains(searchTerm)
+            );
+        }
+
+        // 4. [THÊM MỚI] Áp dụng các filter theo khoảng giá trị
+        // Lọc theo Công nợ (Receivables)
+        if (minDebt.HasValue)
+        {
+            query = query.Where(s => s.TotalDebt >= minDebt.Value);
+        }
+        if (maxDebt.HasValue)
+        {
+            query = query.Where(s => s.TotalDebt <= maxDebt.Value);
+        }
+
+        // Lọc theo Doanh thu (Sales)
+        if (minSales.HasValue)
+        {
+            query = query.Where(s => s.TotalSales >= minSales.Value);
+        }
+        if (maxSales.HasValue)
+        {
+            query = query.Where(s => s.TotalSales <= maxSales.Value);
+        }
+        // (Kết thúc phần thêm mới)
+
+        // 5. Áp dụng Sắp xếp (Sorting)
+        // (Mặc định sắp xếp theo công nợ giảm dần)
+        query = query.OrderByDescending(s => s.TotalDebt);
+
+        // 6. Phân trang
+        var total = await query.CountAsync();
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return new PaginatedResult<SellerReceivablesDto>
+        {
+            Items = items,
+            Total = total,
+            Page = page,
+            PageSize = pageSize
+        };
+    }
+    public async Task<PaginatedResult<SellerReceivablesDto>> GetSellerReceivables1Async(
+   string? searchTerm, string? sortColumn, string? sortDirection, int page, int pageSize)
     {
         // 1. Lấy thông tin tổng hợp từ Invoices, nhóm theo Seller
         // GHI CHÚ: 'g' là một nhóm các hóa đơn của 1 seller
@@ -684,9 +770,9 @@ public class InvoiceService : IInvoiceService
                   (user, stats) => new SellerReceivablesDto
                   {
                       Id = user.Id,
-                      Name = user.FullName, 
+                      Name = user.FullName,
                       Email = user.Email,
-                      Phone = user.PhoneNumber, 
+                      Phone = user.PhoneNumber,
                       TotalSales = stats.TotalSales,
                       TotalDebt = stats.TotalDebt
                   });

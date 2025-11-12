@@ -8,7 +8,7 @@ namespace CB_Gift.Controllers
 {
     [ApiController]
     [Route("api/invoices")]
-    [Authorize]
+    //[Authorize]
     public class InvoicesController : ControllerBase
     {
         private readonly IInvoiceService _invoiceService;
@@ -129,18 +129,49 @@ namespace CB_Gift.Controllers
                 return StatusCode(500, new { message = "Đã xảy ra lỗi.", error = ex.Message }); 
             }
         }
+        // [CẬP NHẬT] - API cho trang Manager xem công nợ
         [HttpGet("seller-receivables")]
         [Authorize(Roles = "Staff, Manager, Admin")]
         public async Task<IActionResult> GetSellerReceivables(
+            // Các tham số cũ
             [FromQuery] string? searchTerm = null,
             [FromQuery] string? sortColumn = null,
             [FromQuery] string? sortDirection = "desc",
             [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 10)
+            [FromQuery] int pageSize = 10,
+
+            // [THÊM MỚI] Nhận filter từ query string
+            [FromQuery] decimal? minDebt = null,
+            [FromQuery] decimal? maxDebt = null,
+            [FromQuery] decimal? minSales = null,
+            [FromQuery] decimal? maxSales = null)
         {
             try
             {
-                var result = await _invoiceService.GetSellerReceivablesAsync(searchTerm, sortColumn, sortDirection, page, pageSize);
+                // [CẬP NHẬT] Truyền các tham số mới xuống service
+                var result = await _invoiceService.GetSellerReceivablesAsync(
+                    searchTerm, sortColumn, sortDirection, page, pageSize,
+                    minDebt, maxDebt, minSales, maxSales
+                );
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Lỗi khi lấy dữ liệu công nợ.", error = ex.Message });
+            }
+        }
+        [HttpGet("seller-receivables1")]
+       // [Authorize(Roles = "Staff, Manager, Admin")]
+        public async Task<IActionResult> GetSellerReceivables1(
+           [FromQuery] string? searchTerm = null,
+           [FromQuery] string? sortColumn = null,
+           [FromQuery] string? sortDirection = "desc",
+           [FromQuery] int page = 1,
+           [FromQuery] int pageSize = 10)
+        {
+            try
+            {
+                var result = await _invoiceService.GetSellerReceivables1Async(searchTerm, sortColumn, sortDirection, page, pageSize);
                 return Ok(result);
             }
             catch (Exception ex)
@@ -150,7 +181,7 @@ namespace CB_Gift.Controllers
         }
         // [CẬP NHẬT] - Endpoint cho tab "Payment History"
         [HttpGet("seller-payments/{sellerId}")]
-        [Authorize(Roles = "Staff, Manager, Admin")]
+        //[Authorize(Roles = "Staff, Manager, Admin")]
         public async Task<IActionResult> GetPaymentsForSeller(string sellerId, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
         {
             try
@@ -166,7 +197,7 @@ namespace CB_Gift.Controllers
 
         // [THÊM MỚI] - API CHO TAB "SALES HISTORY" - LẤY CÁC THÁNG
         [HttpGet("seller-monthly-sales/{sellerId}")]
-        [Authorize(Roles = "Staff, Manager, Admin")]
+       // [Authorize(Roles = "Staff, Manager, Admin")]
         public async Task<IActionResult> GetSellerMonthlySales(string sellerId)
         {
             try
@@ -182,7 +213,7 @@ namespace CB_Gift.Controllers
 
         // [THÊM MỚI] - API CHO TAB "SALES HISTORY" - LẤY ORDER TRONG THÁNG
         [HttpGet("seller-monthly-orders/{sellerId}")]
-        [Authorize(Roles = "Staff, Manager, Admin")]
+       // [Authorize(Roles = "Staff, Manager, Admin")]
         public async Task<IActionResult> GetSellerOrdersForMonth(
             string sellerId,
             [FromQuery] int year,
@@ -203,7 +234,7 @@ namespace CB_Gift.Controllers
 
         // [THÊM MỚI] - API CHO NÚT "CREATE MONTHLY RECEIPT"
         [HttpPost("create-monthly-invoice")]
-        [Authorize(Roles = "Staff, Manager")]
+       // [Authorize(Roles = "Staff, Manager")]
         public async Task<IActionResult> CreateMonthlyInvoice([FromBody] CreateMonthlyInvoiceRequest request)
         {
             try
