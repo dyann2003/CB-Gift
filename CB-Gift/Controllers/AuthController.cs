@@ -228,7 +228,7 @@ public class AuthController : ControllerBase
     /// <summary>
     /// Lấy danh sách tất cả các Seller trong hệ thống.
     /// </summary> api/auth/all-sellers
-    [Authorize(Roles = "Staff,Manager")]
+    [Authorize(Roles = "Staff,Manager,QC")]
     [HttpGet("all-sellers")]
     public async Task<IActionResult> GetAllSellers()
     {
