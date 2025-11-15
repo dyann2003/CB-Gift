@@ -957,6 +957,7 @@ namespace CB_Gift.Services
     string? status,
     string? searchTerm,
     string? sortColumn,
+    string? sellerId,
     string? sortDirection,
     DateTime? fromDate,
     DateTime? toDate,
@@ -981,7 +982,11 @@ namespace CB_Gift.Services
 
             if (fromDate.HasValue && toDate.HasValue)
                 query = query.Where(o => o.OrderDate >= fromDate && o.OrderDate <= toDate);
-
+            if (!string.IsNullOrEmpty(sellerId))
+            {
+                // Hàm này sẽ lọc theo SellerUserId trên bảng Order
+                query = query.Where(o => o.SellerUserId == sellerId);
+            }
             int total = await query.CountAsync();
             // --- 3. SẮP XẾP (SORTING) ---
             // Kiểm tra hướng sắp xếp
@@ -1030,6 +1035,7 @@ namespace CB_Gift.Services
                 Email = o.EndCustomer.Email,
                 Address = o.EndCustomer.Address,
                 SellerId = o.SellerUserId,
+                SellerName= o.SellerUser.FullName,
                 CreationDate = o.CreationDate ?? o.OrderDate,
                 TotalCost = o.TotalCost,
                 PaymentStatus = o.PaymentStatus,
@@ -1133,7 +1139,7 @@ namespace CB_Gift.Services
 
             if (!string.IsNullOrEmpty(seller))
             {
-                projectedQuery = projectedQuery.Where(dto => dto.SellerName == seller);
+                projectedQuery = projectedQuery.Where(dto => dto.SellerId == seller);
             }
 
             // 5. Lấy tổng số (sau khi đã lọc)

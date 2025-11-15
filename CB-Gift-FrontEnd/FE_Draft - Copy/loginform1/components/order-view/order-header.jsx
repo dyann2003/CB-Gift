@@ -1,0 +1,84 @@
+"use client";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Trash2, ArrowLeft } from 'lucide-react';
+
+export default function OrderHeader({
+  orderId,
+  status,
+  createdAt,
+  onCancel,
+  onBack,
+}) {
+  const getStatusBadgeColor = (status) => {
+    switch (status) {
+      case "PENDING":
+        return "bg-yellow-100 text-yellow-800";
+      case "CANCELLED":
+        return "bg-red-100 text-red-800";
+      case "COMPLETED":
+        return "bg-green-100 text-green-800";
+      case "PROCESSING":
+        return "bg-blue-100 text-blue-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getStatusLabel = (status) => {
+    switch (status) {
+      case "PENDING":
+        return "PENDING";
+      case "CANCELLED":
+        return "CANCELLED";
+      case "COMPLETED":
+        return "COMPLETED";
+      case "PROCESSING":
+        return "PROCESSING";
+      default:
+        return status;
+    }
+  };
+
+  return (
+    <div className="border-b border-gray-200 pb-4 mb-6">
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-xl font-semibold text-gray-900">
+              Order: #{orderId}
+            </h1>
+            <Badge className={`${getStatusBadgeColor(status)} font-medium`}>
+              {getStatusLabel(status)}
+            </Badge>
+          </div>
+          <p className="text-sm text-gray-500">
+            Created at: {new Date(createdAt).toLocaleString()}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          {onCancel && (
+            <Button
+              variant="outline"
+              onClick={onCancel}
+              className="border-red-200 text-red-600 hover:bg-red-50"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Cancel
+            </Button>
+          )}
+          {onBack && (
+            <Button
+              onClick={onBack}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

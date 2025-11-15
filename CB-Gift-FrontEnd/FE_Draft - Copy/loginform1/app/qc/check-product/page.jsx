@@ -1,22 +1,29 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import apiClient from "../../../lib/apiClient";
-// --- UI Components ---
+import apiClient from "../../../lib/apiClient"; 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-// --- Icons ---
-import { Search, Eye, Check, X, Download } from "lucide-react";
+import {
+  Search,
+  Eye,
+  Check,
+  X,
+  Download,
+  Loader, 
+  ChevronLeft, 
+  ChevronRight,
+} from "lucide-react";
 // --- Layout Components ---
 import QcSidebar from "@/components/layout/qc/sidebar";
 import QcHeader from "@/components/layout/qc/header";
 // --- Navigation ---
 import { useRouter } from "next/navigation";
-
-// --- ADDED: Helper function to map status ID to string ---
+import Swal from "sweetalert2"; // Thêm Swal
+// ✅ HÀM HELPER NÀY SẼ ĐƯỢC DÙNG TRONG JSX
 const mapProductionStatusToString = (statusId) => {
   switch (statusId) {
     case 0:
@@ -50,10 +57,10 @@ const mapProductionStatusToString = (statusId) => {
     case 14:
       return "CANCELLED";
     default:
-      return "UNKNOWN"; // Fallback for unexpected values
+      return "UNKNOWN";
   }
 };
-// --- Optional: Helper function for badge colors ---
+// --- Helper function for badge colors (Dùng CODE từ API) ---
 const getStatusBadgeVariant = (statusString) => {
   switch (statusString) {
     case "QC_FAIL":
@@ -63,14 +70,16 @@ const getStatusBadgeVariant = (statusString) => {
     case "HOLD":
       return "destructive";
     case "QC_DONE":
+    case "SHIPPED": // Thêm
     case "FINISHED":
     case "PACKING":
-      return "success"; // Use "default" or define "success" in your theme
+      return "success";
     case "CHECK_DESIGN":
     case "IN_PROD":
     case "DESIGNING":
       return "secondary";
     case "READY_PROD":
+    case "CONFIRMED": // Thêm
       return "default";
     default:
       return "outline";
@@ -88,26 +97,83 @@ export default function CheckProduct() {
   const [rejectReason, setRejectReason] = useState("");
   const [confirmAction, setConfirmAction] = useState(null); // Stores the function to run on confirm
   const [confirmMessage, setConfirmMessage] = useState("");
-  const [manualOrderId, setManualOrderId] = useState("");
   const router = useRouter();
 
   // --- Data States ---
-  const [allOrders, setAllOrders] = useState([]);
+  // [SỬA] Đổi tên state chính thành 'orders'
+  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // --- State for Product Detail Modal ---
-  const [viewingProduct, setViewingProduct] = useState(null); // Holds the product being viewed in detail
+  // --- THÊM STATE CHO PHÂN TRANG, SẮP XẾP, LỌC ---
+  const [page, setPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalOrders, setTotalOrders] = useState(0);
+  const [sortColumn, setSortColumn] = useState("orderDate");
+  const [sortDirection, setSortDirection] = useState("desc");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [sellers, setSellers] = useState([]);
+  const [selectedSeller, setSelectedSeller] = useState("");
 
-  // --- REFACTORED: Reusable function to load orders ---
-  const loadOrders = async () => {
+  // --- THÊM useEffect ĐỂ TẢI DANH SÁCH SELLERS ---
+  useEffect(() => {
+    const fetchSellers = async () => {
+      try {
+        const response = await fetch(
+          `${apiClient.defaults.baseURL}/api/auth/all-sellers`,
+          {
+            credentials: "include", // Cần thiết vì API có [Authorize]
+          }
+        );
+        if (!response.ok) throw new Error("Failed to fetch sellers list");
+        const data = await response.json();
+        setSellers(data || []); // API trả về [ { sellerId, sellerName } ]
+      } catch (err) {
+        console.error("Error fetching sellers:", err);
+      }
+    };
+    fetchSellers();
+  }, []); // [] đảm bảo chỉ chạy 1 lần
+
+  // --- [THAY THẾ] HÀM loadOrders BẰNG useEffect CHÍNH ---
+  // (Hàm này sẽ gọi API GetAllOrders mới của bạn)
+  const fetchOrders = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(
-        `${apiClient.defaults.baseURL}/api/Order/GetAllOrders`
-      );
+      // Xây dựng query params
+      const params = new URLSearchParams();
+      params.append("page", page.toString());
+      params.append("pageSize", itemsPerPage.toString());
+      params.append("sortDirection", sortDirection);
+      params.append("sortColumn", sortColumn);
+
+      if (searchTerm) {
+        params.append("searchTerm", searchTerm);
+      }
+      if (filterStatus && filterStatus !== "all") {
+        params.append("status", filterStatus);
+      }
+      if (fromDate) {
+        params.append("fromDate", fromDate);
+      }
+      if (toDate) {
+        params.append("toDate", toDate);
+      }
+      if (selectedSeller) {
+        params.append("seller", selectedSeller);
+      }
+
+      // Tạo URL cuối cùng
+      const apiUrl = `${apiClient.defaults.baseURL}/api/Order/GetAllOrdersForInvoice?${params.toString()}`;
+
+      console.log("[QC v1] Fetching:", apiUrl);
+
+      const response = await fetch(apiUrl, {
+        credentials: "include",
+      });
 
       if (!response.ok) {
         throw new Error(
@@ -116,65 +182,10 @@ export default function CheckProduct() {
       }
 
       const data = await response.json();
-
-      // ✅ API trả về { total, orders: [...] } → lấy mảng thực tế
-      const ordersArray = data.orders || [];
-
-      const transformedData = ordersArray.map((order) => {
-        // Nếu API mới không còn trường "details", tránh lỗi .map undefined
-        const products = (order.details || []).map((detail) => ({
-          orderDetailID: detail.orderDetailID,
-          name: detail.productName,
-          quantity: detail.quantity,
-          size: detail.size,
-          accessory: detail.accessory,
-          note: detail.note,
-          status: mapProductionStatusToString(detail.productionStatus),
-        }));
-
-        const specialInstructions = (order.details || [])
-          .map((d) => d.note)
-          .filter(Boolean)
-          .join("; ");
-
-        const customerFiles = (order.details || []).map((detail) => ({}));
-        const designFiles = (order.details || [])
-          .filter((detail) => detail.linkFileDesign)
-          .map((detail) => ({}));
-
-        return {
-          id: order.orderId,
-          code: order.orderCode,
-          customer: order.customerName,
-          products: products,
-          staff: order.sellerName,
-          dateManufactured: new Date(order.orderDate).toLocaleDateString(
-            "vi-VN"
-          ),
-          status: order.statusOderName,
-          statusOrderId: order.statusOrder,
-          customerInfo: {
-            name: order.customerName,
-            phone: order.phone,
-            email: order.email,
-            address: order.address,
-            city: order.shipCity,
-            state: order.shipState,
-            zipcode: order.zipcode,
-            country: order.shipCountry,
-          },
-          productDetails: {
-            activeTTS: order.activeTTS,
-            specialInstructions: specialInstructions,
-          },
-          customerFiles: customerFiles,
-          designFiles: designFiles,
-          productImages: [],
-        };
-      });
-
-      // ✅ cập nhật danh sách
-      setAllOrders(transformedData);
+      // ✅ API trả về { total, orders: [...] }
+      // Dữ liệu 'orders' đã là DTO, không cần 'transformedData'
+      setOrders(data.orders || []);
+      setTotalOrders(data.total || 0);
     } catch (err) {
       setError(
         "Could not load orders. Please check the API connection and try again."
@@ -185,68 +196,64 @@ export default function CheckProduct() {
     }
   };
 
-  // --- END REFACTORED FUNCTION ---
-
-  // --- Initial Data Load ---
   useEffect(() => {
-    loadOrders(); // Call the reusable function on mount
-  }, []); // Empty dependency array means this runs once
+    fetchOrders();
+  }, [
+    page,
+    itemsPerPage,
+    sortDirection,
+    sortColumn,
+    searchTerm,
+    filterStatus,
+    fromDate,
+    toDate,
+    selectedSeller,
+  ]);
+  // --- KẾT THÚC HÀM FETCH MỚI ---
 
-  // --- Filtering Logic ---
-  const filteredOrders = allOrders.filter((order) => {
-    const lowerSearchTerm = searchTerm.toLowerCase();
-    const orderIdMatch = order.code?.toLowerCase().includes(lowerSearchTerm);
-    const customerMatch = order.customer
-      ?.toLowerCase()
-      .includes(lowerSearchTerm);
-    const productMatch = order.products?.some((product) =>
-      product.name?.toLowerCase().includes(lowerSearchTerm)
-    );
-    const orderStatusString = order.status; // Use the string status name for filtering dropdown
-    const matchesSearch = orderIdMatch || customerMatch || productMatch;
-    // Compare filterStatus against the string name from API (order.status)
-    const matchesFilter =
-      filterStatus === "all" || orderStatusString === filterStatus;
-    return matchesSearch && matchesFilter;
-  });
+  // [ĐÃ XÓA] - Logic Filtering Logic (const filteredOrders)
 
   // --- Handlers ---
-  const handleManualOrderSearch = () => {
-    if (!manualOrderId.trim()) return;
-    const foundOrder = allOrders.find(
-      (order) =>
-        order.id?.toString().toLowerCase() ===
-          manualOrderId.trim().toLowerCase() ||
-        order.code?.toLowerCase() === manualOrderId.trim().toLowerCase()
-    );
-    if (foundOrder) {
-      setSelectedOrder(foundOrder);
-      setManualOrderId("");
-    } else {
-      alert(`Order with ID or Code "${manualOrderId}" not found.`);
-    }
+  const handleSearchChange = (value) => {
+    setSearchTerm(value);
+    setPage(1);
   };
+  const handleFilterChange = (value) => {
+    setFilterStatus(value);
+    setPage(1);
+  };
+  const handleSellerChange = (value) => {
+    setSelectedSeller(value);
+    setPage(1);
+  };
+  const handleItemsPerPageChange = (value) => {
+    setItemsPerPage(Number(value));
+    setPage(1);
+  };
+  const totalPages = Math.ceil(totalOrders / itemsPerPage);
+  const startIndex = (page - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+
+  // [ĐÃ XÓA] handleManualOrderSearch (gộp vào searchTerm)
 
   // --- UPDATED: handleApprove with API call ---
   const handleApprove = (orderId) => {
     setConfirmMessage(
       `Are you sure you want to approve order ${
-        selectedOrder?.code || orderId
+        selectedOrder?.orderCode || orderId
       } for shipping?`
     );
-
     setConfirmAction(() => async () => {
       console.log(`Attempting to approve order ${orderId}...`);
       try {
-        setLoading(true); // Indicate loading state during API call
+        setLoading(true);
         const response = await fetch(
           `${apiClient.defaults.baseURL}/api/Order/${orderId}/approve-shipping`,
           {
             method: "PUT",
+            credentials: "include", // Thêm credentials
             headers: {
               "Content-Type": "application/json",
-              // Add Authorization header if required:
-              // 'Authorization': `Bearer ${your_token}`
             },
           }
         );
@@ -266,21 +273,24 @@ export default function CheckProduct() {
         setShowConfirmDialog(false);
         setSelectedOrder(null);
 
-        await loadOrders(); // Refresh the order list
+        Swal.fire(
+          "Approved!",
+          `Order ${selectedOrder?.orderCode || orderId} approved for shipping!`,
+          "success"
+        );
 
-        alert(`Order ${selectedOrder?.code || orderId} approved for shipping!`);
+        fetchOrders(); // Tải lại danh sách
       } catch (error) {
         console.error("Failed to approve order:", error);
-        alert(`Failed to approve order: ${error.message}`);
-        setShowConfirmDialog(false); // Close confirm dialog on error
+        Swal.fire("Error", `Failed to approve order: ${error.message}`, "error");
+        setShowConfirmDialog(false);
       } finally {
-        setLoading(false); // Ensure loading is turned off
+        setLoading(false);
       }
     });
 
     setShowConfirmDialog(true);
   };
-  // --- END UPDATED handleApprove ---
 
   const handleReject = (orderId) => {
     const orderToReject = selectedOrder;
@@ -292,23 +302,22 @@ export default function CheckProduct() {
   };
 
   const handleRejectConfirm = async () => {
-    // Make async for potential API call
     if (rejectReason.trim() && selectedOrder) {
-      const orderId = selectedOrder.id;
+      const orderId = selectedOrder.orderId; // [SỬA] Dùng orderId
       console.log(
         `Attempting to reject order ${orderId}. Reason: ${rejectReason}...`
       );
       try {
         setLoading(true);
-        // TODO: Implement API call for rejection (Example)
+        // TODO: Implement API call for rejection
         /*
-         const response = await fetch(`https://localhost:7015/api/Orders/${orderId}/reject`, {
-           method: 'PUT', // Or POST, depending on your API design
+         const response = await fetch(`${apiClient.defaults.baseURL}/api/Order/${orderId}/reject`, {
+           method: 'PUT',
+           credentials: 'include',
            headers: { 'Content-Type': 'application/json' },
            body: JSON.stringify({ reason: rejectReason })
          });
          if (!response.ok) {
-           // Handle API error
            throw new Error('Failed to reject order via API');
          }
          */
@@ -316,12 +325,17 @@ export default function CheckProduct() {
         setShowRejectDialog(false);
         setRejectReason("");
         setSelectedOrder(null);
-        await loadOrders(); // Refresh data after rejection
-        alert(`Order ${selectedOrder?.code || orderId} rejected.`);
+
+        Swal.fire(
+          "Rejected!",
+          `Order ${selectedOrder?.orderCode || orderId} rejected.`,
+          "success"
+        );
+
+        fetchOrders(); // Tải lại
       } catch (error) {
         console.error("Failed to reject order:", error);
-        alert(`Failed to reject order: ${error.message}`);
-        // Optionally keep reject dialog open on error
+        Swal.fire("Error", `Failed to reject order: ${error.message}`, "error");
       } finally {
         setLoading(false);
       }
@@ -329,10 +343,12 @@ export default function CheckProduct() {
   };
 
   const handleDownload = (fileUrl, fileName) => {
-    // ... (handleDownload function remains the same) ...
     if (!fileUrl || fileUrl === "#") {
-      console.warn(`Invalid URL for download: ${fileName}`);
-      alert(`Cannot download file "${fileName}" - Invalid URL provided.`);
+      Swal.fire(
+        "Error",
+        `Cannot download file "${fileName}" - Invalid URL provided.`,
+        "error"
+      );
       return;
     }
     console.log(`Attempting to download: ${fileName} from ${fileUrl}`);
@@ -363,51 +379,124 @@ export default function CheckProduct() {
               </p>
             </div>
 
-            {/* Search and Filter */}
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-              <div className="flex flex-col md:flex-row gap-4 items-center mb-4">
+            {/* --- [SỬA] Search and Filter (Full) --- */}
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 space-y-4">
+              {/* Hàng 1: Search, Seller, Status */}
+              <div className="flex flex-col md:flex-row gap-4">
                 <div className="flex-1 relative w-full">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                   <Input
-                    placeholder="Search Order Code, Customer, Product..."
+                    placeholder="Search Order Code, Customer..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => handleSearchChange(e.target.value)}
                     className="pl-10 w-full"
                   />
                 </div>
-                {/* --- Filter Dropdown: Values should match API string status names --- */}
+
+                {/* Dropdown Seller */}
+                <select
+                  value={selectedSeller}
+                  onChange={(e) => handleSellerChange(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-md text-sm w-full md:w-auto"
+                >
+                  <option value="">All Sellers</option>
+                  {sellers.map((seller) => (
+                    <option key={seller.sellerId} value={seller.sellerId}>
+                      {seller.sellerName || `Seller (ID: ${seller.sellerId.substring(0, 6)}..)`}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Filter Dropdown (dùng CODE) */}
                 <select
                   value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
+                  onChange={(e) => handleFilterChange(e.target.value)}
                   className="px-3 py-2 border border-gray-300 rounded-md text-sm w-full md:w-auto"
                 >
                   <option value="all">All Status</option>
-                  {/* Example values - adjust to match your API's statusOderName strings */}
-                  <option value="Cần Check Design">Cần Check Design</option>
-                  <option value="Sản xuất Xong">Sản xuất Xong</option>
-                  <option value="Packing">Packing</option>
-                  <option value="Cancelled">Cancelled</option>
-                  {/* Add all relevant statuses returned by API's statusOderName */}
+                  <option value="CHECK_DESIGN">Check Design</option>
+                  <option value="FINISHED">Finished (Prod. Done)</option>
+                  <option value="QC_DONE">QC Done</option>
+                  <option value="QC_FAIL">QC Fail</option>
+                  <option value="PACKING">Packing</option>
+                  <option value="CANCELLED">Cancelled</option>
+                  <option value="SHIPPED">Shipped</option>
                 </select>
-                {/* ---------------------------------------------------------------- */}
               </div>
-              <div className="flex gap-2 items-center">
-                <Input
-                  placeholder="Enter Order ID or Code manually..."
-                  value={manualOrderId}
-                  onChange={(e) => setManualOrderId(e.target.value)}
-                  className="flex-1"
-                />
-                <Button
-                  onClick={handleManualOrderSearch}
-                  variant="outline"
-                  size="sm"
-                >
-                  <Search className="h-4 w-4 mr-1" />
-                  Find Order
-                </Button>
+
+              {/* Hàng 2: Date Range và Sorting */}
+              <div className="flex flex-col md:flex-row gap-4 items-center">
+                {/* From Date */}
+                <div className="flex-1 w-full">
+                  <Label className="text-xs font-medium text-gray-600">
+                    From Date
+                  </Label>
+                  <Input
+                    type="date"
+                    value={fromDate}
+                    onChange={(e) => {
+                      setFromDate(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full"
+                  />
+                </div>
+                {/* To Date */}
+                <div className="flex-1 w-full">
+                  <Label className="text-xs font-medium text-gray-600">
+                    To Date
+                  </Label>
+                  <Input
+                    type="date"
+                    value={toDate}
+                    onChange={(e) => {
+                      setToDate(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full"
+                    min={fromDate}
+                  />
+                </div>
+                {/* Sort Column */}
+                <div className="flex-1 w-full">
+                  <Label className="text-xs font-medium text-gray-600">
+                    Sort By
+                  </Label>
+                  <select
+                    value={sortColumn}
+                    onChange={(e) => {
+                      setSortColumn(e.target.value);
+                      setPage(1);
+                    }}
+                    className="px-3 py-2 border border-gray-300 rounded-md w-full text-sm"
+                  >
+                    <option value="orderDate">Order Date</option>
+                    <option value="customerName">Customer Name</option>
+                    <option value="orderCode">Order Code</option>
+                    <option value="sellerName">Seller Name</option>
+                    <option value="totalCost">Total Cost</option>
+                  </select>
+                </div>
+                {/* Sort Direction */}
+                <div className="flex-1 w-full md:w-auto">
+                  <Label className="text-xs font-medium text-gray-600">
+                    Direction
+                  </Label>
+                  <select
+                    value={sortDirection}
+                    onChange={(e) => {
+                      setSortDirection(e.target.value);
+                      setPage(1);
+                    }}
+                    className="px-3 py-2 border border-gray-300 rounded-md w-full text-sm"
+                  >
+                    <option value="desc">Descending</option>
+                    <option value="asc">Ascending</option>
+                  </select>
+                </div>
               </div>
             </div>
+            {/* --- KẾT THÚC FILTER MỚI --- */}
 
             {/* Orders Table */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-x-auto">
@@ -421,13 +510,16 @@ export default function CheckProduct() {
                       Customer
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Products
+                      Products (Qty)
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Staff
+                      Seller
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Date
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Action
@@ -438,27 +530,30 @@ export default function CheckProduct() {
                   {loading && (
                     <tr>
                       <td
-                        colSpan="6"
+                        colSpan="7" // [SỬA] Colspan
                         className="text-center px-6 py-4 text-gray-500"
                       >
-                        Loading orders...
+                        <div className="flex justify-center items-center">
+                          <Loader className="h-4 w-4 animate-spin mr-2" />
+                          Loading orders...
+                        </div>
                       </td>
                     </tr>
                   )}
                   {error && (
                     <tr>
                       <td
-                        colSpan="6"
+                        colSpan="7" // [SỬA] Colspan
                         className="text-center px-6 py-4 text-red-600"
                       >
                         {error}
                       </td>
                     </tr>
                   )}
-                  {!loading && !error && filteredOrders.length === 0 && (
+                  {!loading && !error && orders.length === 0 && (
                     <tr>
                       <td
-                        colSpan="6"
+                        colSpan="7" // [SỬA] Colspan
                         className="text-center px-6 py-4 text-gray-500"
                       >
                         No orders found matching your criteria.
@@ -467,35 +562,50 @@ export default function CheckProduct() {
                   )}
                   {!loading &&
                     !error &&
-                    filteredOrders.map((order) => (
+                    // [SỬA] Dùng 'orders' thay vì 'filteredOrders'
+                    orders.map((order) => (
                       <tr
-                        key={order.id}
+                        key={order.orderId} // [SỬA] Dùng key là orderId
                         className="hover:bg-gray-50 transition-colors"
                       >
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {order.code}
+                          {order.orderCode}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                          {order.customer}
+                          {order.customerName}
                         </td>
                         <td
                           className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate"
-                          title={order.products?.map((p) => p.name).join(", ")}
+                          title={order.details
+                            ?.map((p) => `${p.productName} (x${p.quantity})`)
+                            .join(", ")}
                         >
-                          {order.products?.map((p) => p.name).join(", ") ||
-                            "N/A"}
+                          {/* [SỬA] Hiển thị DTO 'details' */}
+                          {order.details
+                            ?.map((p) => `${p.productName} (x${p.quantity})`)
+                            .join(", ") || "N/A"}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                          {order.staff}
+                          {order.sellerName}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                          {order.dateManufactured}
+                          {new Date(order.orderDate).toLocaleDateString(
+                            "vi-VN"
+                          )}
+                        </td>
+                        {/* [SỬA] Thêm cột Status */}
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <Badge
+                            variant={getStatusBadgeVariant(order.statusOderName)}
+                          >
+                            {order.statusOderName}
+                          </Badge>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => setSelectedOrder(order)}
+                            onClick={() => setSelectedOrder(order)} // Dùng DTO
                           >
                             <Eye className="h-4 w-4 mr-1" /> Inspect
                           </Button>
@@ -505,32 +615,74 @@ export default function CheckProduct() {
                 </tbody>
               </table>
             </div>
+
+            {/* --- THÊM: Pagination Controls --- */}
+            {!loading && totalOrders > 0 && (
+              <div className="bg-white px-4 py-3 border-t border-gray-200 sm:px-6 rounded-lg shadow-sm">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-700">Show</span>
+                    <select
+                      value={itemsPerPage}
+                      onChange={(e) =>
+                        handleItemsPerPageChange(e.target.value)
+                      }
+                      className="px-2 py-1 border border-gray-300 rounded-md text-sm"
+                    >
+                      <option value="5">5</option>
+                      <option value="10">10</option>
+                      <option value="20">20</option>
+                      <option value="50">50</option>
+                    </select>
+                    <span className="text-sm text-gray-700">per page</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-700">
+                      Showing {startIndex + 1} to{" "}
+                      {Math.min(endIndex, totalOrders)} of {totalOrders} results
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(page - 1)}
+                      disabled={page === 1}
+                      className="disabled:opacity-50"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm text-gray-700">
+                      Page {page} of {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(page + 1)}
+                      disabled={page === totalPages}
+                      className="disabled:opacity-50"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* --- KẾT THÚC PAGINATION --- */}
           </div>
         </main>
       </div>
 
-      {/* Product Inspection Modal (Vertical Layout with Approve Button Logic) */}
+      {/* Product Inspection Modal (Đã cập nhật) */}
       {selectedOrder && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 transition-opacity duration-300">
-          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] transform transition-all duration-300 scale-95 opacity-0 animate-fade-in-scale flex flex-col">
-            <style jsx global>{`
-              @keyframes fade-in-scale {
-                from {
-                  opacity: 0;
-                  transform: scale(0.95);
-                }
-                to {
-                  opacity: 1;
-                  transform: scale(1);
-                }
-              }
-              .animate-fade-in-scale {
-                animation: fade-in-scale 0.2s ease-out forwards;
-              }
-            `}</style>
+          {/* [SỬA LỖI] Xóa class 'opacity-0' và 'animate-fade-in-scale' để modal hiển thị */}
+          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] transform transition-all duration-300 flex flex-col">
             <div className="sticky top-0 bg-white px-6 py-4 border-b border-gray-200 flex justify-between items-center z-10 flex-shrink-0">
               <h2 className="text-lg font-semibold text-gray-800">
-                Product Inspection - Order {selectedOrder.code}
+                Product Inspection - Order {selectedOrder.orderCode}
               </h2>
               <Button
                 variant="ghost"
@@ -546,43 +698,44 @@ export default function CheckProduct() {
                 <h3 className="font-semibold text-base mb-3 text-gray-700">
                   Customer Information
                 </h3>
+                {/* [SỬA] Dùng DTO trực tiếp */}
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                   <div>
                     <Label className="text-xs text-gray-500">Name</Label>
                     <p className="font-medium text-gray-800">
-                      {selectedOrder.customerInfo?.name || "N/A"}
+                      {selectedOrder.customerName || "N/A"}
                     </p>
                   </div>
                   <div>
                     <Label className="text-xs text-gray-500">Phone</Label>
                     <p className="font-medium text-gray-800">
-                      {selectedOrder.customerInfo?.phone || "N/A"}
+                      {selectedOrder.phone || "N/A"}
                     </p>
                   </div>
                   <div className="col-span-2">
                     <Label className="text-xs text-gray-500">Email</Label>
                     <p className="font-medium text-gray-800 truncate">
-                      {selectedOrder.customerInfo?.email || "N/A"}
+                      {selectedOrder.email || "N/A"}
                     </p>
                   </div>
                   <div className="col-span-2">
                     <Label className="text-xs text-gray-500">Address</Label>
                     <p className="font-medium text-gray-800">
-                      {`${selectedOrder.customerInfo?.address || ""}${
-                        selectedOrder.customerInfo?.city
-                          ? `, ${selectedOrder.customerInfo.city}`
+                      {`${selectedOrder.address || ""}${
+                        selectedOrder.shipCity
+                          ? `, ${selectedOrder.shipCity}`
                           : ""
                       }${
-                        selectedOrder.customerInfo?.state
-                          ? `, ${selectedOrder.customerInfo.state}`
+                        selectedOrder.shipState
+                          ? `, ${selectedOrder.shipState}`
                           : ""
                       }${
-                        selectedOrder.customerInfo?.zipcode
-                          ? ` ${selectedOrder.customerInfo.zipcode}`
+                        selectedOrder.zipcode
+                          ? ` ${selectedOrder.zipcode}`
                           : ""
                       }${
-                        selectedOrder.customerInfo?.country
-                          ? `, ${selectedOrder.customerInfo.country}`
+                        selectedOrder.shipCountry
+                          ? `, ${selectedOrder.shipCountry}`
                           : ""
                       }` || "N/A"}
                     </p>
@@ -594,17 +747,18 @@ export default function CheckProduct() {
                   Order & Product Details
                 </h3>
                 <div className="space-y-3 mb-4 max-h-60 overflow-y-auto pr-2">
-                  {selectedOrder.products?.map((product, index) => (
+                  {/* [SỬA] Dùng DTO 'details' */}
+                  {selectedOrder.details?.map((product) => (
                     <div
-                      key={index}
+                      key={product.orderDetailID} // Dùng ID thật
                       className="bg-white p-3 rounded border border-gray-200 shadow-sm"
                     >
                       <div className="flex justify-between items-center mb-2">
                         <p
                           className="font-medium text-sm text-gray-800 flex-1 mr-2 truncate"
-                          title={product.name}
+                          title={product.productName}
                         >
-                          {product.name || "Unnamed Product"}
+                          {product.productName || "Unnamed Product"}
                         </p>
                         <Button
                           variant="outline"
@@ -612,7 +766,6 @@ export default function CheckProduct() {
                           className="text-xs h-7 px-2 flex-shrink-0"
                           onClick={() => {
                             if (product.orderDetailID) {
-                              // !!! IMPORTANT: Adjust path if needed !!!
                               router.push(
                                 `/qc/order-detail/${product.orderDetailID}`
                               );
@@ -644,79 +797,80 @@ export default function CheckProduct() {
                             {product.accessory || "-"}
                           </p>
                         </div>
-                        <div>
+                       <div>
+                          {/* --- ✅ [SỬA LỖI] GỌI HELPER TẠI ĐÂY --- */}
                           <Label className="text-gray-500">Status:</Label>
                           <Badge
-                            variant={getStatusBadgeVariant(product.status)}
+                            variant={getStatusBadgeVariant(
+                              mapProductionStatusToString(product.status) // Chuyển đổi số (6) sang chuỗi ("READY_PROD")
+                            )}
                             className="text-xs px-1.5 py-0.5"
                           >
-                            {product.status || "Unknown"}
+                            {mapProductionStatusToString(product.status)}
                           </Badge>
+                          {/* -------------------------------------- */}
                         </div>
                       </div>
+                      {/* Hiển thị Note của từng sản phẩm */}
+                      {product.note && (
+                        <div className="mt-2 pt-2 border-t border-gray-100">
+                           <Label className="text-xs text-gray-500">Note:</Label>
+                           <p className="text-sm text-gray-700">{product.note}</p>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm pt-3 border-t border-blue-100">
                   <div>
                     <Label className="text-xs text-gray-500">
-                      Staff Assigned
+                      Seller Assigned
                     </Label>
                     <p className="font-medium text-gray-800">
-                      {selectedOrder.staff || "N/A"}
+                      {selectedOrder.sellerName || "N/A"}
                     </p>
                   </div>
                   <div>
                     <Label className="text-xs text-gray-500">Order Date</Label>
                     <p className="font-medium text-gray-800">
-                      {selectedOrder.dateManufactured || "N/A"}
+                      {new Date(selectedOrder.orderDate).toLocaleDateString(
+                        "vi-VN"
+                      ) || "N/A"}
                     </p>
                   </div>
-                  {selectedOrder.productDetails?.specialInstructions && (
-                    <div className="col-span-2 mt-1">
-                      <Label className="text-xs text-gray-500">Notes</Label>
-                      <p className="font-medium text-gray-800 text-sm bg-yellow-100 border border-yellow-200 p-2 rounded mt-1">
-                        {selectedOrder.productDetails.specialInstructions}
-                      </p>
-                    </div>
-                  )}
                 </div>
               </div>
-            </div>{" "}
+            </div>
             {/* End Modal Body */}
+
             {/* Footer / Actions Row */}
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-lg flex-shrink-0">
               {(() => {
-                // Check if the order status is already PACKING (12) or beyond
                 const isAlreadyApprovedOrBeyond =
-                  selectedOrder.statusOrderId >= 12;
+                  selectedOrder.statusOrder >= 12; // 12 = PACKING
 
                 if (isAlreadyApprovedOrBeyond) {
                   return (
-                    <>
-                      {/* Reject button might still be needed depending on workflow */}
-                      {/* <Button variant="outline" onClick={() => handleReject(selectedOrder.id)} className="text-red-600 border-red-300 hover:bg-red-50 ...">...</Button> */}
-                      <Button
-                        className="bg-gray-400 text-white px-5 cursor-not-allowed"
-                        disabled={true}
-                        title="This order has already been approved or shipped."
-                      >
-                        <Check className="h-4 w-4 mr-1" /> Already Approved
-                      </Button>
-                    </>
+                    <Button
+                      className="bg-gray-400 text-white px-5 cursor-not-allowed"
+                      disabled={true}
+                      title="This order has already been approved or shipped."
+                    >
+                      <Check className="h-4 w-4 mr-1" /> Already Approved
+                    </Button>
                   );
                 } else {
                   // Check if all products are QC_DONE
                   const canApprove =
-                    selectedOrder.products?.length > 0 &&
-                    selectedOrder.products.every((p) => p.status === "QC_DONE");
+                    selectedOrder.details?.length > 0 &&
+                    selectedOrder.details.every(
+                      (p) => mapProductionStatusToString(p.status) === "QC_DONE"
+                    );
                   return (
                     <>
-                      {/* <Button variant="outline" onClick={() => handleReject(selectedOrder.id)} className="text-red-600 border-red-300 hover:bg-red-50 hover:border-red-500 hover:text-red-700">
-                            <X className="h-4 w-4 mr-1" /> Reject Product
-                          </Button> */}
+                      {/* <Button variant="outline" ...> Reject Product </Button> */}
                       <Button
-                        onClick={() => handleApprove(selectedOrder.id)}
+                        onClick={() => handleApprove(selectedOrder.orderId)}
                         className="bg-green-600 hover:bg-green-700 text-white px-5 disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={!canApprove || loading} // Also disable while loading
                         title={
@@ -736,25 +890,10 @@ export default function CheckProduct() {
         </div>
       )}
 
-      {/* Reject Reason Dialog */}
+      {/* Reject Reason Dialog (Giữ nguyên) */}
       {showRejectDialog && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[60] transition-opacity duration-300">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 transform transition-all duration-300 scale-95 opacity-0 animate-fade-in-scale">
-            <style jsx global>{`
-              @keyframes fade-in-scale {
-                from {
-                  opacity: 0;
-                  transform: scale(0.95);
-                }
-                to {
-                  opacity: 1;
-                  transform: scale(1);
-                }
-              }
-              .animate-fade-in-scale {
-                animation: fade-in-scale 0.2s ease-out forwards;
-              }
-            `}</style>
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <h3 className="text-lg font-semibold mb-4 text-gray-800">
               Reject Product
             </h3>
@@ -796,8 +935,6 @@ export default function CheckProduct() {
                 className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
                 disabled={!rejectReason.trim() || loading}
               >
-                {" "}
-                {/* Disable while loading */}
                 Confirm Rejection
               </Button>
             </div>
@@ -805,25 +942,10 @@ export default function CheckProduct() {
         </div>
       )}
 
-      {/* General Confirmation Dialog */}
+      {/* General Confirmation Dialog (Giữ nguyên) */}
       {showConfirmDialog && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[60] transition-opacity duration-300">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 transform transition-all duration-300 scale-95 opacity-0 animate-fade-in-scale">
-            <style jsx global>{`
-              @keyframes fade-in-scale {
-                from {
-                  opacity: 0;
-                  transform: scale(0.95);
-                }
-                to {
-                  opacity: 1;
-                  transform: scale(1);
-                }
-              }
-              .animate-fade-in-scale {
-                animation: fade-in-scale 0.2s ease-out forwards;
-              }
-            `}</style>
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <h3 className="text-lg font-semibold mb-4 text-gray-800">
               Confirm Action
             </h3>
@@ -835,8 +957,7 @@ export default function CheckProduct() {
                 disabled={loading}
               >
                 Cancel
-              </Button>{" "}
-              {/* Disable while loading */}
+              </Button>
               <Button
                 onClick={() => {
                   if (confirmAction) confirmAction();
@@ -845,102 +966,13 @@ export default function CheckProduct() {
                 disabled={loading}
               >
                 Confirm
-              </Button>{" "}
-              {/* Disable while loading */}
+              </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Product Detail Modal */}
-      {viewingProduct && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[60] transition-opacity duration-300">
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full transform transition-all duration-300 scale-95 opacity-0 animate-fade-in-scale flex flex-col max-h-[85vh]">
-            <style jsx global>{`
-              @keyframes fade-in-scale {
-                from {
-                  opacity: 0;
-                  transform: scale(0.95);
-                }
-                to {
-                  opacity: 1;
-                  transform: scale(1);
-                }
-              }
-              .animate-fade-in-scale {
-                animation: fade-in-scale 0.2s ease-out forwards;
-              }
-            `}</style>
-            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 flex-shrink-0">
-              <h3 className="text-lg font-medium text-gray-800 text-center flex-grow">
-                Product Details
-              </h3>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setViewingProduct(null)}
-                className="rounded-full text-gray-500 hover:bg-gray-100 -mr-2"
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
-            <div className="p-6 space-y-5 overflow-y-auto">
-              <div className="text-center mb-4">
-                <p className="text-xl font-semibold text-gray-900">
-                  {viewingProduct.name || "N/A"}
-                </p>
-              </div>
-              <dl className="border-t border-gray-200 pt-4">
-                <div className="grid grid-cols-3 gap-x-4 gap-y-4 text-sm">
-                  <div className="border-b border-gray-100 pb-2">
-                    <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Quantity
-                    </dt>
-                    <dd className="mt-1 text-gray-900 font-medium">
-                      {viewingProduct.quantity ?? "?"}
-                    </dd>
-                  </div>
-                  <div className="border-b border-gray-100 pb-2">
-                    <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Size
-                    </dt>
-                    <dd className="mt-1 text-gray-900 font-medium">
-                      {viewingProduct.size || "-"}
-                    </dd>
-                  </div>
-                  <div className="border-b border-gray-100 pb-2">
-                    <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Accessory
-                    </dt>
-                    <dd className="mt-1 text-gray-900 font-medium">
-                      {viewingProduct.accessory || "-"}
-                    </dd>
-                  </div>
-                </div>
-              </dl>
-              <div className="pt-4">
-                <h4 className="text-sm font-semibold text-gray-700 mb-2">
-                  Note / Instructions
-                </h4>
-                {viewingProduct.note ? (
-                  <div className="text-gray-700 bg-amber-50 border border-amber-200 rounded-md p-3 text-sm shadow-sm leading-relaxed">
-                    {viewingProduct.note}
-                  </div>
-                ) : (
-                  <p className="text-gray-500 italic text-sm">
-                    No specific note provided.
-                  </p>
-                )}
-              </div>
-            </div>
-            <div className="flex justify-end px-6 py-3 bg-gray-50 border-t border-gray-200 rounded-b-lg flex-shrink-0">
-              <Button variant="outline" onClick={() => setViewingProduct(null)}>
-                Close
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* [ĐÃ XÓA] - Product Detail Modal (viewingProduct) */}
     </div>
   );
 }

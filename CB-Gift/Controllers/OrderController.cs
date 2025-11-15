@@ -23,10 +23,12 @@ namespace CB_Gift.Controllers
         }
 
         [HttpGet("GetAllOrders")]
+        [Authorize(Roles = "Staff,Manager,QC")]
         public async Task<IActionResult> GetAllOrders(
      [FromQuery] string? status = null,
      [FromQuery] string? searchTerm = null,
      [FromQuery] string? sortColumn = null,
+     [FromQuery] string? sellerId=null,
      [FromQuery] string? sortDirection = "desc",
      [FromQuery] DateTime? fromDate = null,
      [FromQuery] DateTime? toDate = null,
@@ -36,7 +38,7 @@ namespace CB_Gift.Controllers
             try
             {
                 var (orders, total) = await _orderService.GetFilteredAndPagedOrdersAsync(
-                    status, searchTerm, sortColumn, sortDirection, fromDate, toDate, page, pageSize);
+                    status, searchTerm, sortColumn, sellerId, sortDirection, fromDate, toDate, page, pageSize);
 
                 return Ok(new { total, orders });
             }
@@ -321,7 +323,8 @@ namespace CB_Gift.Controllers
             }
         }
         [HttpGet("GetAllOrdersForInvoice")]
-        public async Task<IActionResult> GetAllOrders(
+        [Authorize(Roles = "Staff,Manager,QC")]
+        public async Task<IActionResult> GetAllOrdersForInvoice(
             [FromQuery] string? status = null,
             [FromQuery] string? searchTerm = null,
             [FromQuery] string? seller = null,

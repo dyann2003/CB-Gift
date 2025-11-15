@@ -124,13 +124,13 @@ namespace CB_Gift.Services
                     refund.Status = "Approved";
                     refund.GatewayRefundId = "MANUAL_REFUND_APPROVED";
 
-                    foreach (var detail in order.OrderDetails)
+                  /*  foreach (var detail in order.OrderDetails)
                     {
                         if (detail.PlanDetails.Any())
                         {
                             _context.PlanDetails.RemoveRange(detail.PlanDetails);
                         }
-                    }
+                    }*/
 
                     // Cập nhật Order sang trạng thái cuối
                     order.StatusOrder = 18; // 18 = REFUNDED

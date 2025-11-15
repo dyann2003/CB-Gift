@@ -23,6 +23,7 @@ namespace CB_Gift.Services.IService
             string? status,
             string? searchTerm,
             string? sortColumn,
+            string? sellerId,
             string? sortDirection,
             DateTime? fromDate,
             DateTime? toDate,
