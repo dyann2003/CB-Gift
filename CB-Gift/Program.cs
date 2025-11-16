@@ -101,8 +101,50 @@ builder.Services
         };
     });
 
+// ========= Cấu hình GHN =========
+// Lấy cấu hình GhnSettings
+var ghnSettings = builder.Configuration.GetSection("GhnSettings");
+
+// Lấy Token và BaseAddress
+var ghnToken = ghnSettings["Token"];
+var ghnProdBaseUrl = ghnSettings["ProdBaseAddress"];
+
+var ghnTokenDev = ghnSettings["TokenDev"];
+var ghnDevBaseUrl = ghnSettings["DevBaseAddress"];
+var ghnShopId = ghnSettings["ShopId"];
+
+// Kiểm tra null
+if (string.IsNullOrEmpty(ghnToken) || string.IsNullOrEmpty(ghnProdBaseUrl))
+{
+    throw new InvalidOperationException("Lỗi cấu hình: GhnSettings:Token hoặc ProdBaseAddress chưa được đặt.");
+}
+if (string.IsNullOrEmpty(ghnTokenDev) || string.IsNullOrEmpty(ghnDevBaseUrl))
+{
+    throw new InvalidOperationException("Lỗi cấu hình: GhnSettings:TokenDev hoặc DevBaseAddress chưa được đặt.");
+}
+// -------------------------
+
+
 builder.Services.AddAuthorization();
-builder.Services.AddHttpClient();
+
+// 1. Client cho môi trường PROD (Lấy Tỉnh/Huyện/Xã)
+builder.Services.AddHttpClient("GhnProdClient", client =>
+{
+    client.BaseAddress = new Uri(ghnProdBaseUrl);
+    client.DefaultRequestHeaders.Add("Token", ghnToken);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
+
+// 2. Client cho môi trường DEV (Tạo đơn, Leadtime...)
+builder.Services.AddHttpClient("GhnDevClient", client =>
+{
+    client.BaseAddress = new Uri(ghnDevBaseUrl);
+    client.DefaultRequestHeaders.Add("Token", ghnTokenDev);
+    client.DefaultRequestHeaders.Add("ShopId", ghnShopId);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
+
+// ------------------------------------
 
 // ================== CORS (cho Next.js FE) ==================
 builder.Services.AddCors(options =>
@@ -140,8 +182,12 @@ builder.Services.AddScoped<IAiStudioService, AiStudioService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ICancellationService, CancellationService>();
 builder.Services.AddScoped<IRefundService, RefundService>();
-
+builder.Services.AddScoped<ILocationService, GhnLocationService>();
+builder.Services.AddScoped<IShippingService, GhnShippingService>();
+builder.Services.AddScoped<IGhnPrintService, GhnPrintService>();
 builder.Services.AddScoped<IManagementAccountService, ManagementAccountService>();
+
+
 // --- Quartz ---
 builder.Services.AddQuartz(q =>
 {
