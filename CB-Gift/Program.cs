@@ -1,9 +1,11 @@
 ﻿using CB_Gift.Data;
 using CB_Gift.DTOs;
 using CB_Gift.Jobs;
+using CB_Gift.Orders.Import;
 using CB_Gift.Services;
 using CB_Gift.Services.Email;
 using CB_Gift.Services.IService;
+using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -142,6 +144,11 @@ builder.Services.AddScoped<ICancellationService, CancellationService>();
 builder.Services.AddScoped<IRefundService, RefundService>();
 
 builder.Services.AddScoped<IManagementAccountService, ManagementAccountService>();
+builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<OrderFactory>();
+builder.Services.AddScoped<ReferenceDataCache>();
+builder.Services.AddScoped<IValidator<OrderImportRowDto>, OrderImportRowValidator>();
+
 // --- Quartz ---
 builder.Services.AddQuartz(q =>
 {
@@ -196,7 +203,8 @@ using (var scope = app.Services.CreateScope())
     var services = scope.ServiceProvider;
     await SeedRolesAsync(services);
     await SeedAllDataAsync(services);
-   
+    var cache = scope.ServiceProvider.GetRequiredService<ReferenceDataCache>();
+    await cache.LoadAsync();
 }
 
 app.Run();
