@@ -2,6 +2,7 @@ using CB_Gift.Models;
 using CB_Gift.DTOs;
 using CB_Gift.Models.Enums;
 using CB_Gift.Data;
+using CB_Gift.Orders.Import;
 
 namespace CB_Gift.Services.IService
 {
@@ -60,5 +61,10 @@ namespace CB_Gift.Services.IService
              int pageSize);
 
         Task<IEnumerable<string>> GetUniqueSellersAsync(string? status);
+        /// <summary>
+        /// Import đơn hàng từ file Excel.
+        /// sellerUserId = id của Seller đang đăng nhập.
+        /// </summary>
+        Task<OrderImportResult> ImportFromExcelAsync(IFormFile file, string sellerUserId);
     }
 }
