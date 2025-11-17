@@ -33,6 +33,7 @@ namespace CB_Gift.DTOs
         public string ReturnUrl { get; set; }
         [Required]
         public string CancelUrl { get; set; }
+        public string? GatewayName { get; set; } 
     }
     // DTO chứa payload từ webhook của PayOS
     public class PayOSWebhookPayload
