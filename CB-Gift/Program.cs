@@ -1,9 +1,11 @@
 ﻿using CB_Gift.Data;
 using CB_Gift.DTOs;
 using CB_Gift.Jobs;
+using CB_Gift.Orders.Import;
 using CB_Gift.Services;
 using CB_Gift.Services.Email;
 using CB_Gift.Services.IService;
+using FluentValidation;
 using CB_Gift.Services.Payments;
 using CB_Gift.Utils;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -193,6 +195,10 @@ builder.Services.AddScoped<ILocationService, GhnLocationService>();
 builder.Services.AddScoped<IShippingService, GhnShippingService>();
 builder.Services.AddScoped<IGhnPrintService, GhnPrintService>();
 builder.Services.AddScoped<IManagementAccountService, ManagementAccountService>();
+builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<OrderFactory>();
+builder.Services.AddScoped<ReferenceDataCache>();
+builder.Services.AddScoped<IValidator<OrderImportRowDto>, OrderImportRowValidator>();
 
 
 // --- Quartz ---
@@ -249,7 +255,8 @@ using (var scope = app.Services.CreateScope())
     var services = scope.ServiceProvider;
     await SeedRolesAsync(services);
     await SeedAllDataAsync(services);
-   
+    var cache = scope.ServiceProvider.GetRequiredService<ReferenceDataCache>();
+    await cache.LoadAsync();
 }
 
 app.Run();
