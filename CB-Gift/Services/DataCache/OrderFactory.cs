@@ -33,9 +33,11 @@ namespace CB_Gift.Services
             if (string.IsNullOrWhiteSpace(s))
                 return null;
 
-            return s.Trim();
+            // Loại mọi whitespace unicode
+            var cleaned = System.Text.RegularExpressions.Regex.Replace(s, @"\s+", "");
+
+            return string.IsNullOrWhiteSpace(cleaned) ? null : cleaned.Trim();
         }
-        
         private string NormalizeSize(string? size)
         {
             if (string.IsNullOrWhiteSpace(size))
