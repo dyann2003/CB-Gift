@@ -37,7 +37,7 @@ namespace CB_Gift.Controllers
                 }
 
                 // Validate định dạng file hình ảnh
-                var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+                var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp",".mp4" };
                 var fileExtension = Path.GetExtension(uploadDto.File.FileName).ToLowerInvariant();
 
                 if (!allowedExtensions.Contains(fileExtension))

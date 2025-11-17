@@ -4,6 +4,8 @@ using CB_Gift.Jobs;
 using CB_Gift.Services;
 using CB_Gift.Services.Email;
 using CB_Gift.Services.IService;
+using CB_Gift.Services.Payments;
+using CB_Gift.Utils;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -140,7 +142,11 @@ builder.Services.AddScoped<IAiStudioService, AiStudioService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ICancellationService, CancellationService>();
 builder.Services.AddScoped<IRefundService, RefundService>();
-
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<PayOSService>();
+builder.Services.AddScoped<VNPayService>();
+builder.Services.AddScoped<PaymentGatewayFactory>();
+builder.Services.AddScoped<VnPayHelper>();
 builder.Services.AddScoped<IManagementAccountService, ManagementAccountService>();
 // --- Quartz ---
 builder.Services.AddQuartz(q =>
