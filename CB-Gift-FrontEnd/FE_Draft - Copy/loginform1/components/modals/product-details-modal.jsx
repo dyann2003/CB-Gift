@@ -19,342 +19,408 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 export default function ProductDetailsModal({
   product,
   isOpen,
   onClose,
   categories,
+  onUpdated,
 }) {
   const { toast } = useToast();
-  const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({});
 
+  const [isEditing, setIsEditing] = useState(false);
+  const [expandedVariant, setExpandedVariant] = useState(null);
+
+  const [formData, setFormData] = useState({
+    variants: [],
+  });
+
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const [categoryList, setCategoryList] = useState([]);
+
+  // ---------------------- LOAD CATEGORY ----------------------
+  useEffect(() => {
+    const loadCategories = async () => {
+      if (
+        Array.isArray(categories) &&
+        categories.length > 0 &&
+        typeof categories[0] === "object"
+      ) {
+        setCategoryList(categories);
+        return;
+      }
+
+      try {
+        const res = await fetch(
+          "https://localhost:7015/api/Categories/filter?page=1&pageSize=100"
+        );
+        const data = await res.json();
+        setCategoryList(data.categories || []);
+      } catch {
+        setCategoryList([]);
+      }
+    };
+
+    loadCategories();
+  }, [categories]);
+
+  // ------------------------ LOAD PRODUCT -----------------------
   useEffect(() => {
     if (product) {
-      setFormData(product);
+      setFormData({
+        productId: product.productId,
+        productName: product.productName,
+        categoryId: product.categoryId ?? null,
+        describe: product.describe ?? "",
+        itemLink: product.itemLink ?? "",
+        status: product.status === 1 ? "Active" : "Inactive",
+        variants: product.variants ?? [],
+      });
     }
   }, [product]);
 
+  // ------------------------ INPUT CHANGE ------------------------
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSelectChange = (name, value) => {
-    setFormData((prev) => ({ ...prev, [name]: value }));
+  // ------------------------ VARIANT CHANGE ------------------------
+  const handleVariantChange = (index, field, value) => {
+    const updated = [...formData.variants];
+    updated[index] = { ...updated[index], [field]: value };
+    setFormData((prev) => ({ ...prev, variants: updated }));
   };
 
-  const handleSave = () => {
-    toast({
-      title: "Success",
-      description: "Product updated successfully",
-      variant: "default",
-    });
-    setIsEditing(false);
+  // ------------------------ IMAGE UPLOAD ------------------------
+  const handleImageUpload = async (file) => {
+    if (!file) return;
+
+    setUploadingImage(true);
+
+    try {
+      const form = new FormData();
+      form.append("file", file);
+
+      const res = await fetch(`https://localhost:7015/api/images/upload`, {
+        method: "POST",
+        credentials: "include",
+        body: form,
+      });
+
+      if (!res.ok) throw new Error("Upload failed");
+
+      const data = await res.json();
+      const url = data.url || data.secureUrl || data.path;
+
+      setFormData((prev) => ({
+        ...prev,
+        itemLink: url,
+      }));
+
+      toast({
+        title: "Image Uploaded",
+        description: "The product image has been updated.",
+      });
+    } catch (err) {
+      toast({
+        title: "Upload Failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    }
+
+    setUploadingImage(false);
   };
 
+  // --------------------------- SAVE ------------------------------
+  const handleSave = async () => {
+    const payload = {
+      categoryId: Number(formData.categoryId),
+      productName: formData.productName,
+      productCode: product.productCode,
+      status: formData.status === "Active" ? 1 : 0,
+      itemLink: formData.itemLink,
+      describe: formData.describe,
+      template: "",
+      tagIds: [],
+      variants: formData.variants.map((v) => ({
+        lengthCm: Number(v.lengthCm || 0),
+        heightCm: Number(v.heightCm || 0),
+        widthCm: Number(v.widthCm || 0),
+        weightGram: Number(v.weightGram || 0),
+        shipCost: Number(v.shipCost || 0),
+        baseCost: Number(v.baseCost || 0),
+        thicknessMm: v.thicknessMm,
+        sizeInch: v.sizeInch,
+        layer: v.layer,
+        customShape: v.customShape,
+        sku: v.sku,
+        extraShipping: Number(v.extraShipping || 0),
+        totalCost: Number(v.baseCost || 0) + Number(v.shipCost || 0),
+      })),
+    };
+
+    try {
+      const res = await fetch(
+        `https://localhost:7015/api/Product/${formData.productId}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(payload),
+        }
+      );
+
+      if (!res.ok) throw new Error("Failed to update product");
+
+      toast({ title: "Success", description: "Product updated successfully!" });
+      setIsEditing(false);
+      onUpdated?.();
+      onClose();
+
+      setTimeout(() => {
+        window.location.reload();
+      }, 700);
+    } catch (err) {
+      toast({
+        title: "Update Failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  // --------------------- TOGGLE STATUS ------------------------
   const handleStatusToggle = () => {
     const newStatus = formData.status === "Active" ? "Inactive" : "Active";
     setFormData((prev) => ({ ...prev, status: newStatus }));
-    toast({
-      title: "Success",
-      description: `Product status changed to ${newStatus}`,
-      variant: "default",
-    });
   };
+
+  const currentCategoryName =
+    categoryList.find((c) => c.categoryId === formData.categoryId)
+      ?.categoryName ?? "";
 
   if (!product) return null;
 
+  // ======================================================
+  // UI
+  // ======================================================
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center justify-between w-full">
-            <DialogTitle>Product Details - {product?.id}</DialogTitle>
+            <DialogTitle>Product Details — #{formData.productId}</DialogTitle>
             <Badge
               className={
-                product?.status === "Active" ? "bg-green-500" : "bg-gray-500"
+                formData.status === "Active" ? "bg-green-500" : "bg-gray-500"
               }
             >
-              {product?.status}
+              {formData.status}
             </Badge>
           </div>
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Product Image */}
-          <div className="flex justify-center">
+          {/* IMAGE PREVIEW + FILE UPLOAD IN EDIT MODE */}
+          <div className="flex flex-col items-center gap-3">
             <img
-              src={formData.image || "/placeholder.svg"}
+              src={formData.itemLink || "/placeholder.svg"}
               alt={formData.productName}
-              className="h-40 w-40 rounded-lg object-cover border border-gray-200"
+              className="h-40 w-40 rounded-lg object-cover border"
             />
+
+            {isEditing && (
+              <div className="flex flex-col items-center gap-2">
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleImageUpload(e.target.files[0])}
+                />
+                {uploadingImage && (
+                  <p className="text-sm text-gray-500">Uploading...</p>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Product Information Section */}
+          {/* PRODUCT INFO */}
           <div className="space-y-4">
-            <h4 className="font-semibold text-gray-900">Product Information</h4>
+            <h4 className="font-semibold">Product Information</h4>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Name */}
               <div>
-                <Label className="text-sm font-medium text-gray-700">
-                  Product Name
-                </Label>
+                <Label>Product Name</Label>
                 <Input
                   name="productName"
-                  value={formData.productName || ""}
+                  value={formData.productName}
                   onChange={handleInputChange}
                   disabled={!isEditing}
-                  className="mt-1"
                 />
               </div>
+
+              {/* Category */}
               <div>
-                <Label className="text-sm font-medium text-gray-700">
-                  Category
-                </Label>
+                <Label>Category</Label>
+
                 {isEditing ? (
                   <Select
-                    value={formData.category || ""}
-                    onValueChange={(value) =>
-                      handleSelectChange("category", value)
+                    value={
+                      formData.categoryId
+                        ? String(formData.categoryId)
+                        : "__none"
                     }
+                    onValueChange={(value) => {
+                      if (value === "__none") {
+                        setFormData((prev) => ({ ...prev, categoryId: null }));
+                        return;
+                      }
+                      setFormData((prev) => ({
+                        ...prev,
+                        categoryId: Number(value),
+                      }));
+                    }}
                   >
-                    <SelectTrigger className="mt-1">
+                    <SelectTrigger>
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
+
                     <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat} value={cat}>
-                          {cat}
+                      <SelectItem value="__none">-- Select --</SelectItem>
+
+                      {categoryList.map((c) => (
+                        <SelectItem
+                          key={c.categoryId}
+                          value={String(c.categoryId)}
+                        >
+                          {c.categoryName}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 ) : (
-                  <Input
-                    name="category"
-                    value={formData.category || ""}
-                    disabled
-                    className="mt-1"
-                  />
+                  <Input value={currentCategoryName} disabled />
                 )}
               </div>
+
+              {/* Description */}
               <div className="md:col-span-2">
-                <Label className="text-sm font-medium text-gray-700">
-                  Description
-                </Label>
+                <Label>Description</Label>
                 <Input
-                  name="description"
-                  value={formData.description || ""}
+                  name="describe"
+                  value={formData.describe}
                   onChange={handleInputChange}
                   disabled={!isEditing}
-                  className="mt-1"
                 />
               </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-700">
-                  Image URL
-                </Label>
+
+              {/* Image URL - ALWAYS VISIBLE */}
+              <div className="md:col-span-2">
+                <Label>Image URL</Label>
                 <Input
-                  name="image"
-                  value={formData.image || ""}
+                  name="itemLink"
+                  value={formData.itemLink}
                   onChange={handleInputChange}
                   disabled={!isEditing}
-                  className="mt-1"
                 />
               </div>
             </div>
           </div>
 
-          {/* Product Variables Section */}
-          <div className="space-y-4 bg-gray-50 p-4 rounded-lg">
-            <h4 className="font-semibold text-gray-900">Product Variables</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label className="text-xs font-medium text-gray-600">
-                  Size
-                </Label>
-                <Input
-                  name="size"
-                  value={formData.size || ""}
-                  onChange={handleInputChange}
-                  disabled={!isEditing}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label className="text-xs font-medium text-gray-600">
-                  Layer
-                </Label>
-                <Input
-                  name="layer"
-                  value={formData.layer || ""}
-                  onChange={handleInputChange}
-                  disabled={!isEditing}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label className="text-xs font-medium text-gray-600">
-                  Thickness
-                </Label>
-                <Input
-                  name="thickness"
-                  value={formData.thickness || ""}
-                  onChange={handleInputChange}
-                  disabled={!isEditing}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label className="text-xs font-medium text-gray-600">
-                  Custom Shape
-                </Label>
-                <Input
-                  name="customShape"
-                  value={formData.customShape || ""}
-                  onChange={handleInputChange}
-                  disabled={!isEditing}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label className="text-xs font-medium text-gray-600">
-                  Weight (gram)
-                </Label>
-                <Input
-                  name="weight"
-                  value={formData.weight || ""}
-                  onChange={handleInputChange}
-                  disabled={!isEditing}
-                  type="number"
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label className="text-xs font-medium text-gray-600">
-                  Dimension (L×W×H) cm
-                </Label>
-                <div className="grid grid-cols-3 gap-2 mt-1">
-                  <Input
-                    placeholder="Length"
-                    value={formData.length || ""}
-                    onChange={(e) =>
-                      handleInputChange({
-                        ...e,
-                        target: { ...e.target, name: "length" },
-                      })
-                    }
-                    disabled={!isEditing}
-                  />
-                  <Input
-                    placeholder="Width"
-                    value={formData.width || ""}
-                    onChange={(e) =>
-                      handleInputChange({
-                        ...e,
-                        target: { ...e.target, name: "width" },
-                      })
-                    }
-                    disabled={!isEditing}
-                  />
-                  <Input
-                    placeholder="Height"
-                    value={formData.height || ""}
-                    onChange={(e) =>
-                      handleInputChange({
-                        ...e,
-                        target: { ...e.target, name: "height" },
-                      })
-                    }
-                    disabled={!isEditing}
-                  />
-                </div>
-              </div>
-              <div>
-                <Label className="text-xs font-medium text-gray-600">
-                  Scan TikTok
-                </Label>
-                <Input
-                  name="scanTiktok"
-                  value={formData.scanTiktok || ""}
-                  onChange={handleInputChange}
-                  disabled={!isEditing}
-                  className="mt-1"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Pricing Section */}
+          {/* VARIANTS */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <h4 className="font-medium mb-3 text-gray-900">Pricing</h4>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <Label className="text-xs font-medium text-gray-600">
-                  Base Cost
-                </Label>
-                <Input
-                  name="baseCost"
-                  value={formData.baseCost || ""}
-                  onChange={handleInputChange}
-                  disabled={!isEditing}
-                  className="mt-1"
-                />
+            <h4 className="font-semibold mb-2">Product Variants</h4>
+
+            {formData.variants.map((v, index) => (
+              <div
+                key={v.productVariantId ?? index}
+                className="border rounded-lg mb-2"
+              >
+                <button
+                  className="flex justify-between items-center w-full p-3 bg-white hover:bg-gray-100 rounded-lg"
+                  onClick={() =>
+                    setExpandedVariant(expandedVariant === index ? null : index)
+                  }
+                >
+                  <span className="font-medium">
+                    Variant #{index + 1} — SKU: {v.sku}
+                  </span>
+
+                  {expandedVariant === index ? (
+                    <ChevronDown />
+                  ) : (
+                    <ChevronRight />
+                  )}
+                </button>
+
+                {expandedVariant === index && (
+                  <div className="p-4 grid grid-cols-2 gap-3 bg-gray-50 border-t">
+                    {[
+                      ["Length (cm)", "lengthCm"],
+                      ["Width (cm)", "widthCm"],
+                      ["Height (cm)", "heightCm"],
+                      ["Weight (gram)", "weightGram"],
+                      ["Thickness (mm)", "thicknessMm"],
+                      ["Size (inch)", "sizeInch"],
+                      ["Layer", "layer"],
+                      ["Custom Shape", "customShape"],
+                      ["Ship Cost", "shipCost"],
+                      ["Base Cost", "baseCost"],
+                      ["Extra Shipping", "extraShipping"],
+                    ].map(([label, field]) => (
+                      <div key={field}>
+                        <Label>{label}</Label>
+                        <Input
+                          disabled={!isEditing}
+                          value={v[field] ?? ""}
+                          onChange={(e) =>
+                            handleVariantChange(index, field, e.target.value)
+                          }
+                        />
+                      </div>
+                    ))}
+
+                    <div>
+                      <Label>Total Cost</Label>
+                      <Input disabled value={v.totalCost ?? ""} />
+                    </div>
+                  </div>
+                )}
               </div>
-              <div>
-                <Label className="text-xs font-medium text-gray-600">
-                  Base Price
-                </Label>
-                <Input
-                  name="basePrice"
-                  value={formData.basePrice || ""}
-                  disabled
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label className="text-xs font-medium text-gray-600">
-                  Ship Cost
-                </Label>
-                <Input
-                  name="shipCost"
-                  value={formData.shipCost || ""}
-                  onChange={handleInputChange}
-                  disabled={!isEditing}
-                  className="mt-1"
-                />
-              </div>
-            </div>
+            ))}
           </div>
 
-          {/* Action Buttons */}
+          {/* BUTTONS */}
           <div className="flex justify-end gap-3 pt-4 border-t">
             <Button variant="outline" onClick={onClose}>
               Close
             </Button>
-            <Button
+
+            {/* <Button
               variant={formData.status === "Active" ? "destructive" : "default"}
               onClick={handleStatusToggle}
             >
               {formData.status === "Active" ? "Deactivate" : "Activate"}
-            </Button>
+            </Button> */}
+
             {isEditing ? (
               <>
                 <Button variant="outline" onClick={() => setIsEditing(false)}>
                   Cancel
                 </Button>
-                <Button
-                  onClick={handleSave}
-                  className="bg-blue-600 hover:bg-blue-700"
-                >
+                <Button className="bg-blue-600" onClick={handleSave}>
                   Save Changes
                 </Button>
               </>
             ) : (
               <Button
+                className="bg-blue-600"
                 onClick={() => setIsEditing(true)}
-                className="bg-blue-600 hover:bg-blue-700"
               >
                 Edit Product
               </Button>

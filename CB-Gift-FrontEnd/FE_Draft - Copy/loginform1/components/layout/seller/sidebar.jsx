@@ -15,6 +15,11 @@ export default function SellerSidebar({ currentPage }) {
       path: "/seller/order-overview",
     },
     {
+      id: "product-catalog",
+      label: "Product Catalog",
+      path: "/seller/product-catalog",
+    },
+    {
       id: "manage-invoice",
       label: "Manage Invoice",
       path: "/seller/manage-invoice",

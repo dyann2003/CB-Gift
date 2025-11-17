@@ -30,7 +30,7 @@ export default function ManagerSidebar({ currentPage, setCurrentPage }) {
     },
     {
       id: "manage-catalog",
-      label: "Manage Catalog",
+      label: "Manage Product",
       path: "/manager/manage-catalog",
     },
     {

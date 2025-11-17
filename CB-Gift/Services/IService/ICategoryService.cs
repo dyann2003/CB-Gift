@@ -11,5 +11,15 @@ namespace CB_Gift.Services.IService
         Task<bool> UpdateCategoryAsync(int id, UpdateCategoryDto updateCategoryDto);
         Task<bool> DeleteCategoryAsync(int id);
         Task<bool> UpdateCategoryStatusAsync(int id, UpdateCategoryStatusDto statusDto);
+
+        Task<(IEnumerable<CategoryDto> Categories, int Total)>
+    GetFilteredAndPagedCategoriesAsync(
+        string? searchTerm,
+        int? status,
+        string? sortColumn,
+        string? sortDirection,
+        int page,
+        int pageSize);
+
     }
 }

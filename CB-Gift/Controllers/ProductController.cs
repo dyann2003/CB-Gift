@@ -25,6 +25,51 @@ namespace CB_Gift.Controllers
             var products = await _service.GetAllAsync();
             return Ok(products);
         }
+
+        //    [HttpGet("filter")]
+        //    public async Task<IActionResult> GetFilteredProducts(
+        //[FromQuery] string? searchTerm = null,
+        //[FromQuery] int? status = null,
+        //[FromQuery] string? sortColumn = null,
+        //[FromQuery] string? sortDirection = null,
+        //[FromQuery] int page = 1,
+        //[FromQuery] int pageSize = 10)
+        //    {
+        //        try
+        //        {
+        //            var (products, total) = await _service.GetFilteredAndPagedProductsAsync(
+        //                searchTerm, status, sortColumn, sortDirection, page, pageSize);
+
+        //            return Ok(new { total, products });
+        //        }
+        //        catch (Exception ex)
+        //        {
+        //            return StatusCode(500, new
+        //            {
+        //                message = "Lỗi khi lấy danh sách sản phẩm.",
+        //                detail = ex.Message
+        //            });
+        //        }
+        //    }
+
+        [HttpGet("filter")]
+        public async Task<IActionResult> FilterProducts(
+    string? searchTerm = "",
+    string? category = "",
+    int? status = null,
+    int page = 1,
+    int pageSize = 10)
+        {
+            var (total, products) = await _service.FilterProductsAsync(
+                searchTerm, category, status, page, pageSize);
+
+            return Ok(new { total, products });
+        }
+
+
+
+
+
         //GET: api/Prodcut/active   -- các sản phẩm được active
         [HttpGet("active")]
         public async Task<IActionResult> GetAllProductHaveStatusTrue()

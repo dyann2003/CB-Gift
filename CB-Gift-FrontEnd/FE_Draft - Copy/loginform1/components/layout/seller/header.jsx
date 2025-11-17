@@ -89,9 +89,9 @@ export default function SellerHeader() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <div className="px-2 py-1.5 text-sm font-medium">
+              {/* <div className="px-2 py-1.5 text-sm font-medium">
                 Balance: $100
-              </div>
+              </div> */}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setShowProfileModal(true)}>
                 View Profile
