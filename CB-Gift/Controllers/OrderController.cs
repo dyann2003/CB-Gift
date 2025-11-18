@@ -405,5 +405,21 @@ namespace CB_Gift.Controllers
 
             return Ok(result);
         }
+
+        [HttpPost("import")]
+
+        public async Task<IActionResult> ImportExcel(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest("File không hợp lệ.");
+
+            var sellerUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(sellerUserId))
+                return Unauthorized("Không xác định được Seller hiện tại.");
+
+            var result = await _orderService.ImportFromExcelAsync(file, sellerUserId);
+
+            return Ok(result);
+        }
     }
 }
