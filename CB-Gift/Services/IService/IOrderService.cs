@@ -60,5 +60,6 @@ namespace CB_Gift.Services.IService
              int pageSize);
 
         Task<IEnumerable<string>> GetUniqueSellersAsync(string? status);
+        Task<OrderWithDetailsDto?> GetManagerOrderDetailAsync(int orderId);
     }
 }

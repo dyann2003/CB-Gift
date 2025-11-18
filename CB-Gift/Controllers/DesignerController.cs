@@ -126,4 +126,69 @@ public class DesignerController : ControllerBase
             return StatusCode(500, new { message = "An internal server error occurred while updating the status." });
         }
     }
+    [HttpGet("{orderDetailId}")]
+    public async Task<IActionResult> GetTaskDetail(int orderDetailId)
+    {
+        var designerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(designerId)) return Unauthorized();
+
+        var taskDetail = await _designerTaskService.GetTaskDetailAsync(orderDetailId, designerId);
+
+        if (taskDetail == null)
+        {
+            // Dùng Forbid (403) thay vì NotFound (404) để bảo mật
+            return Forbid("Bạn không có quyền xem task này hoặc task không tồn tại.");
+        }
+
+        return Ok(taskDetail);
+    }
+    [HttpGet("history")]
+    public async Task<IActionResult> GetMyDesignHistory(
+        [FromQuery] int? productId, 
+        [FromQuery] string? sellerId,
+        [FromQuery] string? searchTerm,
+        [FromQuery] DateTime? startDate,
+        [FromQuery] DateTime? endDate,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10
+    )
+    {
+        var designerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(designerId)) return Unauthorized();
+
+        int validPage = page > 0 ? page : 1;
+        int validPageSize = (pageSize > 0 && pageSize <= 100) ? pageSize : 10;
+
+        var result = await _designerTaskService.GetDesignedHistoryAsync(
+            designerId,
+            productId,
+            sellerId,
+            searchTerm,
+            startDate,
+            endDate,
+            validPage,
+            validPageSize
+        );
+        return Ok(result);
+    }
+    // --- ENDPOINT MỚI: Lấy danh sách sản phẩm để filter ---
+    [HttpGet("products")]
+    public async Task<IActionResult> GetDesignerProducts()
+    {
+        var designerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(designerId)) return Unauthorized();
+
+        var products = await _designerTaskService.GetDesignerProductsAsync(designerId);
+        return Ok(products);
+    }
+    //Lấy danh sách sellers để filter ---
+    [HttpGet("sellers")]
+    public async Task<IActionResult> GetDesignerSellers()
+    {
+        var designerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(designerId)) return Unauthorized();
+
+        var sellers = await _designerTaskService.GetDesignerSellersAsync(designerId);
+        return Ok(sellers);
+    }
 }

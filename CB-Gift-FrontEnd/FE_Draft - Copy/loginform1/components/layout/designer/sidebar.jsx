@@ -1,18 +1,36 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import {
+  Home,
+  Palette, // Icon cho Design Assign
+  History, // Icon cho Design History
+  Settings,
+  User,
+  LogOut,
+  Package, // Thêm icon
+  ClipboardList, // Thêm icon
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function DesignerSidebar({ currentPage, setCurrentPage }) {
   const router = useRouter();
 
   const menuItems = [
-    { id: "dashboard", label: "Dashboard", path: "/designer/dashboard" },
+    { id: "dashboard", label: "Dashboard",icon: <Home className="h-4 w-4" />, path: "/designer/dashboard" },
     {
       id: "design-assign",
       label: "Design Assign by Seller",
+      icon: <Palette className="h-4 w-4" />, 
       path: "/designer/design-assign",
-    }
+    },
+    {
+      label: "Design History",
+      path: "/designer/design-history",
+      icon: <History className="h-4 w-4" />, // Icon mới
+      id: "design-history",
+    },
     // {
     //   id: "manage-fail-design",
     //   label: "Manage Fail Design",
@@ -32,14 +50,15 @@ export default function DesignerSidebar({ currentPage, setCurrentPage }) {
       </div>
 
       <nav className="flex-1 p-4 space-y-2">
-        {menuItems.map((item) => (
+        { menuItems.map((item) => (
           <Button
             key={item.id}
             variant={currentPage === item.id ? "default" : "ghost"}
-            className="w-full justify-start"
+            className="w-full justify-start gap-3"  // thêm gap-3 để icon và text không dính nhau
             onClick={() => handleNavigation(item)}
           >
-            {item.label}
+            {item.icon}          {/* ← Đây là chỗ bạn quên!!! */}
+            <span>{item.label}</span>
           </Button>
         ))}
       </nav>

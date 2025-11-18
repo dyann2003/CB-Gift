@@ -287,12 +287,18 @@ export default function ManageOrder() {
 
   // Utility: check if the product detail can be approved/rejected
   // status code 4 là "Cần Check Design"
-  const canApproveOrReject = (item) => {
-    const statusVal = Number(item.status);
-    const productionVal = Number(item.productionStatus);
-    return statusVal === 4 || productionVal === 4;
+  // const canApproveOrReject = (item) => {
+  //   const statusVal = Number(item.status);
+  //   const productionVal = Number(item.productionStatus);
+  //   return statusVal === 4 && productionVal === 4;
+  // };
+  const canApproveOrReject = (order, item) => {
+    const orderStatus = Number(order.statusOrder);
+    const itemProductionStatus = Number(item.productionStatus);
+    
+    // Chỉ hiện nút khi Order là 5 VÀ Detail là 4
+    return orderStatus === 5 && itemProductionStatus === 4;
   };
-
   // orders: chỉ chứa dữ liệu dữ liệu trang hiện tại
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -300,46 +306,54 @@ export default function ManageOrder() {
 
   const [selectedStatConfig, setSelectedStatConfig] = useState(null);
   const toggleDateFilter = () => setIsDateFilterOpen(!isDateFilterOpen);
-  // thiếu cái filter Date
   const uploadImage = async (file) => {
     const formData = new FormData();
     formData.append("File", file);
     try {
-      const res = await fetch(`${apiClient.defaults.baseURL}/api/images/upload`, {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      });
+    const res = await fetch(`${apiClient.defaults.baseURL}/api/images/upload-media`, {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+    });
 
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Upload failed: ${res.status} - ${errText}`);
-      }
-
-      const data = await res.json();
-      console.log("Upload success:", data);
-      return data.url || data.secureUrl || data.path || null;
-    } catch (err) {
-      console.error("Upload error:", err);
-      setErrorMessage("Upload failed: " + err.message);
-      setShowErrorDialog(true);
-      return null;
+    if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Upload failed: ${res.status} - ${errText}`);
     }
-  };
 
-  const openRefundPopup = async (order) => {
+    const data = await res.json();
+    console.log("Upload success:", data);
+    // Cập nhật để ưu tiên secureUrl
+    return data.secureUrl || data.url || data.path || null;
+    } catch (err) {
+    console.error("Upload error:", err);
+    setErrorMessage("Upload failed: " + err.message);
+    setShowErrorDialog(true);
+    return null;
+    } };
+
+    // ===============================================
+    // === HÀM CẬP NHẬT - BẠN HÃY DÁN HÀM NÀY VÀO ===
+    // ===============================================
+    const openRefundPopup = async (order) => {
     let proofUrl = null;
 
     const { value: reason } = await Swal.fire({
       title: `Refund order #${order.orderId}`,
+      
+      // ✅ [THAY ĐỔI 1]: Cập nhật HTML
       html: `
       <textarea id="refundReason" class="swal2-textarea" placeholder="Nhập lý do hoàn tiền (tối thiểu 5 ký tự)"></textarea>
-      <input type="file" id="refundImageInput" accept="image/*" style="margin-top: 10px;" />
+      
+      <input type="file" id="refundMediaInput" accept="image/*,video/*" style="margin-top: 10px;" />
+      
       <div id="uploadStatus" style="margin-top:10px; display:none;">
         <div class="swal2-loader" style="display:inline-block;"></div>
-        <span>Loading images...</span>
+        <span>Loading file...</span>
       </div>
-      <img id="refundImagePreview" style="display:none; margin-top: 10px; max-width:100%; max-height:150px; border-radius: 5px;" />
+      
+            <img id="refundImagePreview" style="display:none; margin-top: 10px; max-width:100%; max-height:150px; border-radius: 5px;" />
+      <video id="refundVideoPreview" controls style="display:none; margin-top: 10px; max-width:100%; max-height:150px; border-radius: 5px;"></video>
     `,
       showCancelButton: true,
       confirmButtonText: "Submit request",
@@ -347,40 +361,50 @@ export default function ManageOrder() {
       confirmButtonColor: "#d97706",
       cancelButtonColor: "#6b7280",
 
+      // ✅ [THAY ĐỔI 2]: Cập nhật didOpen để lấy đúng ID
       didOpen: () => {
-        const fileInput = document.getElementById("refundImageInput");
-        const preview = document.getElementById("refundImagePreview");
+        const fileInput = document.getElementById("refundMediaInput");
+        const imgPreview = document.getElementById("refundImagePreview");
+        const videoPreview = document.getElementById("refundVideoPreview");
         const uploadStatus = document.getElementById("uploadStatus");
 
         fileInput.addEventListener("change", async (e) => {
           const file = e.target.files[0];
           if (!file) return;
 
-          // ✅ Hiển thị loading icon
+          // ✅ [THAY ĐỔI 3]: Ẩn cả 2 preview khi bắt đầu upload
           uploadStatus.style.display = "block";
-          preview.style.display = "none";
+          imgPreview.style.display = "none";
+          videoPreview.style.display = "none";
 
-          // ✅ Gọi hàm upload ảnh có sẵn
+          // Gọi hàm upload (đã trỏ đến endpoint /upload-media)
           const uploadedUrl = await uploadImage(file);
 
-          // ✅ Tắt loading icon
           uploadStatus.style.display = "none";
 
           if (uploadedUrl) {
-            proofUrl = uploadedUrl;
-            preview.src = proofUrl;
-            preview.style.display = "block";
+            proofUrl = uploadedUrl; 
+
+            // Logic này giờ sẽ chạy ĐÚNG
+            if (file.type.startsWith("video/")) {
+              videoPreview.src = proofUrl;
+              videoPreview.style.display = "block";
+            } else if (file.type.startsWith("image/")) {
+              imgPreview.src = proofUrl;
+              imgPreview.style.display = "block";
+            }
           } else {
             Swal.fire({
               icon: "error",
               title: "Upload thất bại",
-              text: "Không thể upload ảnh. Vui lòng thử lại.",
+              text: "Không thể upload file. Vui lòng thử lại.",
             });
           }
         });
       },
 
       preConfirm: () => {
+        // (Giữ nguyên, không đổi)
         const reasonValue = document.getElementById("refundReason").value;
         if (!reasonValue || reasonValue.trim().length < 5) {
           Swal.showValidationMessage("Lý do hoàn tiền phải ít nhất 5 ký tự!");
@@ -389,9 +413,9 @@ export default function ManageOrder() {
         return reasonValue;
       },
     });
-
+  
+    // Phần còn lại của hàm (gọi API refund) giữ nguyên
     if (!reason) return;
-
     try {
       const response = await fetch(
         `${apiClient.defaults.baseURL}/api/order/${order.id}/request-refund`,
@@ -399,9 +423,9 @@ export default function ManageOrder() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ reason, proofUrl }),
-        }
-      );
+          body: JSON.stringify({ reason, proofUrl }), // proofUrl sẽ là link video hoặc ảnh
+ }
+ );
 
       const data = await response.json();
 
@@ -547,6 +571,7 @@ export default function ManageOrder() {
       const mappedOrders = data.map((order) => ({
         id: order.orderId,
         orderId: order.orderCode,
+        statusOrder: order.statusOrder,
         orderDate: new Date(order.orderDate).toISOString().split("T")[0],
         customerName: order.customerName,
         phone: order.phone || "",
@@ -1029,6 +1054,11 @@ export default function ManageOrder() {
         orderId: fullOrder.orderCode,
         orderDate: new Date(fullOrder.orderDate).toISOString().split("T")[0],
         customerName: fullOrder.customerName,
+        reason: fullOrder.reason,
+        rejectionReason: fullOrder.rejectionReason,
+        proofUrl: fullOrder.proofUrl,
+        refundAmount: fullOrder.refundAmount,
+        isRefundPending: fullOrder.isRefundPending,
         phone: fullOrder.phone || "",
         email: fullOrder.email || "",
         address: fullOrder.address || "",
@@ -2951,6 +2981,74 @@ whitespace-nowrap"
                                                   </p>
                                                 </div>
                                               </div>
+                                              {/* 👇 THÊM KHỐI NÀY VÀO NGAY DƯỚI 👇 */}
+                                              {(editedOrder.reason || editedOrder.rejectionReason || editedOrder.refundAmount > 0) && (
+                                                <div className={`mt-4 p-4 rounded-lg border ${
+                                                    editedOrder.rejectionReason ? "bg-red-50 border-red-200" : "bg-orange-50 border-orange-200"
+                                                  }`}>
+                                                  <h3 className={`font-semibold text-lg mb-3 ${
+                                                      editedOrder.rejectionReason ? "text-red-800" : "text-orange-800"
+                                                    }`}>
+                                                    Request Details (Refund/Cancel)
+                                                  </h3>
+                                                  
+                                                  <div className="space-y-3 text-sm">
+                                                    {/* 1. Số tiền hoàn (nếu có) */}
+                                                    {editedOrder.refundAmount > 0 && (
+                                                      <div className="flex justify-between items-center bg-white p-2 rounded border border-gray-200">
+                                                        <span className="font-medium text-gray-700">Requested Refund Amount:</span>
+                                                        <span className="font-bold text-green-600 text-lg">
+                                                          ${editedOrder.refundAmount?.toFixed(2)}
+                                                        </span>
+                                                      </div>
+                                                    )}
+
+                                                    {/* 2. Lý do yêu cầu (Seller/Khách gửi) */}
+                                                    {editedOrder.reason && (
+                                                      <div>
+                                                        <span className="block font-medium text-gray-700 mb-1">Reason:</span>
+                                                        <div className="bg-white p-3 rounded border border-gray-200 text-gray-800 italic">
+                                                          "{editedOrder.reason}"
+                                                        </div>
+                                                      </div>
+                                                    )}
+
+                                                    {/* 3. Link bằng chứng (Proof URL) */}
+                                                    {editedOrder.proofUrl && (
+                                                      <div>
+                                                        <span className="block font-medium text-gray-700 mb-1">Evidence / Proof:</span>
+                                                        <a 
+                                                          href={editedOrder.proofUrl} 
+                                                          target="_blank" 
+                                                          rel="noopener noreferrer"
+                                                          className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 bg-white px-3 py-2 rounded border border-blue-200 hover:shadow-sm transition-all"
+                                                        >
+                                                          <span>📷 View Proof Image</span>
+                                                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                                                        </a>
+                                                      </div>
+                                                    )}
+
+                                                    {/* 4. Lý do từ chối (Staff gửi - nếu có) */}
+                                                    {editedOrder.rejectionReason && (
+                                                      <div className="mt-2">
+                                                        <span className="block font-medium text-red-700 mb-1">Rejection Reason (Admin):</span>
+                                                        <div className="bg-white p-3 rounded border border-red-200 text-red-600 font-medium">
+                                                          "{editedOrder.rejectionReason}"
+                                                        </div>
+                                                      </div>
+                                                    )}
+                                                    
+                                                    {/* 5. Cảnh báo đang chờ duyệt */}
+                                                    {editedOrder.isRefundPending && (
+                                                      <div className="mt-2 flex items-center gap-2 text-amber-600 font-bold bg-amber-100 p-2 rounded justify-center">
+                                                          <span className="animate-pulse">⚠️ Waiting for Staff Approval</span>
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              )}
+                                              {/* 👆 KẾT THÚC PHẦN THÊM 👆 */}
                                             </div>
 
                                             {/* QR Code Section */}
@@ -3271,7 +3369,7 @@ whitespace-nowrap"
                                                 <div className="mt-3 flex items-center gap-2">
                                                   <button
                                                     className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded border ${
-                                                      canApproveOrReject(item)
+                                                      canApproveOrReject(order,item)
                                                         ? "bg-green-50 text-green-700 border-green-200 hover:shadow"
                                                         : "opacity-50 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-200"
                                                     }`}
@@ -3283,7 +3381,7 @@ whitespace-nowrap"
                                                     disabled={
                                                       isSubmittingDetail ===
                                                         item.orderDetailID ||
-                                                      !canApproveOrReject(item)
+                                                      !canApproveOrReject(order,item)
                                                     }
                                                   >
                                                     {isSubmittingDetail ===
@@ -3296,7 +3394,7 @@ whitespace-nowrap"
 
                                                   <button
                                                     className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded border ${
-                                                      canApproveOrReject(item)
+                                                      canApproveOrReject(order,item)
                                                         ? "bg-red-50 text-red-700 border-red-200 hover:shadow"
                                                         : "opacity-50 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-200"
                                                     }`}
@@ -3308,7 +3406,7 @@ whitespace-nowrap"
                                                     disabled={
                                                       isSubmittingDetail ===
                                                         item.orderDetailID ||
-                                                      !canApproveOrReject(item)
+                                                      !canApproveOrReject(order,item)
                                                     }
                                                   >
                                                     {isSubmittingDetail ===
