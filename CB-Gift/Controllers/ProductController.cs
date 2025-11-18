@@ -25,6 +25,21 @@ namespace CB_Gift.Controllers
             var products = await _service.GetAllAsync();
             return Ok(products);
         }
+
+        [HttpGet("filter")]
+        public async Task<IActionResult> FilterProducts(
+   string? searchTerm = "",
+   string? category = "",
+   int? status = null,
+   int page = 1,
+   int pageSize = 10)
+        {
+            var (total, products) = await _service.FilterProductsAsync(
+                searchTerm, category, status, page, pageSize);
+
+            return Ok(new { total, products });
+        }
+
         //GET: api/Prodcut/active   -- các sản phẩm được active
         [HttpGet("active")]
         public async Task<IActionResult> GetAllProductHaveStatusTrue()
@@ -86,6 +101,9 @@ namespace CB_Gift.Controllers
 
             return NoContent();
         }
+
+
+
         [HttpDelete("hidden/{id}")]
         // Ẩn sản phẩm
         public async Task<IActionResult> SoftDeleteProduct(int id)
