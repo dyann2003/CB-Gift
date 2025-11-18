@@ -15,11 +15,16 @@ export default function SellerSidebar({ currentPage }) {
       path: "/seller/order-overview",
     },
     {
+      id: "product-catalog",
+      label: "Product Catalog",
+      path: "/seller/product-catalog",
+    },
+    {
       id: "manage-invoice",
       label: "Manage Invoice",
       path: "/seller/manage-invoice",
     },
-    //{ id: "receive-bill", label: "Receive Bill", path: "/seller/receive-bill" },
+    { id: "receive-bill", label: "Receive Bill", path: "/seller/receive-bill" },
   ];
 
   const handleNavigation = (item) => {

@@ -550,7 +550,9 @@ export default function ManageOrder() {
         params.append("fromDate", dateRange.from.toISOString());
       if (dateRange?.to) params.append("toDate", dateRange.to.toISOString());
 
-      const url = `${apiClient.defaults.baseURL}/api/Seller?${params.toString()}`;
+      const url = `${
+        apiClient.defaults.baseURL
+      }/api/Seller?${params.toString()}`;
 
       // 3. Gọi API với URL có tham số
       const response = await fetch(url, {
@@ -658,9 +660,12 @@ export default function ManageOrder() {
   // ✅ Dù
   const fetchStats = async () => {
     try {
-      const res = await fetch(`${apiClient.defaults.baseURL}/api/Seller/stats`, {
-        credentials: "include",
-      });
+      const res = await fetch(
+        `${apiClient.defaults.baseURL}/api/Seller/stats`,
+        {
+          credentials: "include",
+        }
+      );
       if (!res.ok) throw new Error("Failed to fetch stats");
       const data = await res.json();
       setOrderStats(data);
@@ -757,9 +762,12 @@ export default function ManageOrder() {
 
     // Nếu tất cả đều hợp lệ, fetch danh sách designer
     try {
-      const res = await fetch(`${apiClient.defaults.baseURL}/api/Seller/my-designer`, {
-        credentials: "include",
-      });
+      const res = await fetch(
+        `${apiClient.defaults.baseURL}/api/Seller/my-designer`,
+        {
+          credentials: "include",
+        }
+      );
       if (!res.ok) throw new Error("Failed to fetch designers");
       const data = await res.json();
       setDesigners(data);
@@ -818,94 +826,68 @@ export default function ManageOrder() {
     }
   };
 
-  const handleExport = () => {
-    // Vì FE chỉ có dữ liệu 1 trang, cần gọi 1 API BE không phân trang để export toàn bộ
-    alert(
-      "Chức năng export đang sử dụng dữ liệu lọc hiện tại. Nếu muốn export toàn bộ, cần có API riêng!"
-    );
+  const handleExport = async () => {
+    try {
+      // Xây query params giống fetchOrders để export theo cùng bộ lọc hiện tại
+      const selectedStatConfigInList = STATS_CONFIG.find(
+        (stat) => stat.title === selectedStat
+      );
+      const statusFilter =
+        selectedStatConfig?.statusFilter ||
+        selectedStatConfigInList?.statusFilter ||
+        (selectedStat !== "Total Order" ? selectedStat : null);
 
-    // Logic export hiện tại đang dùng orders (chỉ 1 trang) - cần sửa nếu muốn export full
-    if (!paginatedOrders || paginatedOrders.length === 0) {
-      alert("❌ Không có đơn hàng nào để export!");
-      return;
-    }
-
-    const exportData = [];
-
-    paginatedOrders.forEach((order) => {
-      const products = order.products || [];
-
-      products.forEach((p) => {
-        exportData.push({
-          OrderID: order.id,
-          OrderCode: order.orderId,
-          OrderDate: formatMySQLDate(order.orderDate),
-          CustomerName: order.customerName || order.customerInfo?.name || "",
-          Phone: order.phone || order.customerInfo?.phone || "",
-          Email: order.email || order.customerInfo?.email || "",
-          Address: order.address || order.customerInfo?.address || "",
-          Size: p.size || "",
-          ProductName: p.name || "",
-          Quantity: p.quantity || 0,
-          Price: p.price || 0,
-          Accessory: p.accessory || "",
-          PaymentStatus: p.paymentStatus || "",
-          Note: order.orderNotes || "",
-          LinkImg: order.uploadedFiles?.linkImg?.url || "",
-          LinkThanksCard: order.uploadedFiles?.linkThanksCard?.url || "",
-          LinkFileDesign: order.uploadedFiles?.linkFileDesign?.url || "",
-          Status: order.status || "",
-          TotalAmount: order.totalAmount || "",
-          OrderNotes: order.orderNotes || "",
-          TimeCreated: order.timeCreated || "",
-        });
+      const params = new URLSearchParams({
+        // note: export không dùng page/pageSize, BE sẽ ignore hoặc trả full
+        searchTerm: searchTerm || "",
+        sortColumn: sortColumn || "orderDate",
+        sortDirection: sortDirection || "desc",
       });
-      // Nếu order không có product nào, vẫn export 1 dòng tổng
-      if (products.length === 0) {
-        exportData.push({
-          OrderID: order.id,
-          OrderCode: order.orderId,
-          OrderDate: formatMySQLDate(order.orderDate),
-          CustomerName: order.customerName || order.customerInfo?.name || "",
-          Phone: order.phone || order.customerInfo?.phone || "",
 
-          Email: order.email || order.customerInfo?.email || "",
-          Address: order.address || order.customerInfo?.address || "",
-          ProductName: "",
-          Quantity: "",
-          Price: "",
-          Size: "",
-          Accessory: "",
-          Note: order.orderNotes || "",
-
-          LinkImg: order.uploadedFiles?.linkImg?.url || "",
-          LinkThanksCard: order.uploadedFiles?.linkThanksCard?.url || "",
-          LinkFileDesign: order.uploadedFiles?.linkFileDesign?.url || "",
-          Status: order.status || "",
-          TotalAmount: order.totalAmount || "",
-          OrderNotes: order.orderNotes || "",
-          TimeCreated: order.timeCreated || "",
-        });
+      if (statusFilter && selectedStat !== "Total Order") {
+        params.append("status", statusFilter);
       }
-    });
+      if (dateRange?.from)
+        params.append("fromDate", dateRange.from.toISOString());
+      if (dateRange?.to) params.append("toDate", dateRange.to.toISOString());
 
-    console.log("📦 Export Data:", exportData);
-    const worksheet = XLSX.utils.json_to_sheet(exportData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Orders");
-    const excelBuffer = XLSX.write(workbook, {
-      bookType: "xlsx",
-      type: "array",
-    });
-    const blob = new Blob([excelBuffer], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
-    const fileName = `Orders_${new Date().toISOString().slice(0, 10)}.xlsx`;
-    saveAs(blob, fileName);
+      const url = `${
+        apiClient.defaults.baseURL
+      }/api/Seller/export?${params.toString()}`;
 
-    alert(
-      `✅ Đã export ${exportData.length} dòng dữ liệu từ ${paginatedOrders.length} đơn hàng!`
-    );
+      // Gọi API để nhận file - server trả file xlsx
+      const res = await fetch(url, {
+        method: "GET",
+        credentials: "include", // giữ auth cookie
+      });
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(errText || `Export failed: ${res.status}`);
+      }
+
+      const blob = await res.blob();
+      const fileName = `Orders_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+      // Dùng file-saver (bạn đang import saveAs ở trên)
+      saveAs(blob, fileName);
+
+      // Thông báo thành công
+      Swal.fire({
+        icon: "success",
+        title: "Export completed",
+        text: "File đã được tải về.",
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      console.error("Export failed:", err);
+      Swal.fire({
+        icon: "error",
+        title: "Export failed",
+        text: err.message || "Có lỗi khi xuất file.",
+      });
+    }
   };
 
   // Helper: định dạng MySQL
@@ -1036,9 +1018,12 @@ export default function ManageOrder() {
   const handleViewDetails = async (order) => {
     try {
       console.log("🧾 Selected order (before fetch):", order);
-      const res = await fetch(`${apiClient.defaults.baseURL}/api/Seller/${order.id}`, {
-        credentials: "include",
-      });
+      const res = await fetch(
+        `${apiClient.defaults.baseURL}/api/Seller/${order.id}`,
+        {
+          credentials: "include",
+        }
+      );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const fullOrder = await res.json();
       console.log("✅ Full order fetched:", fullOrder);
@@ -1493,7 +1478,6 @@ export default function ManageOrder() {
         setCurrentPage={setCurrentPage}
       /> */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">
           <div className="space-y-6">
             {/* Welcome Header */}
