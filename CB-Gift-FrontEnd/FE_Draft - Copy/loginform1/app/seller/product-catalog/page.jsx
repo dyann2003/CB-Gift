@@ -7,6 +7,7 @@ import ProductDetailsModal from "@/components/modals/seller-product-details-moda
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import apiClient from "../../../lib/apiClient";
 import {
   Select,
   SelectContent,
