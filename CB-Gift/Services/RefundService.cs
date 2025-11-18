@@ -60,7 +60,8 @@ namespace CB_Gift.Services
                 CreatedAt = DateTime.UtcNow
             };
             _context.Refunds.Add(newRefund);
-
+            // chuyển order sang trạng thái HOLD
+            order.StatusOrder = 16; // 16 = HOLD (Chuyển sang "Chờ")
             // ✅ LƯU VÀO DB TRƯỚC
             await _context.SaveChangesAsync();
 
@@ -135,7 +136,7 @@ namespace CB_Gift.Services
                     // Cập nhật Order sang trạng thái cuối
                     order.StatusOrder = 18; // 18 = REFUNDED
                     order.PaymentStatus = "Refunded";
-                    order.ProductionStatus = "CANCELED";
+                    order.ProductionStatus = "Refunded";
 
                     // ✅ Chuẩn bị thông báo
                     notificationMessage = $"Yêu cầu hoàn tiền cho đơn hàng #{orderId} đã được CHẤP NHẬN.";
@@ -151,7 +152,7 @@ namespace CB_Gift.Services
 
                     refund.Status = "Rejected";
                     refund.StaffRejectionReason = request.RejectionReason;
-
+                    order.StatusOrder = 14;
                     // ✅ Chuẩn bị thông báo
                     notificationMessage = $"Yêu cầu hoàn tiền cho đơn hàng #{orderId} đã bị TỪ CHỐI. Lý do: {request.RejectionReason}";
                     finalStatusString = "REFUND_REJECTED"; // Trạng thái ảo để UI biết

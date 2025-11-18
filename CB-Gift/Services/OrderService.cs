@@ -193,7 +193,32 @@ namespace CB_Gift.Services
             var dto = await query
             .ProjectTo<OrderWithDetailsDto>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync();
+            // Nếu không tìm thấy đơn (hoặc không thuộc về seller này), trả về null luôn
+            if (dto == null) return null;
 
+            // 3. 👇 BỔ SUNG: Truy vấn thủ công bảng Refunds và CancellationRequests
+            // (Copy logic từ GetManagerOrderDetailAsync sang)
+
+            var latestRefund = await _context.Refunds
+                .Where(r => r.OrderId == orderId)
+                .OrderByDescending(r => r.CreatedAt)
+                .FirstOrDefaultAsync();
+
+
+            // 4. 👇 BỔ SUNG: Điền dữ liệu vào DTO
+
+            // --- Ưu tiên 1: Xử lý Hoàn tiền (Refund) ---
+            if (latestRefund != null)
+            {
+                dto.LatestRefundId = latestRefund.RefundId;
+                dto.IsRefundPending = (latestRefund.Status == "Pending");
+                dto.RefundAmount = latestRefund.Amount;
+
+                // Lấy lý do và bằng chứng
+                dto.Reason = latestRefund.Reason; // Lý do Seller gửi
+                dto.RejectionReason = latestRefund.StaffRejectionReason; // Lý do Staff từ chối
+                dto.ProofUrl = latestRefund.ProofUrl; // Link bằng chứng
+            }
             return dto;
         }
 
@@ -964,15 +989,15 @@ namespace CB_Gift.Services
         }
 
         public async Task<(IEnumerable<OrderWithDetailsDto> Orders, int Total)> GetFilteredAndPagedOrdersAsync(
-    string? status,
-    string? searchTerm,
-    string? sortColumn,
-    string? sellerId,
-    string? sortDirection,
-    DateTime? fromDate,
-    DateTime? toDate,
-    int page,
-    int pageSize)
+            string? status,
+            string? searchTerm,
+            string? sortColumn,
+            string? sellerId,
+            string? sortDirection,
+            DateTime? fromDate,
+            DateTime? toDate,
+            int page,
+            int pageSize)
         {
             // ví dụ code
             var query = _context.Orders
@@ -1058,7 +1083,7 @@ namespace CB_Gift.Services
                 // --- ⭐ THÊM LOGIC TÍNH TOÁN CÁC TRƯỜNG MỚI ---
 
                 // Lấy lý do YÊU CẦU (của Seller)
-                Reason = (o.StatusOrder == 17) // 17 = CANCELLED
+                Reason = (o.StatusOrder == 16) // 16 = HOLD
                     ? (from cr in _context.CancellationRequests
                        where cr.OrderId == o.OrderId
                        orderby cr.CreatedAt descending
@@ -1213,7 +1238,47 @@ namespace CB_Gift.Services
 
             return sellerNames;
         }
+        public async Task<OrderWithDetailsDto?> GetManagerOrderDetailAsync(int orderId)
+        {
+            // BƯỚC 1: Lấy thông tin Order gốc (Giữ nguyên các Include cũ, KHÔNG Include Refund/Cancel)
+            var orderEntity = await _context.Orders
+                .Include(o => o.EndCustomer)
+                .Include(o => o.StatusOrderNavigation)
+                .Include(o => o.OrderDetails)
+                    .ThenInclude(od => od.ProductVariant)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(o => o.OrderId == orderId);
 
+            if (orderEntity == null) return null;
+
+            // BƯỚC 2: Map sang DTO (Sử dụng AutoMapper như bình thường)
+            var dto = _mapper.Map<OrderWithDetailsDto>(orderEntity);
+
+            // BƯỚC 3: Truy vấn thủ công bảng Refunds (Tìm theo OrderId)
+            // Vì không có Navigation Property nên ta query trực tiếp từ DbSet _context.Refunds
+            var latestRefund = await _context.Refunds
+                .Where(r => r.OrderId == orderId)
+                .OrderByDescending(r => r.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            // BƯỚC 5: Logic điền dữ liệu vào DTO (Mapping thủ công các trường manager cần)
+
+            // --- Xử lý logic Hoàn tiền (Refund) ---
+            if (latestRefund != null)
+            {
+                dto.LatestRefundId = latestRefund.RefundId;
+                dto.IsRefundPending = (latestRefund.Status == "Pending"); // Hoặc check null tùy logic của bạn
+                dto.RefundAmount = latestRefund.Amount;
+
+                // Reason: Lý do Seller/Khách yêu cầu
+                dto.Reason = latestRefund.Reason;
+                dto.ProofUrl = latestRefund.ProofUrl;
+                // RejectionReason: Lý do Staff từ chối
+                dto.RejectionReason = latestRefund.StaffRejectionReason;
+
+                // Nếu trạng thái Order đang là Refunded hoặc Refund Pending, ưu tiên hiển thị lý do Refund
+                return dto;
+            }
         private DateTime? GetDateTimeSafe(IXLCell cell)
         {
             if (cell == null || cell.IsEmpty())
@@ -1402,5 +1467,7 @@ namespace CB_Gift.Services
             return result;
         }
 
+            return dto;
+        }
     }
 }

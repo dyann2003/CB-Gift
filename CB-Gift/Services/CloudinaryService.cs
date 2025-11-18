@@ -104,6 +104,43 @@ namespace CB_Gift.Services
             var deletionParams = new DeletionParams(publicId);
             await _cloudinary.DestroyAsync(deletionParams);
         }
+        // === PHƯƠNG THỨC MỚI CHO VIDEO ===
+        public async Task<VideoUploadResult> UploadVideoFromStreamAsync(Stream stream, string fileName, string userId)
+        {
+            if (stream == null || stream.Length == 0)
+                throw new ArgumentException("Dữ liệu stream không được rỗng.", nameof(stream));
+            if (string.IsNullOrWhiteSpace(userId))
+                throw new ArgumentException("UserId không được rỗng.", nameof(userId));
+
+            var userFolderPath = $"{_uploadFolder}/{userId}";
+            var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(fileName);
+            var uniqueSuffix = Guid.NewGuid().ToString("N").Substring(0, 8);
+            var publicId = $"{fileNameWithoutExtension}-{uniqueSuffix}";
+
+            var uploadParams = new VideoUploadParams()
+            {
+                File = new FileDescription(fileName, stream),
+                Folder = userFolderPath,
+                PublicId = publicId,
+                Overwrite = false
+            };
+
+            var uploadResult = await _cloudinary.UploadAsync(uploadParams);
+            if (uploadResult.Error != null)
+                throw new Exception($"Lỗi từ Cloudinary: {uploadResult.Error.Message}");
+
+            return uploadResult;
+        }
+
+        // === PHƯƠNG THỨC MỚI ĐỂ XÓA VIDEO ===
+        public async Task DeleteVideoAsync(string publicId)
+        {
+            var deletionParams = new DeletionParams(publicId)
+            {
+                ResourceType = ResourceType.Video
+            };
+            await _cloudinary.DestroyAsync(deletionParams);
+        }
     }
 }
 

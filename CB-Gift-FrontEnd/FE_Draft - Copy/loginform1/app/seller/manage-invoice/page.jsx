@@ -69,12 +69,12 @@ const PaymentMethodSelector = ({ invoice, onClose }) => {
 
     // Lấy URL cho return/cancel
     // Gợi ý: Bạn nên tạo trang /payment-success và /payment-cancel
-    //const returnUrl = `${window.location.origin}/seller/manage-invoice`;
+    const returnUrl = `${window.location.origin}/seller/manage-invoice`;
     const cancelUrl = window.location.href; // Quay lại trang hiện tại
-    const publicBaseUrl = " https://slyvia-nonsubordinating-sulkily.ngrok-free.dev";
+    //const publicBaseUrl = " https://slyvia-nonsubordinating-sulkily.ngrok-free.dev";
     
     // URL này VNPay sẽ chấp nhận VÌ NÓ LÀ PUBLIC
-   const returnUrl = `${publicBaseUrl}/seller/manage-invoice`;
+  // const returnUrl = `${publicBaseUrl}/seller/manage-invoice`;
     const payload = {
       invoiceId: invoice.invoiceId,
       amount: amountToPay,

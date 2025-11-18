@@ -369,6 +369,26 @@ namespace CB_Gift.Controllers
                 });
             }
         }
+        [HttpGet("manager/{id}")]
+        [Authorize(Roles = "Staff,Manager,QC")] // Chỉ cho phép nội bộ truy cập
+        public async Task<IActionResult> GetManagerOrderDetail(int id)
+        {
+            try
+            {
+                // Gọi hàm service tách riêng mà chúng ta vừa viết
+                var orderDetail = await _orderService.GetManagerOrderDetailAsync(id);
+
+                if (orderDetail == null)
+                {
+                    return NotFound(new { message = $"Order with ID {id} not found." });
+                }
+
+                return Ok(orderDetail);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Lỗi server khi lấy chi tiết đơn hàng.", error = ex.Message });
+            }
 
         [HttpPost("import")]
 
