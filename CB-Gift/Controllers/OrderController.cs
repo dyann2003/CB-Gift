@@ -389,8 +389,8 @@ namespace CB_Gift.Controllers
             {
                 return StatusCode(500, new { message = "Lỗi server khi lấy chi tiết đơn hàng.", error = ex.Message });
             }
-
-        [HttpPost("import")]
+        }
+        /*[HttpPost("import")]
 
         public async Task<IActionResult> ImportExcel(IFormFile file)
         {
@@ -404,7 +404,7 @@ namespace CB_Gift.Controllers
             var result = await _orderService.ImportFromExcelAsync(file, sellerUserId);
 
             return Ok(result);
-        }
+        }*/
 
         [HttpPost("import")]
 
