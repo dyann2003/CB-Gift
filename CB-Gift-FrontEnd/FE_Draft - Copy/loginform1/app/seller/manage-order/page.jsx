@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import Link from 'next/link';
 import SellerSidebar from "@/components/layout/seller/sidebar";
 import SellerHeader from "@/components/layout/seller/header";
 import * as XLSX from "xlsx";
@@ -1910,8 +1911,21 @@ whitespace-nowrap"
                                     }
                                   />
                                 </TableCell>
-                                <TableCell className="font-medium text-slate-900 whitespace-nowrap">
+                                {/* <TableCell className="font-medium text-slate-900 whitespace-nowrap">
                                   {order.orderId}
+                                </TableCell> */}
+                                <TableCell className="font-medium text-slate-900 whitespace-nowrap">
+                                    {/* Sử dụng component Link để bọc nội dung */}
+                                    <Link 
+                                        // Thêm thuộc tính target="_blank"
+                                        target="_blank" 
+                                        // Thuộc tính rel="noopener noreferrer" được khuyến nghị cho bảo mật
+                                        rel="noopener noreferrer" 
+                                        // Vẫn giữ đường dẫn tương đối đúng để chuyển đến /seller/order-view/[id]
+                                        href={`../seller/order-view/${order.id}`}
+                                        className="hover:underline text-blue-600" >
+                                        {order.orderId}
+                                    </Link>
                                 </TableCell>
                                 <TableCell className="text-slate-600 whitespace-nowrap">
                                   {order.orderDate}
