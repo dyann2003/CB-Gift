@@ -24,18 +24,20 @@ namespace CB_Gift.Services
         private readonly IMapper _mapper;
         private readonly INotificationService _notificationService;
         private readonly IHubContext<NotificationHub> _hubContext;
+        private readonly IShippingService _shippingService;
         private readonly OrderFactory _orderFactory;
         private readonly IValidator<OrderImportRowDto> _validator;
         private readonly ReferenceDataCache _cache;
         public OrderService(CBGiftDbContext context, IMapper mapper, ILogger<OrderService> logger,
             INotificationService notificationService, IHubContext<NotificationHub> hubContext, OrderFactory orderFactory,
-    IValidator<OrderImportRowDto> validator,ReferenceDataCache cache)
+            IValidator<OrderImportRowDto> validator,ReferenceDataCache cache, IShippingService shippingService)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
             _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _notificationService = notificationService;
             _hubContext = hubContext;
+            _shippingService = shippingService;
             _orderFactory = orderFactory;
             _validator = validator;
             _cache = cache;
@@ -857,6 +859,8 @@ namespace CB_Gift.Services
         {
             var order = await _context.Orders
                                       .Include(o => o.OrderDetails)
+                                        .ThenInclude(od => od.ProductVariant)
+                                      .Include(o => o.EndCustomer)
                                       .FirstOrDefaultAsync(o => o.OrderId == orderId);
 
             if (order == null)
@@ -874,6 +878,16 @@ namespace CB_Gift.Services
                 };
             }
 
+            if (order.EndCustomer == null)
+            {
+                return new ApproveOrderResult { IsSuccess = false, ErrorMessage = "Customer information is missing." };
+            }
+
+            // Validate District/Ward
+            if (order.ToDistrictId == null || string.IsNullOrEmpty(order.ToWardCode))
+            {
+                return new ApproveOrderResult { IsSuccess = false, ErrorMessage = "Missing District ID or Ward Code for shipping." };
+            }
 
             bool allDetailsQcDone = order.OrderDetails.All(d => d.ProductionStatus == ProductionStatus.QC_DONE);
 
@@ -886,11 +900,40 @@ namespace CB_Gift.Services
                     ErrorMessage = "Not all products have passed QC (Status QC_DONE)."
                 };
             }
-            //order.StatusOrder = (int)ProductionStatus.PACKING;
-            order.StatusOrder = 14; // chuyển trạng thái là đã ship
+
+            var orderShippingRequest = new CreateOrderRequest
+            {
+                ToName = order.EndCustomer.Name,
+                ToPhone = order.EndCustomer.Phone,
+                ToAddress = order.EndCustomer.Address,
+                ToDistrictId = order.ToDistrictId.Value,
+                ToWardCode = order.ToWardCode,
+                WeightInGrams = (int)Math.Ceiling(order.OrderDetails.Sum(od => (od.ProductVariant.WeightGram ?? 0m) * od.Quantity)),
+                Length = (int)Math.Ceiling(order.OrderDetails.Max(od => od.ProductVariant.LengthCm ?? 0m)),
+                Width = (int)Math.Ceiling(order.OrderDetails.Max(od => od.ProductVariant.WidthCm ?? 0m)),
+                Height = (int)Math.Ceiling(order.OrderDetails.Sum(od => (od.ProductVariant.HeightCm ?? 0m) * od.Quantity)),
+                Items = order.OrderDetails.Select(od => new OrderItemRequest
+                {
+                    Name = od.ProductVariant.Sku,
+                    Quantity = od.Quantity,
+                    Weight = (int)Math.Ceiling((od.ProductVariant.WeightGram ?? 0m) * od.Quantity)
+                }).ToList()
+            };
+
 
             try
             {
+                var shippingResult = await _shippingService.CreateOrderAsync(orderShippingRequest);
+                if (shippingResult == null || string.IsNullOrEmpty(shippingResult.OrderCode))
+                {
+                    return new ApproveOrderResult
+                    {
+                        IsSuccess = false,
+                        ErrorMessage = "Lỗi tạo đơn vận chuyển: Không nhận được Mã Vận Đơn từ hệ thống."
+                    };
+                }
+                order.Tracking = shippingResult.OrderCode;
+                order.StatusOrder = 13; // OrderStatus.Shipping;
                 _context.Orders.Update(order);
                 await _context.SaveChangesAsync();
                 // ✅ BẮT ĐẦU GỬI THÔNG BÁO
@@ -899,7 +942,7 @@ namespace CB_Gift.Services
                     // 1. Gửi thông báo (chuông) cho Seller
                     await _notificationService.CreateAndSendNotificationAsync(
                         order.SellerUserId,
-                        $"Đơn hàng #{orderId} của bạn đã được giao.",
+                        $"Đơn hàng #{orderId} của bạn đang tiến hành giao. Mã vận đơn: {order.Tracking}",
                         $"/seller/orders/{orderId}"
                     );
 
@@ -907,7 +950,7 @@ namespace CB_Gift.Services
                     var orderGroupName = $"order_{orderId}";
                     await _hubContext.Clients.Group(orderGroupName).SendAsync(
                         "OrderStatusChanged",
-                        new { orderId = orderId, newStatus = "SHIPPED" } // Giả sử 14 là Shipped
+                        new { orderId = orderId, newStatus = "SHIPPING", trackingCode = order.Tracking } // Giả sử 13 là Shipping
                     );
                 }
                 catch (Exception ex)

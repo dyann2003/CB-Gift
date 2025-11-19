@@ -228,27 +228,12 @@ export default function CreateOrderShippingPage() {
         length: form.length,
         width: form.width,
         height: form.height,
-        // (Lưu ý: GHN API v2 dùng 'price' ở sản phẩm,
-        // nhưng nếu API của bạn cần giá trị tổng, hãy dùng form.price)
-        
-        // Thông tin SẢN PHẨM (từ mảng 'products')
-        // API của GHN/bạn có thể yêu cầu 1 mảng tên là 'items'
         items: products.map(p => ({
             name: p.itemName.trim(),
             quantity: p.quantity,
             price: p.price,
             weight: p.weightInGrams 
-            // Lưu ý: GHN dùng 'weight', không phải 'weightInGrams' trong 'items'
-            // Hãy điều chỉnh key này ('weight' hay 'weightInGrams') 
-            // cho đúng với DTO .NET của bạn
         }))
-        
-        // --- Code cũ của bạn (ĐÃ BỊ XÓA VÌ SAI) ---
-        // itemName: firstProduct.itemName.trim(),
-        // quantity: firstProduct.quantity,
-        // price: firstProduct.price,
-        // weightInGrams: firstProduct.weightInGrams // <-- Dòng này là LỖI
-        // --- Hết code cũ ---
       };
 
       const response = await fetch(`${DOTNET_API_BASE_URL}/Shipping/create`, {
@@ -272,7 +257,7 @@ export default function CreateOrderShippingPage() {
         }
       } else {
         setCreateResult(data);
-        // Reset form... (giữ nguyên)
+        // Reset form
         setForm({
           toName: '', toPhone: '', toAddress: '',
           weightInGrams: 100, length: 10, width: 10, height: 10, price: 10000
@@ -318,22 +303,6 @@ export default function CreateOrderShippingPage() {
           </div>
         </div>
       </header>
-
-      {/* Navigation Tabs */}
-      <nav className="border-b border-border bg-card sticky top-0 z-10">
-        <div className="w-full px-4 md:px-8">
-          <div className="flex space-x-8">
-            <button className="flex items-center gap-3 px-0 py-4 font-semibold text-primary border-b-2 border-primary transition-colors relative">
-              <PackageIcon />
-              <span>Tạo Đơn Hàng</span>
-            </button>
-            <Link href="/TrackingOrderShipping" className="flex items-center gap-3 px-0 py-4 font-semibold text-muted-foreground hover:text-foreground transition-colors border-b-2 border-transparent hover:border-muted">
-              <SearchIcon />
-              <span>Theo Dõi Vận Đơn</span>
-            </Link>
-          </div>
-        </div>
-      </nav>
 
       {/* Main Content */}
       <main className="w-full px-4 py-8 md:px-8 md:py-12">
