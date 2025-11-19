@@ -751,11 +751,11 @@ export default function ManageOrder() {
     );
     // Kiểm tra có order nào KHÔNG phải là Draft (Nháp)
     const nonDraftOrders = selectedOrdersData.filter(
-      (order) => order.status !== "Draft (Nháp)"
+      (order) => order.status !== "DRAFT"
     );
     if (nonDraftOrders.length > 0) {
       setCannotAssignMessage(
-        `Cannot assign ${nonDraftOrders.length} order(s) to designer. Only orders with "Draft (Nháp)" status can be assigned.`
+        `Cannot assign ${nonDraftOrders.length} order(s) to designer. Only orders with "Draft" status can be assigned.`
       );
       setShowCannotAssignDialog(true);
       return;
