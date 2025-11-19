@@ -4,23 +4,43 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Trash2, ArrowLeft } from 'lucide-react';
 
-export default function OrderHeader({
+ export default function OrderHeader({
   orderId,
-  status,
+  status, // Đây là statusOderName (string) từ API
   createdAt,
   onCancel,
+  trackingCode,
   onBack,
 }) {
   const getStatusBadgeColor = (status) => {
     switch (status) {
-      case "PENDING":
-        return "bg-yellow-100 text-yellow-800";
-      case "CANCELLED":
-        return "bg-red-100 text-red-800";
-      case "COMPLETED":
+      // TRẠNG THÁI THÀNH CÔNG/HOÀN THÀNH
+      case "CONFIRMED":
+      case "SHIPPED":
         return "bg-green-100 text-green-800";
-      case "PROCESSING":
+      
+      // TRẠNG THÁI ĐANG XỬ LÝ/PENDING
+      case "CREATED":
+      case "NEEDDESIGN":
+      case "DESIGNING":
+      case "READY_PROD":
+      case "INPROD":
+      case "PACKING":
+      case "CHECKDESIGNC":
         return "bg-blue-100 text-blue-800";
+
+      // TRẠNG THÁI NHÁP/TẠM DỪNG
+      case "DRAFT":
+      case "HOLD":
+        return "bg-yellow-100 text-yellow-800";
+
+      // TRẠNG THÁI LỖI/HỦY/HOÀN TIỀN
+      case "DESIGN_REDO":
+      case "QC_FAIL":
+      case "CANCELLEDC":
+      case "REFUND":
+        return "bg-red-100 text-red-800";
+        
       default:
         return "bg-gray-100 text-gray-800";
     }
@@ -56,9 +76,12 @@ export default function OrderHeader({
           <p className="text-sm text-gray-500">
             Created at: {new Date(createdAt).toLocaleString()}
           </p>
+          <p className="text-sm text-gray-500">
+            Tracking Code: <span className="font-medium text-gray-700 whitespace-nowrap">{trackingCode}</span>
+        </p>  
         </div>
         <div className="flex gap-2">
-          {onCancel && (
+          {/* {onCancel && (
             <Button
               variant="outline"
               onClick={onCancel}
@@ -67,7 +90,7 @@ export default function OrderHeader({
               <Trash2 className="h-4 w-4 mr-2" />
               Cancel
             </Button>
-          )}
+          )} */}
           {onBack && (
             <Button
               onClick={onBack}

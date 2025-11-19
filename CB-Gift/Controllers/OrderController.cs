@@ -105,6 +105,7 @@ namespace CB_Gift.Controllers
         }
         // Make Order Tổng
         [HttpPost("make-order")]
+        [Authorize(Roles = "Seller")]
         public async Task<IActionResult> MakeOrder([FromBody] MakeOrderDto request)
         {
             try
