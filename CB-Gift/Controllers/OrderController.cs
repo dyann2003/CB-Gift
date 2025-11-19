@@ -105,6 +105,7 @@ namespace CB_Gift.Controllers
         }
         // Make Order Tổng
         [HttpPost("make-order")]
+        [Authorize(Roles = "Seller")]
         public async Task<IActionResult> MakeOrder([FromBody] MakeOrderDto request)
         {
             try
@@ -368,6 +369,58 @@ namespace CB_Gift.Controllers
                     detail = ex.Message
                 });
             }
+        }
+        [HttpGet("manager/{id}")]
+        [Authorize(Roles = "Staff,Manager,QC")] // Chỉ cho phép nội bộ truy cập
+        public async Task<IActionResult> GetManagerOrderDetail(int id)
+        {
+            try
+            {
+                // Gọi hàm service tách riêng mà chúng ta vừa viết
+                var orderDetail = await _orderService.GetManagerOrderDetailAsync(id);
+
+                if (orderDetail == null)
+                {
+                    return NotFound(new { message = $"Order with ID {id} not found." });
+                }
+
+                return Ok(orderDetail);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Lỗi server khi lấy chi tiết đơn hàng.", error = ex.Message });
+            }
+        }
+        /*[HttpPost("import")]
+
+        public async Task<IActionResult> ImportExcel(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest("File không hợp lệ.");
+
+            var sellerUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(sellerUserId))
+                return Unauthorized("Không xác định được Seller hiện tại.");
+
+            var result = await _orderService.ImportFromExcelAsync(file, sellerUserId);
+
+            return Ok(result);
+        }*/
+
+        [HttpPost("import")]
+
+        public async Task<IActionResult> ImportExcel(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest("File không hợp lệ.");
+
+            var sellerUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(sellerUserId))
+                return Unauthorized("Không xác định được Seller hiện tại.");
+
+            var result = await _orderService.ImportFromExcelAsync(file, sellerUserId);
+
+            return Ok(result);
         }
     }
 }

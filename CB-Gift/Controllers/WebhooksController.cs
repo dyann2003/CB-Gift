@@ -16,7 +16,7 @@ namespace CB_Gift.Controllers
             _invoiceService = invoiceService;
         }
 
-        [HttpPost("payos")]
+       /* [HttpPost("payos")]
         public async Task<IActionResult> HandlePayOSWebhook()
         {
             // Luôn bật buffering để đọc body nhiều lần nếu cần
@@ -59,6 +59,6 @@ namespace CB_Gift.Controllers
                 // Ghi log lỗi chi tiết ở đây
                 return StatusCode(500, new { message = "Error processing webhook.", error = ex.Message });
             }
-        }
+        }*/
     }
 }

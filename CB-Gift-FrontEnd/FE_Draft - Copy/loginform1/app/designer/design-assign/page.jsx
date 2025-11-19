@@ -81,7 +81,8 @@ export default function DesignAssignPage() {
   const [confirmMessage, setConfirmMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [assignedOrders, setAssignedOrders] = useState([]);
-
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [taskLogs, setTaskLogs] = useState([]); 
   // --- SIGNALR: nhận assignment mới từ server ---
   const connection = useSignalR();
 
@@ -104,106 +105,6 @@ export default function DesignAssignPage() {
     window.addEventListener("taskAssigned", handleNewTask);
     return () => window.removeEventListener("taskAssigned", handleNewTask);
   }, []);
-
-  // useEffect(() => {
-  //   const handleNewTask = (event) => {
-  //     const { orderId, message } = event.detail; // ✅ đúng key
-  //     console.log("📥 New task assigned:", event.detail);
-
-  //     toast({
-  //       title: "🎨 New Design Task",
-  //       description: Message,
-  //       className: "bg-green-50 text-green-700 border border-green-200",
-  //     });
-
-  //     // Gọi lại API để cập nhật danh sách task
-  //     fetchTasks();
-  //   };
-
-  //   window.addEventListener("taskAssigned", handleNewTask);
-  //   return () => window.removeEventListener("taskAssigned", handleNewTask);
-  // }, []);
-
-  // useEffect(() => {
-  //   if (!connection) return;
-  //   const designerId = localStorage.getItem("userId"); // hoặc lấy từ user context nếu có
-  //   if (designerId) {
-  //     connection.invoke("JoinGroup", `user_${designerId}`).catch(console.error);
-  //   }
-
-  //   // handler khi server gọi Clients...SendAsync("ReceiveMessage", user, message)
-  //   const handler = (user, message) => {
-  //     try {
-  //       // message có thể là string JSON (tuỳ BE gửi),
-  //       // hoặc BE có thể gửi object trực tiếp.
-  //       // Nếu BE gửi JSON string containing { type: 'assignment', data: {...} }
-  //       let payload = message;
-  //       if (typeof message === "string") {
-  //         try {
-  //           payload = JSON.parse(message);
-  //         } catch (e) {
-  //           // không phải JSON, payload giữ nguyên
-  //         }
-  //       }
-
-  //       // Nếu server gửi object dạng { type: 'assignment', data: {...} }
-  //       if (payload && payload.type === "assignment" && payload.data) {
-  //         // chèn order mới vào đầu mảng
-  //         setAssignedOrders((prev) => {
-  //           // tránh duplicate nếu đã có
-  //           const exists = prev.some(
-  //             (o) => o.orderDetailId === payload.data.orderDetailId
-  //           );
-  //           if (exists) return prev;
-  //           const mapped = {
-  //             ...payload.data,
-  //             id: payload.data.orderDetailId?.toString() || String(Date.now()),
-  //             ProductionStatus: payload.data.productionStatus || "NEED_DESIGN",
-  //             customerName:
-  //               payload.data.customerName ||
-  //               `Customer for ${payload.data.orderCode}`,
-  //           };
-  //           return [mapped, ...prev];
-  //         });
-  //       } else {
-  //         // Nếu BE chỉ gửi order object trực tiếp
-  //         if (payload && payload.orderDetailId) {
-  //           fetch("https://localhost:7015/api/designer/tasks", {
-  //             credentials: "include",
-  //           })
-  //             .then((res) => res.json())
-  //             .then((data) => {
-  //               const mappedData = (data || []).map((item) => ({
-  //                 ...item,
-  //                 id: item.orderDetailId.toString(),
-  //                 ProductionStatus: item.productionStatus || "NEED_DESIGN",
-  //                 customerName: `Customer for ${item.orderCode}`,
-  //               }));
-  //               setAssignedOrders(mappedData);
-  //             })
-  //             .catch((err) => console.error("SignalR reload failed:", err));
-  //         } else {
-  //           // optional: log unexpected payload
-  //           console.log("📡 Received unexpected payload:", payload);
-  //         }
-  //       }
-  //     } catch (err) {
-  //       console.error("Error handling SignalR message:", err);
-  //     }
-  //   };
-
-  //   // register
-  //   connection.on("NewTaskAssigned", handler);
-
-  //   // (optional) join group if need: join user-specific group using designerId
-  //   // const designerId = /* lấy designer id từ user context / localStorage */;
-  //   // connection.invoke("JoinGroup", `user_${designerId}`).catch(console.error);
-
-  //   // cleanup
-  //   return () => {
-  //     connection.off("NewTaskAssigned", handler);
-  //   };
-  // }, [connection, setAssignedOrders]);
 
   useEffect(() => {
     if (!connection) return;
@@ -234,7 +135,6 @@ export default function DesignAssignPage() {
 
   // Hàm lấy giá trị Code (Int) từ tên Status (String)
   const getStatusCode = (statusKey) => DESIGN_STATUSES[statusKey]?.code;
-
   // --- HÀM GỌI API LẤY KHO ẢNH (ĐÃ CẬP NHẬT URL API VÀ XỬ LÝ LỖI) ---
   const fetchMyImages = async () => {
     try {
@@ -487,71 +387,6 @@ export default function DesignAssignPage() {
     setPage(1);
   };
 
-  // *** LOGIC GỌI API BAN ĐẦU ***
-  // useEffect(() => {
-  //   const fetchTasks = async () => {
-  //     try {
-  //       setLoading(true);
-
-  //       const res = await fetch("https://localhost:7015/api/designer/tasks", {
-  //         credentials: "include",
-  //       });
-
-  //       if (!res.ok) {
-  //         throw new Error(`HTTP error! status: ${res.status}`);
-  //       }
-
-  //       const apiData = await res.json();
-
-  //       const mappedData = (apiData || []).map((item) => ({
-  //         ...item,
-  //         id: item.orderDetailId.toString(),
-  //         ProductionStatus: item.productionStatus || "NEED_DESIGN",
-  //         customerName: `Customer for ${item.orderCode}`,
-  //       }));
-
-  //       setAssignedOrders(mappedData);
-  //     } catch (error) {
-  //       console.error("Failed to fetch assigned tasks:", error);
-  //       setAssignedOrders([]);
-  //     } finally {
-  //       setLoading(false);
-  //     }
-  //   };
-
-  //   fetchTasks();
-  // }, []);
-
-  // const fetchTasks = async () => {
-  //   try {
-  //     setLoading(true);
-
-  //     const res = await fetch("https://localhost:7015/api/designer/tasks", {
-  //       credentials: "include",
-  //     });
-
-  //     if (!res.ok) {
-  //       throw new Error(`HTTP error! status: ${res.status}`);
-  //     }
-
-  //     const apiData = await res.json();
-
-  //     const mappedData = (apiData || []).map((item) => ({
-  //       ...item,
-  //       id: item.orderDetailId.toString(),
-  //       ProductionStatus: item.productionStatus || "NEED_DESIGN",
-  //       customerName: `Customer for ${item.orderCode}`,
-  //     }));
-
-  //     setAssignedOrders(mappedData);
-  //   } catch (error) {
-  //     console.error("❌ Failed to fetch assigned tasks:", error);
-  //     setAssignedOrders([]);
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
-
   const fetchTasks = async () => {
     try {
       setLoading(true);
@@ -565,6 +400,7 @@ export default function DesignAssignPage() {
       const mapped = (apiData || []).map((item) => ({
         ...item,
         id: item.orderDetailId.toString(),
+        orderStatus: item.orderStatus,
         ProductionStatus: item.productionStatus || "NEED_DESIGN",
         customerName: `Customer for ${item.orderCode}`,
       }));
@@ -581,35 +417,6 @@ export default function DesignAssignPage() {
     fetchTasks();
   }, []);
 
-  // // ✅ Gọi lần đầu khi component mount
-  // useEffect(() => {
-  //   fetchTasks();
-  // }, []);
-
-  // ✅ Lắng nghe sự kiện SignalR (hoặc CustomEvent "taskAssigned")
-  // useEffect(() => {
-  //   const handleNewTask = (event) => {
-  //     const { orderId, message } = event.detail;
-  //     console.log("📥 New task assigned:", event.detail);
-
-  //     toast({
-  //       title: "🎨 New Design Task",
-  //       description: message,
-  //       className: "bg-green-50 text-green-700 border border-green-200",
-  //     });
-
-  //     // 🔁 Reload lại danh sách task sau khi nhận event
-  //     fetchTasks();
-  //   };
-
-  //   window.addEventListener("taskAssigned", handleNewTask);
-
-  //   // 🧹 Cleanup khi component unmount
-  //   return () => {
-  //     window.removeEventListener("taskAssigned", handleNewTask);
-  //   };
-  // }, []);
-
   const getAvailableMonthsYears = () => {
     const monthYearSet = new Set();
     assignedOrders.forEach((order) => {
@@ -620,7 +427,44 @@ export default function DesignAssignPage() {
     });
     return Array.from(monthYearSet).sort().reverse();
   };
+  // --- HÀM ĐỂ LẤY CHI TIẾT TASK VÀ LOGS ---
+  const fetchTaskDetail = async (orderDetailId) => {
+    if (!orderDetailId) return;
+    setDetailLoading(true);
+    setTaskLogs([]); // Xóa log cũ
+    try {
+      const res = await fetch(
+        `${apiClient.defaults.baseURL}/api/designer/tasks/${orderDetailId}`,
+        { credentials: "include" }
+      );
 
+      if (!res.ok) {
+        throw new Error(`Failed to fetch details: ${res.status}`);
+      }
+      
+      const data = await res.json();
+      const updatedTaskInfo = {
+        ...data.taskInfo,
+        id: data.taskInfo.orderDetailId.toString(),
+        ProductionStatus: data.taskInfo.productionStatus || "NEED_DESIGN",
+      };
+      // CẬP NHẬT 2 STATE:
+      // 1. Cập nhật selectedOrder với dữ liệu MỚI NHẤT từ API
+      setSelectedOrder(updatedTaskInfo); 
+      // 2. Lưu trữ danh sách logs
+      setTaskLogs(data.logs || []);
+
+    } catch (error) {
+      console.error("Error fetching task detail:", error);
+      toast({
+        title: "Lỗi",
+        description: "Không thể tải chi tiết công việc hoặc lịch sử.",
+        variant: "destructive",
+      });
+    } finally {
+      setDetailLoading(false);
+    }
+  };
   const availableMonthsYears = getAvailableMonthsYears();
 
   // --- LOGIC FILTER/COUNT/DISPLAY ---
@@ -1032,14 +876,20 @@ export default function DesignAssignPage() {
                           <div className="flex gap-2">
                             <Dialog
                               onOpenChange={(open) => {
-                                // Logic reset state khi mở/đóng Dialog
+                                // Logic reset state khi mở/đóng Dialog [cite: 179]
                                 if (open) {
+                                  // 1. Set state stale (từ bảng) để dialog mở ngay lập tức
                                   setSelectedOrder(order);
-                                  setDesignFile(null);
+                                  setDesignFile(null); 
                                   setDesignNotes("");
                                   setSelectedImageUrl("");
+                                  
+                                  // --- GỌI API MỚI ---
+                                  fetchTaskDetail(order.id); // order.id chính là orderDetailId [cite: 88]
+
                                 } else {
-                                  setSelectedOrder(null);
+                                  setSelectedOrder(null); 
+                                  setTaskLogs([]); // Xóa logs khi đóng
                                 }
                               }}
                             >
@@ -1114,6 +964,73 @@ export default function DesignAssignPage() {
                                             </div>
                                           </div>
                                         </div>
+                                        {/* --- PHẦN MỚI THÊM: LOADING VÀ LỊCH SỬ REJECT --- */}
+                                        
+                                        {/* 1. HIỂN THỊ LOADING */}
+                                        {detailLoading && (
+                                          <div className="text-center p-6 bg-gray-50 rounded-lg">
+                                            <p className="text-gray-600">
+                                              Loading details and history...
+                                            </p>
+                                          </div>
+                                        )}
+
+                                        {/* 2. HIỂN THỊ LỊCH SỬ LOGS (ĐÃ CẬP NHẬT) */}
+                                        {!detailLoading && taskLogs.length > 0 && (
+                                          <div className="space-y-4">
+                                            <h3 className="font-semibold text-lg text-gray-900">
+                                             Design Review History
+                                            </h3>
+                                            <ul className="space-y-3">
+                                              {taskLogs.map((log) => {
+                                                const isRejection = log.eventType === 'DESIGN_REJECTED' || log.eventType === 'QC_FAIL';
+                                                const isApproval = log.eventType === 'DESIGN_APPROVED';
+
+                                                // Xác định style dựa trên loại log
+                                                let containerClass = "bg-gray-50 border-gray-200 p-4 rounded-lg border";
+                                                let titleClass = "font-medium text-gray-700";
+                                                let title = log.eventType; // Tiêu đề mặc định
+
+                                                if (isRejection) {
+                                                  containerClass = "bg-red-50 border-red-200 p-4 rounded-lg border";
+                                                  titleClass = "font-medium text-red-700";
+                                                  title = log.eventType === 'DESIGN_REJECTED' ? 'Design Rejected' : 'QC Báo lỗi';
+                                                } else if (isApproval) {
+                                                  containerClass = "bg-green-50 border-green-200 p-4 rounded-lg border";
+                                                  titleClass = "font-medium text-green-700";
+                                                  title = 'Approved Design';
+                                                }
+
+                                                return (
+                                                  <li 
+                                                    key={log.orderDetailLogId} 
+                                                    className={containerClass}
+                                                  >
+                                                    <div className="flex justify-between items-center mb-1">
+                                                      <span className={titleClass}>
+                                                        {title}
+                                                      </span>
+                                                      <span className="text-xs text-gray-600">
+                                                        {new Date(log.createdAt).toLocaleString()}
+                                                      </span>
+                                                    </div>
+                                                    <p className="text-sm text-gray-800">
+                                                      <strong>Made by:</strong> {log.userName || 'System'}
+                                                    </p>
+                                                    
+                                                    {/* Chỉ hiển thị Lý do/Ghi chú nếu có */}
+                                                    {log.reason && (
+                                                      <p className="text-sm text-gray-800 mt-1">
+                                                        <strong>Reason Reject:</strong> {log.reason}
+                                                      </p>
+                                                    )}
+                                                  </li>
+                                                );
+                                              })}
+                                            </ul>
+                                          </div>
+                                        )}
+                                        {/* --- KẾT THÚC PHẦN MỚI THÊM --- */}
 
                                         {/* Product Details Section */}
                                         <div>
@@ -1278,10 +1195,12 @@ export default function DesignAssignPage() {
                                         </div>
 
                                         {(currentStatus === "DESIGNING" ||
-                                          currentStatus === "DESIGN_REDO") && (
+                                          currentStatus === "DESIGN_REDO" ||
+                                         (currentStatus === "CHECK_DESIGN" && selectedOrder.orderStatus === 4 || selectedOrder.orderStatus === 6))&& (
                                           <div className="border-t pt-4">
-                                            <h3 className="font-semibold text-lg mb-3">
-                                              Upload Design
+                                             <h3 className="font-semibold text-lg mb-3">
+                                              {/* Sửa tiêu đề */}
+                                              {currentStatus === "CHECK_DESIGN" ? "Edit & Resubmit Design" : "Upload Design"}
                                             </h3>
                                             <div className="space-y-4">
                                               {/* 1. INPUT FILE MỚI & NÚT CHỌN KHO ẢNH */}
@@ -1460,7 +1379,7 @@ export default function DesignAssignPage() {
                                                   }
                                                 >
                                                   <Upload className="h-4 w-4 mr-2" />{" "}
-                                                  Upload & Send to Check
+                                                  Upload
                                                 </Button>
                                               </div>
                                             </div>
@@ -1501,39 +1420,39 @@ export default function DesignAssignPage() {
                                 <Check className="h-4 w-4 mr-1" /> Accept
                               </Button>
                             )}
-                            {currentStatus === "DESIGNING" && (
+                            {/* {currentStatus === "DESIGNING" && (
                               <Button size="sm" disabled className="opacity-50">
                                 <Upload className="h-4 w-4 mr-1" /> Upload
                                 Design
                               </Button>
-                            )}
-                            {currentStatus === "DESIGN_REDO" && (
-                              <Button
-                                size="sm"
-                                onClick={() => handleStartRedo(order.id)}
-                                className="bg-purple-600 hover:bg-purple-700"
-                              >
-                                <Check className="h-4 w-4 mr-1" /> Start Redo
-                              </Button>
-                            )}
-                            {currentStatus === "CHECK_DESIGN" && (
+                            )} */}
+                            {/* {currentStatus === "CHECK_DESIGN" && (
                               <Button size="sm" disabled className="opacity-50">
                                 <Check className="h-4 w-4 mr-1" /> Checking
                               </Button>
-                            )}
+                            )} */}
 
                             {currentStatus === "CHECK_DESIGN" &&
-                              order.orderStatus !== "CHECK_DESIGN" && (
+                              order.orderStatus !== "CHECK_DESIGN" &&
+                              (order.orderStatus == 4 || order.orderStatus == 6) && (
                                 <Button
                                   size="sm"
-                                  onClick={() =>
-                                    handleSendToSellerCheck(order.id)
-                                  }
+                                  onClick={() => handleSendToSellerCheck(order.id)}
                                   className="bg-blue-600 hover:bg-blue-700"
                                 >
-                                  <Send className="h-4 w-4 mr-1" /> Send to
-                                  Check
+                                  <Send className="h-4 w-4 mr-1" /> Send to Check
                                 </Button>
+                            )}
+                            {!(
+                                currentStatus === "CHECK_DESIGN" &&
+                                currentStatus === "DESIGNING" ||
+                                currentStatus === "NEED_DESIGN" ||
+                                 currentStatus === "DESIGN_REDO" ||
+                                (order.orderStatus == 4 || order.orderStatus == 6)
+                              ) && (
+                                <span className="text-xs text-gray-500 block mt-1">
+                                  Already sent
+                                </span>
                               )}
                           </div>
                         </TableCell>
