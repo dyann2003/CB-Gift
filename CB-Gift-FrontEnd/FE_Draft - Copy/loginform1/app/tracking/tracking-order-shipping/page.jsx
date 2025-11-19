@@ -110,7 +110,7 @@ export default function TrackingOrderShippingPage() {
         toPhone: data.to_phone,
         toAddress: data.to_address,
         requiredNote: requiredNoteTranslation[data.required_note] || data.required_note,
-        weight: data.weight, 
+        weight: data.calculate_weight, 
 
         log: Array.isArray(data.log)
           ? data.log.map((l) => ({
@@ -186,22 +186,6 @@ export default function TrackingOrderShippingPage() {
           </div>
         </div>
       </header>
-
-      {/* Navigation Tabs */}
-      <nav className="border-b border-border bg-card sticky top-0 z-10">
-        <div className="w-full px-4 md:px-8">
-          <div className="flex space-x-8">
-            <Link href="/" className="flex items-center gap-3 px-0 py-4 font-semibold text-muted-foreground hover:text-foreground transition-colors border-b-2 border-transparent hover:border-muted">
-              <PackageIcon />
-              <span>Tạo Đơn Hàng</span>
-            </Link>
-            <button className="flex items-center gap-3 px-0 py-4 font-semibold text-primary border-b-2 border-primary transition-colors">
-              <SearchIcon />
-              <span>Theo Dõi Vận Đơn</span>
-            </button>
-          </div>
-        </div>
-      </nav>
 
       {/* Main Content */}
       <main className="w-full px-4 py-8 md:px-8 md:py-12">

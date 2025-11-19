@@ -35,6 +35,11 @@ public partial class Order
 
     public int StatusOrder { get; set; }
 
+    public int? ToProvinceId { get; set; }
+
+    public int? ToDistrictId { get; set; }
+    public string? ToWardCode { get; set; }
+
     public virtual EndCustomer EndCustomer { get; set; }
 
     public virtual ICollection<OrderDetail> OrderDetails { get; set; } = new List<OrderDetail>();

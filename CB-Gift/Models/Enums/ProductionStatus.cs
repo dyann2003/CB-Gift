@@ -18,7 +18,7 @@
         // Trạng thái liên quan đến Sản xuất  
         IN_PROD, //7
         FINISHED, //8
-        QC_DONE, //9
+        QC_DONE, //9    
         QC_FAIL, //10
         PROD_REWORK, //11
 

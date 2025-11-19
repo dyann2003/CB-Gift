@@ -97,42 +97,6 @@ namespace CB_Gift.DTOs
         public long TotalFee { get; set; }
     }
 
-    //public class GhnTrackData
-    //{
-    //    [JsonPropertyName("order_code")]
-    //    public string OrderCode { get; set; }
-
-    //    [JsonPropertyName("status")]
-    //    public string Status { get; set; }
-
-    //    [JsonPropertyName("order_date")]
-    //    public string OrderDate { get; set; }
-
-    //    [JsonPropertyName("pickup_time")]
-    //    public string PickupTime { get; set; }
-
-    //    [JsonPropertyName("leadtime")]
-    //    public string Leadtime { get; set; }
-
-    //    [JsonPropertyName("to_name")]
-    //    public string ToName { get; set; }
-
-    //    [JsonPropertyName("to_phone")]
-    //    public string ToPhone { get; set; }
-
-    //    [JsonPropertyName("to_address")]
-    //    public string ToAddress { get; set; }
-
-    //    [JsonPropertyName("required_note")]
-    //    public string RequiredNote { get; set; }
-
-    //    [JsonPropertyName("converted_weight")]
-    //    public int Weight { get; set; }
-
-    //    [JsonPropertyName("log")]
-    //    public List<GhnLog> Log { get; set; } = new();
-    //}
-
     public class TrackingResult
     {
         [JsonPropertyName("order_code")]
@@ -162,7 +126,7 @@ namespace CB_Gift.DTOs
         [JsonPropertyName("required_note")]
         public string RequiredNote { get; set; }
 
-        [JsonPropertyName("weight")]
+        [JsonPropertyName("calculate_weight")]
         public int Weight { get; set; }
 
         [JsonPropertyName("items")]
