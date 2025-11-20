@@ -28,6 +28,7 @@ export default function OrderView({
           orderId={order.id}
           status={order.status}
           createdAt={order.createdAt}
+          orderDate={order.orderDate}
           onCancel={onCancel}
           onBack={onBack}
         />

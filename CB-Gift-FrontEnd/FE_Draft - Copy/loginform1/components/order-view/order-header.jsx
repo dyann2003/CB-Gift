@@ -8,6 +8,7 @@ import { Trash2, ArrowLeft } from 'lucide-react';
   orderId,
   status, // Đây là statusOderName (string) từ API
   createdAt,
+  orderDate,
   onCancel,
   trackingCode,
   onBack,
@@ -75,6 +76,9 @@ import { Trash2, ArrowLeft } from 'lucide-react';
           </div>
           <p className="text-sm text-gray-500">
             Created at: {new Date(createdAt).toLocaleString()}
+          </p>
+          <p className="text-sm text-gray-500">
+            Order Date: {new Date(orderDate).toLocaleString()}
           </p>
           <p className="text-sm text-gray-500">
             Tracking Code: <span className="font-medium text-gray-700 whitespace-nowrap">{trackingCode}</span>

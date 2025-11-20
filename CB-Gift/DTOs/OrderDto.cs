@@ -65,7 +65,9 @@ namespace CB_Gift.DTOs
         public int OrderDetailID { get; set; }
         public int ProductVariantID { get; set; }
         public string Size { get; set; }
+        public string Layer { get; set; }
         public string ProductName { get; set; }
+        public string Sku { get; set; }
         public int Quantity { get; set; }
         public decimal? Price { get; set; }
         public ProductionStatus? ProductionStatus { get; set; }
@@ -74,6 +76,7 @@ namespace CB_Gift.DTOs
         public string LinkThanksCard { get; set; }
 
         public string AssignedDesignerUserId { get; set; }
+        public DateTime AssignedAt { get; set; }
 
         public string LinkFileDesign { get; set; }
 

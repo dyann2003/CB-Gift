@@ -55,11 +55,14 @@ export default function ProductItem({
           <h3 className="text-lg font-semibold text-gray-900 mb-1 truncate">
             {product.name}
           </h3>
-          <p className="text-sm text-gray-500 mb-2">
+          {/* <p className="text-sm text-gray-500 mb-2">
             <span className="font-medium">SKU:</span> {product.sku} / {product.size} / {product.color}
+          </p> */}
+           <p className="text-sm text-[#384551] mb-2">
+            <span className="font-bold">SKU:</span> {product.sku}
           </p>
-          <p className="text-xs text-gray-600 mb-3">
-            <span className="font-medium">Print in:</span> {product.supplier}
+          <p className="text-xs text-[#384551] mb-3">
+            <span className="font-bold">Print in:</span> {product.supplier}
           </p>
 
           {/* Timeline */}
@@ -71,15 +74,16 @@ export default function ProductItem({
 
       {/* Product Info Grid (Luôn hiển thị - Dưới Timeline) */}
       <div className="grid grid-cols-3 gap-6 mt-4 pt-4 border-t border-gray-100">
-        
+  
         {/* Print Side */}
         <div className="flex items-center gap-2">
-          <Text className="h-4 w-4 text-gray-500" />
+          {/* Icon cũng chuyển sang màu đậm */}
+          <Text className="h-4 w-4 text-[#384551]" />
           <div>
-            <p className="text-xs text-gray-500 font-medium leading-none">
+            <p className="text-xs text-[#384551] font-bold leading-none">
               Print Side
             </p>
-            <p className="font-semibold text-sm text-gray-900">
+            <p className="font-bold text-sm text-[#384551]">
               {product.printSide}
             </p>
           </div>
@@ -87,12 +91,12 @@ export default function ProductItem({
         
         {/* Production Cost */}
         <div className="flex items-center gap-2">
-          <DollarSign className="h-4 w-4 text-gray-500" />
+          {/* <DollarSign className="h-4 w-4 text-[#384551]" /> */}
           <div>
-            <p className="text-xs text-gray-500 font-medium leading-none">
+            <p className="text-xs text-[#384551] font-bold leading-none">
               Production Cost
             </p>
-            <p className="font-semibold text-sm text-gray-900">
+            <p className="font-bold text-sm text-[#384551]">
               {product.productionCost}
             </p>
           </div>
@@ -100,15 +104,15 @@ export default function ProductItem({
         
         {/* Tracking Status */}
         <div>
-          <p className="text-xs text-gray-500 font-medium mb-1">
+          <p className="text-xs text-[#384551] font-bold mb-1">
             Tracking Status
           </p>
-          <p className="font-semibold text-sm text-gray-900">
+          <p className="font-bold text-sm text-[#384551]">
             {product.trackingDetail}
           </p>
         </div>
       </div>
-      
+            
       {/* Expanded Details */}
       {expanded && (
         <div className="mt-6 pt-6 border-t border-gray-100 bg-gray-50 p-4 rounded-b-lg -mx-6 -mb-6">
