@@ -2,6 +2,7 @@
 #nullable disable
 using System;
 using System.Collections.Generic;
+using CB_Gift.Data;
 using CB_Gift.Models.Enums;
 
 namespace CB_Gift.Models;

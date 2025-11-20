@@ -383,7 +383,7 @@ namespace CB_Gift.Services
             var order = _mapper.Map<Order>(request.OrderCreate);
             order.SellerUserId = sellerUserId;
             order.EndCustomerId = customerId;
-            order.OrderDate = DateTime.Now;
+            order.OrderDate = DateTime.Now; // ẩn đi vì khi tạo chỉ là draft thi lưu vào creation date rồi
             order.ProductionStatus = "Created";
             order.StatusOrder = 1;
             // Nếu ActiveTTS = true thì cộng thêm CostScan vào tổng
@@ -419,7 +419,8 @@ namespace CB_Gift.Services
                     Accessory = item.Accessory,
                     Note = item.Note,
                     Price = price,
-                    CreatedDate = DateTime.UtcNow
+                    CreatedDate = DateTime.UtcNow,
+                    ProductionStatus = ProductionStatus.DRAFT
                 };
                 details.Add(detail);
             }
@@ -817,6 +818,8 @@ namespace CB_Gift.Services
                 // Giả định 7 là Order Status cho CONFIRMED/READY_PROD
                 const int READY_PROD_ORDER_STATUS = 7;
                 order.StatusOrder = READY_PROD_ORDER_STATUS;
+                // cập nhật trạng thái order được confirm
+                order.OrderDate = DateTime.Now;
 
                 // 4. Cập nhật HÀNG LOẠT ProductionStatus của các OrderDetail
                 foreach (var detail in order.OrderDetails)
@@ -1217,7 +1220,8 @@ namespace CB_Gift.Services
 
             if (!string.IsNullOrEmpty(seller))
             {
-                projectedQuery = projectedQuery.Where(dto => dto.SellerId == seller);
+                projectedQuery = projectedQuery.Where(dto => dto.SellerId == seller ||
+                                                     dto.SellerName == seller);
             }
 
             // 5. Lấy tổng số (sau khi đã lọc)

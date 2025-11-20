@@ -701,7 +701,7 @@ namespace CB_Gift.Services
                     _logger.LogWarning(ex,"Lỗi khi gửi thông báo SignalR cho AssignDesignerToOrderAsync");
                 }
                 // ✅ KẾT THÚC GỬI THÔNG BÁO
-
+                order.OrderDate = assignmentTime;
                 // Lưu tất cả các thay đổi vào cơ sở dữ liệu.
                 await _context.SaveChangesAsync();
 

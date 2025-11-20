@@ -35,49 +35,77 @@ const mapApiToUiData = (apiData) => {
   const firstName = nameParts[0];
   const lastName = nameParts.slice(1).join(" ") || "";
 
-  // Xử lý Billing (API hiện tại chỉ có TotalCost, tạm tính các phí khác bằng 0 hoặc logic tự quy định)
+  // Xử lý Billing
   const productionCosts = apiData.details.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const shippingCost = apiData.totalCost - productionCosts; // Giả định
+  const shippingCost = apiData.totalCost - productionCosts; 
 
   // 2. Định nghĩa các cột mốc chính cho Timeline
   const MAIN_PRODUCTION_STEPS = [1, 6, 7, 12, 9]; // CREATED, READY_PROD, IN_PROD, PACKING, QC_DONE
+
+  // [FIX] Logic Activity Timeline mới: Tách Draft và Confirmed
+  // 1. Luôn có sự kiện tạo bản nháp (dựa vào creationDate)
+  const activitiesLog = [
+    {
+      date: new Date(apiData.creationDate).toLocaleString(),
+      title: "Order Draft Created",
+      description: "Draft created successfully, waiting for confirmation.",
+    },
+  ];
+
+  // 2. Kiểm tra xem OrderDate có hợp lệ không (tức là đã Confirm)
+  // Check khác null và khác "Invalid Date"
+  const isConfirmed = apiData.orderDate && !isNaN(new Date(apiData.orderDate).getTime());
+
+  if (isConfirmed) {
+    // Nếu đã Confirm, thêm sự kiện này vào timeline
+    activitiesLog.push({
+      date: new Date(apiData.orderDate).toLocaleString(),
+      title: "Order Confirmed", 
+      description: "Order confirmed & sent to production.",
+    });
+  }
+
+  // 3. Kiểm tra Refund (Logic cũ của bạn)
+  if (apiData.latestRefundId) {
+    activitiesLog.push({
+      date: "Recent",
+      title: "Refund Requested",
+      description: `Amount: ${apiData.refundAmount} - Reason: ${apiData.reason}`,
+    });
+  }
+  // [END FIX]
 
   return {
     id: apiData.orderCode || apiData.orderId.toString(),
     status: apiData.statusOderName || "PENDING",
     createdAt: apiData.creationDate,
+    // [FIX] Thay "Null" bằng null để tránh lỗi Invalid Date ở UI
+    orderDate: apiData.orderDate || null, 
     
     // Map danh sách sản phẩm
     products: apiData.details.map((item) => {
-      // Tính toán currentStatusCode trước Object Literal
       const currentStatusCode = item.productionStatus ?? 0;
         
       return {
         id: item.orderDetailID,
         name: item.productName,
         currentStatusCode: currentStatusCode, 
-       trackingCode: apiData.tracking?.trim() ? apiData.tracking.trim() : "N/A",
-        // Dữ liệu còn thiếu từ API, dùng placeholder hoặc dữ liệu tạm
-        sku: `VAR-${item.productVariantID}`, 
-        color: "Default", 
+        trackingCode: apiData.tracking?.trim() ? apiData.tracking.trim() : "N/A",
+        sku: item.sku, 
+        color: item.layer, 
         size: item.size,
         supplier: "CBGift Factory", 
         image: item.linkImg || "/placeholder.svg", 
         printSide: item.needDesign ? "Custom" : "Standard", 
         productionCost: `${item.price?.toLocaleString()} đ`,
-        // Ánh xạ trạng thái hiện tại sang tên ENUM
         trackingDetail: PRODUCTION_STATUS_MAP[currentStatusCode] || "UNKNOWN", 
-        
-        // Bổ sung các link thiết kế
         linkThanksCard: item.linkThanksCard, 
         linkFileDesign: item.linkFileDesign, 
         
-        // Tạo timeline giả lập
         timeline: MAIN_PRODUCTION_STEPS.map((stepCode) => {
           const statusName = PRODUCTION_STATUS_MAP[stepCode];
           return {
             status: statusName,
-            // Sử dụng currentStatusCode đã tính ở trên
             date: currentStatusCode >= stepCode ? apiData.creationDate : null, 
             completed: currentStatusCode >= stepCode,
           };
@@ -104,25 +132,13 @@ const mapApiToUiData = (apiData) => {
       productionCosts: `${productionCosts.toLocaleString()} đ`,
       shippingStandard: "Standard",
       shippingCost: `${shippingCost > 0 ? shippingCost.toLocaleString() : 0} đ`,
-      surchargeFee: "0 đ", // API thiếu
-      taxCost: "0 đ", // API thiếu
+      surchargeFee: "0 đ", 
+      taxCost: "0 đ", 
       totalCosts: `${apiData.totalCost?.toLocaleString()} đ`,
     },
 
-    // Activity Log
-    activities: [
-      {
-        date: new Date(apiData.creationDate).toLocaleString(),
-        title: "Order Created",
-        description: "Order has been placed successfully",
-      },
-      // Nếu có refund, hiển thị thêm
-      ...(apiData.latestRefundId ? [{
-        date: "Recent",
-        title: "Refund Requested",
-        description: `Amount: ${apiData.refundAmount} - Reason: ${apiData.reason}`,
-      }] : [])
-    ],
+    // [FIX] Đảo ngược mảng để sự kiện mới nhất (Confirm/Refund) nằm trên cùng
+    activities: activitiesLog.reverse(), 
   };
 };
 
@@ -144,8 +160,6 @@ export default function OrderViewPage() {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
-                // Thêm Authorization header nếu cần thiết
-                // 'Authorization': `Bearer ${token}` 
             }
         });
 
@@ -173,7 +187,6 @@ export default function OrderViewPage() {
   };
 
   const handleBack = () => {
-    // Đảm bảo luôn quay về trang quản lý đơn hàng
     router.push('/seller/manage-order');
   };
 
