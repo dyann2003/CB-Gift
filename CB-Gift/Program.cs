@@ -15,6 +15,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Quartz;
 using System.Text;
+using CB_Gift.Services.Reports;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -199,7 +200,7 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<OrderFactory>();
 builder.Services.AddScoped<ReferenceDataCache>();
 builder.Services.AddScoped<IValidator<OrderImportRowDto>, OrderImportRowValidator>();
-
+builder.Services.AddScoped<IReportService, ReportService>();
 
 // --- Quartz ---
 builder.Services.AddQuartz(q =>
