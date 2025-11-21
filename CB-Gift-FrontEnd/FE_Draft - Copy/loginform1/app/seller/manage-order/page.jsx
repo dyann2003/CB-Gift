@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import Link from 'next/link';
+import Link from "next/link";
 import SellerSidebar from "@/components/layout/seller/sidebar";
 import SellerHeader from "@/components/layout/seller/header";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import React from "react";
-import { RotateCcw, XCircle, MoreVertical } from "lucide-react";
+import { RotateCcw, XCircle, MoreVertical, CheckCircle2 } from "lucide-react";
 import Swal from "sweetalert2";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -296,7 +296,7 @@ export default function ManageOrder() {
   const canApproveOrReject = (order, item) => {
     const orderStatus = Number(order.statusOrder);
     const itemProductionStatus = Number(item.productionStatus);
-    
+
     // Chỉ hiện nút khi Order là 5 VÀ Detail là 4
     return orderStatus === 5 && itemProductionStatus === 4;
   };
@@ -311,37 +311,47 @@ export default function ManageOrder() {
     const formData = new FormData();
     formData.append("File", file);
     try {
-    const res = await fetch(`${apiClient.defaults.baseURL}/api/images/upload-media`, {
-    method: "POST",
-    credentials: "include",
-    body: formData,
-    });
+      const res = await fetch(
+        `${apiClient.defaults.baseURL}/api/images/upload-media`,
+        {
+          method: "POST",
+          credentials: "include",
+          body: formData,
+        }
+      );
 
-    if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Upload failed: ${res.status} - ${errText}`);
-    }
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Upload failed: ${res.status} - ${errText}`);
+      }
 
-    const data = await res.json();
-    console.log("Upload success:", data);
-    // Cập nhật để ưu tiên secureUrl
-    return data.secureUrl || data.url || data.path || null;
+      const data = await res.json();
+      console.log("Upload success:", data);
+      // Cập nhật để ưu tiên secureUrl
+      return data.secureUrl || data.url || data.path || null;
     } catch (err) {
-    console.error("Upload error:", err);
-    setErrorMessage("Upload failed: " + err.message);
-    setShowErrorDialog(true);
-    return null;
-    } };
+      console.error("Upload error:", err);
+      setErrorMessage("Upload failed: " + err.message);
+      setShowErrorDialog(true);
+      return null;
+    }
+  };
+  const hasDesignFile = (order) => {
+    if (!order.products || order.products.length === 0) return false;
+    return order.products.some(
+      (p) => p.linkFileDesign && p.linkFileDesign.trim() !== null
+    );
+  };
 
-    // ===============================================
-    // === HÀM CẬP NHẬT - BẠN HÃY DÁN HÀM NÀY VÀO ===
-    // ===============================================
-    const openRefundPopup = async (order) => {
+  // ===============================================
+  // === HÀM CẬP NHẬT - BẠN HÃY DÁN HÀM NÀY VÀO ===
+  // ===============================================
+  const openRefundPopup = async (order) => {
     let proofUrl = null;
 
     const { value: reason } = await Swal.fire({
       title: `Refund order #${order.orderId}`,
-      
+
       // ✅ [THAY ĐỔI 1]: Cập nhật HTML
       html: `
       <textarea id="refundReason" class="swal2-textarea" placeholder="Nhập lý do hoàn tiền (tối thiểu 5 ký tự)"></textarea>
@@ -384,7 +394,7 @@ export default function ManageOrder() {
           uploadStatus.style.display = "none";
 
           if (uploadedUrl) {
-            proofUrl = uploadedUrl; 
+            proofUrl = uploadedUrl;
 
             // Logic này giờ sẽ chạy ĐÚNG
             if (file.type.startsWith("video/")) {
@@ -414,7 +424,7 @@ export default function ManageOrder() {
         return reasonValue;
       },
     });
-  
+
     // Phần còn lại của hàm (gọi API refund) giữ nguyên
     if (!reason) return;
     try {
@@ -425,8 +435,8 @@ export default function ManageOrder() {
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({ reason, proofUrl }), // proofUrl sẽ là link video hoặc ảnh
- }
- );
+        }
+      );
 
       const data = await response.json();
 
@@ -1871,6 +1881,9 @@ export default function ManageOrder() {
                           <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
                             Payment Status
                           </TableHead>
+                          <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
+                            Exist File Design
+                          </TableHead>
                           <TableHead
                             className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap cursor-pointer hover:bg-blue-200 transition-colors"
                             onClick={() => handleSort("totalAmount")}
@@ -1915,17 +1928,18 @@ whitespace-nowrap"
                                   {order.orderId}
                                 </TableCell> */}
                                 <TableCell className="font-medium text-slate-900 whitespace-nowrap">
-                                    {/* Sử dụng component Link để bọc nội dung */}
-                                    <Link 
-                                        // Thêm thuộc tính target="_blank"
-                                        target="_blank" 
-                                        // Thuộc tính rel="noopener noreferrer" được khuyến nghị cho bảo mật
-                                        rel="noopener noreferrer" 
-                                        // Vẫn giữ đường dẫn tương đối đúng để chuyển đến /seller/order-view/[id]
-                                        href={`../seller/order-view/${order.id}`}
-                                        className="hover:underline text-blue-600" >
-                                        {order.orderId}
-                                    </Link>
+                                  {/* Sử dụng component Link để bọc nội dung */}
+                                  <Link
+                                    // Thêm thuộc tính target="_blank"
+                                    target="_blank"
+                                    // Thuộc tính rel="noopener noreferrer" được khuyến nghị cho bảo mật
+                                    rel="noopener noreferrer"
+                                    // Vẫn giữ đường dẫn tương đối đúng để chuyển đến /seller/order-view/[id]
+                                    href={`../seller/order-view/${order.id}`}
+                                    className="hover:underline text-blue-600"
+                                  >
+                                    {order.orderId}
+                                  </Link>
                                 </TableCell>
                                 <TableCell className="text-slate-600 whitespace-nowrap">
                                   {order.orderDate}
@@ -1948,6 +1962,13 @@ whitespace-nowrap"
                                 </TableCell>
                                 <TableCell className="text-slate-600 whitespace-nowrap">
                                   {order.paymentStatus}
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap">
+                                  {hasDesignFile(order) ? (
+                                    <CheckCircle2 className="w-5 h-5 text-green-600" />
+                                  ) : (
+                                    <XCircle className="w-5 h-5 text-red-600" />
+                                  )}
                                 </TableCell>
                                 <TableCell className="font-medium text-slate-900 whitespace-nowrap">
                                   {order.totalAmount}
@@ -2980,23 +3001,42 @@ whitespace-nowrap"
                                                 </div>
                                               </div>
                                               {/* 👇 THÊM KHỐI NÀY VÀO NGAY DƯỚI 👇 */}
-                                              {(editedOrder.reason || editedOrder.rejectionReason || editedOrder.refundAmount > 0) && (
-                                                <div className={`mt-4 p-4 rounded-lg border ${
-                                                    editedOrder.rejectionReason ? "bg-red-50 border-red-200" : "bg-orange-50 border-orange-200"
-                                                  }`}>
-                                                  <h3 className={`font-semibold text-lg mb-3 ${
-                                                      editedOrder.rejectionReason ? "text-red-800" : "text-orange-800"
-                                                    }`}>
-                                                    Request Details (Refund/Cancel)
+                                              {(editedOrder.reason ||
+                                                editedOrder.rejectionReason ||
+                                                editedOrder.refundAmount >
+                                                  0) && (
+                                                <div
+                                                  className={`mt-4 p-4 rounded-lg border ${
+                                                    editedOrder.rejectionReason
+                                                      ? "bg-red-50 border-red-200"
+                                                      : "bg-orange-50 border-orange-200"
+                                                  }`}
+                                                >
+                                                  <h3
+                                                    className={`font-semibold text-lg mb-3 ${
+                                                      editedOrder.rejectionReason
+                                                        ? "text-red-800"
+                                                        : "text-orange-800"
+                                                    }`}
+                                                  >
+                                                    Request Details
+                                                    (Refund/Cancel)
                                                   </h3>
-                                                  
+
                                                   <div className="space-y-3 text-sm">
                                                     {/* 1. Số tiền hoàn (nếu có) */}
-                                                    {editedOrder.refundAmount > 0 && (
+                                                    {editedOrder.refundAmount >
+                                                      0 && (
                                                       <div className="flex justify-between items-center bg-white p-2 rounded border border-gray-200">
-                                                        <span className="font-medium text-gray-700">Requested Refund Amount:</span>
+                                                        <span className="font-medium text-gray-700">
+                                                          Requested Refund
+                                                          Amount:
+                                                        </span>
                                                         <span className="font-bold text-green-600 text-lg">
-                                                          ${editedOrder.refundAmount?.toFixed(2)}
+                                                          $
+                                                          {editedOrder.refundAmount?.toFixed(
+                                                            2
+                                                          )}
                                                         </span>
                                                       </div>
                                                     )}
@@ -3004,7 +3044,9 @@ whitespace-nowrap"
                                                     {/* 2. Lý do yêu cầu (Seller/Khách gửi) */}
                                                     {editedOrder.reason && (
                                                       <div>
-                                                        <span className="block font-medium text-gray-700 mb-1">Reason:</span>
+                                                        <span className="block font-medium text-gray-700 mb-1">
+                                                          Reason:
+                                                        </span>
                                                         <div className="bg-white p-3 rounded border border-gray-200 text-gray-800 italic">
                                                           "{editedOrder.reason}"
                                                         </div>
@@ -3014,15 +3056,40 @@ whitespace-nowrap"
                                                     {/* 3. Link bằng chứng (Proof URL) */}
                                                     {editedOrder.proofUrl && (
                                                       <div>
-                                                        <span className="block font-medium text-gray-700 mb-1">Evidence / Proof:</span>
-                                                        <a 
-                                                          href={editedOrder.proofUrl} 
-                                                          target="_blank" 
+                                                        <span className="block font-medium text-gray-700 mb-1">
+                                                          Evidence / Proof:
+                                                        </span>
+                                                        <a
+                                                          href={
+                                                            editedOrder.proofUrl
+                                                          }
+                                                          target="_blank"
                                                           rel="noopener noreferrer"
                                                           className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 bg-white px-3 py-2 rounded border border-blue-200 hover:shadow-sm transition-all"
                                                         >
-                                                          <span>📷 View Proof Image</span>
-                                                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                                                          <span>
+                                                            📷 View Proof Image
+                                                          </span>
+                                                          <svg
+                                                            xmlns="http://www.w3.org/2000/svg"
+                                                            width="16"
+                                                            height="16"
+                                                            viewBox="0 0 24 24"
+                                                            fill="none"
+                                                            stroke="currentColor"
+                                                            strokeWidth="2"
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                          >
+                                                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                                            <polyline points="15 3 21 3 21 9"></polyline>
+                                                            <line
+                                                              x1="10"
+                                                              y1="14"
+                                                              x2="21"
+                                                              y2="3"
+                                                            ></line>
+                                                          </svg>
                                                         </a>
                                                       </div>
                                                     )}
@@ -3030,17 +3097,27 @@ whitespace-nowrap"
                                                     {/* 4. Lý do từ chối (Staff gửi - nếu có) */}
                                                     {editedOrder.rejectionReason && (
                                                       <div className="mt-2">
-                                                        <span className="block font-medium text-red-700 mb-1">Rejection Reason (Admin):</span>
+                                                        <span className="block font-medium text-red-700 mb-1">
+                                                          Rejection Reason
+                                                          (Admin):
+                                                        </span>
                                                         <div className="bg-white p-3 rounded border border-red-200 text-red-600 font-medium">
-                                                          "{editedOrder.rejectionReason}"
+                                                          "
+                                                          {
+                                                            editedOrder.rejectionReason
+                                                          }
+                                                          "
                                                         </div>
                                                       </div>
                                                     )}
-                                                    
+
                                                     {/* 5. Cảnh báo đang chờ duyệt */}
                                                     {editedOrder.isRefundPending && (
                                                       <div className="mt-2 flex items-center gap-2 text-amber-600 font-bold bg-amber-100 p-2 rounded justify-center">
-                                                          <span className="animate-pulse">⚠️ Waiting for Staff Approval</span>
+                                                        <span className="animate-pulse">
+                                                          ⚠️ Waiting for Staff
+                                                          Approval
+                                                        </span>
                                                       </div>
                                                     )}
                                                   </div>
@@ -3367,7 +3444,10 @@ whitespace-nowrap"
                                                 <div className="mt-3 flex items-center gap-2">
                                                   <button
                                                     className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded border ${
-                                                      canApproveOrReject(order,item)
+                                                      canApproveOrReject(
+                                                        order,
+                                                        item
+                                                      )
                                                         ? "bg-green-50 text-green-700 border-green-200 hover:shadow"
                                                         : "opacity-50 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-200"
                                                     }`}
@@ -3379,7 +3459,10 @@ whitespace-nowrap"
                                                     disabled={
                                                       isSubmittingDetail ===
                                                         item.orderDetailID ||
-                                                      !canApproveOrReject(order,item)
+                                                      !canApproveOrReject(
+                                                        order,
+                                                        item
+                                                      )
                                                     }
                                                   >
                                                     {isSubmittingDetail ===
@@ -3392,7 +3475,10 @@ whitespace-nowrap"
 
                                                   <button
                                                     className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded border ${
-                                                      canApproveOrReject(order,item)
+                                                      canApproveOrReject(
+                                                        order,
+                                                        item
+                                                      )
                                                         ? "bg-red-50 text-red-700 border-red-200 hover:shadow"
                                                         : "opacity-50 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-200"
                                                     }`}
@@ -3404,7 +3490,10 @@ whitespace-nowrap"
                                                     disabled={
                                                       isSubmittingDetail ===
                                                         item.orderDetailID ||
-                                                      !canApproveOrReject(order,item)
+                                                      !canApproveOrReject(
+                                                        order,
+                                                        item
+                                                      )
                                                     }
                                                   >
                                                     {isSubmittingDetail ===

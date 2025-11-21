@@ -383,7 +383,7 @@ namespace CB_Gift.Services
             var order = _mapper.Map<Order>(request.OrderCreate);
             order.SellerUserId = sellerUserId;
             order.EndCustomerId = customerId;
-            order.OrderDate = DateTime.Now; // ẩn đi vì khi tạo chỉ là draft thi lưu vào creation date rồi
+            //order.OrderDate = DateTime.Now; // ẩn đi vì khi tạo chỉ là draft thi lưu vào creation date rồi
             order.ProductionStatus = "Created";
             order.StatusOrder = 1;
             // Nếu ActiveTTS = true thì cộng thêm CostScan vào tổng

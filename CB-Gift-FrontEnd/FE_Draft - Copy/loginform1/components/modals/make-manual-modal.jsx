@@ -84,11 +84,20 @@ export default function MakeManualModal({ isOpen, onClose }) {
     email: "",
     address: "",
     address1: "",
-    zipcode: "",
-    shipState: "",
-    shipCity: "",
-    shipCountry: "",
+    provinceId: "",
+    provinceName: "",
+    districtId: "",
+    districtName: "",
+    wardId: "",
+    wardName: "",
   });
+
+  const [provinces, setProvinces] = useState([]);
+  const [districts, setDistricts] = useState([]);
+  const [wards, setWards] = useState([]);
+  const [loadingProvinces, setLoadingProvinces] = useState(false);
+  const [loadingDistricts, setLoadingDistricts] = useState(false);
+  const [loadingWards, setLoadingWards] = useState(false);
 
   const [cartProducts, setCartProducts] = useState([]);
   const [currentProduct, setCurrentProduct] = useState(null);
@@ -112,10 +121,12 @@ export default function MakeManualModal({ isOpen, onClose }) {
       email: "",
       address: "",
       address1: "",
-      zipcode: "",
-      shipState: "",
-      shipCity: "",
-      shipCountry: "",
+      provinceId: "",
+      provinceName: "",
+      districtId: "",
+      districtName: "",
+      wardId: "",
+      wardName: "",
     });
     setCartProducts([]);
     setCurrentProduct(null);
@@ -131,6 +142,8 @@ export default function MakeManualModal({ isOpen, onClose }) {
       note: "",
       productPrice: 0,
     });
+    setDistricts([]);
+    setWards([]);
   };
 
   // ─── Step 2: load products từ BE ───
@@ -141,6 +154,7 @@ export default function MakeManualModal({ isOpen, onClose }) {
   useEffect(() => {
     if (!isOpen) return;
     fetchProducts();
+    fetchProvinces();
   }, [isOpen]);
 
   const fetchProducts = async () => {
@@ -161,17 +175,89 @@ export default function MakeManualModal({ isOpen, onClose }) {
     }
   };
 
+  const fetchProvinces = async () => {
+    setLoadingProvinces(true);
+    try {
+      const res = await fetch(`https://localhost:7015/api/Location/provinces`, {
+        credentials: "include",
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const data = await res.json();
+
+      // 🔥 Chuẩn hóa data về dạng FE cần
+      const normalized = data.map((p) => ({
+        id: p.ProvinceID,
+        name: p.ProvinceName,
+      }));
+
+      setProvinces(normalized);
+    } catch (err) {
+      console.error("Failed to fetch provinces:", err);
+    } finally {
+      setLoadingProvinces(false);
+    }
+  };
+
+  const fetchDistricts = async (provinceId) => {
+    try {
+      const res = await fetch(
+        `https://localhost:7015/api/Location/districts/${provinceId}`,
+        { credentials: "include" }
+      );
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const data = await res.json();
+
+      const normalized = data.map((d) => ({
+        id: d.DistrictID,
+        name: d.DistrictName,
+      }));
+
+      setDistricts(normalized);
+    } catch (err) {
+      alert(`Failed to load districts: ${err.message}`);
+    }
+  };
+
+  const fetchWards = async (districtId) => {
+    try {
+      const res = await fetch(
+        `https://localhost:7015/api/Location/wards/${districtId}`,
+        { credentials: "include" }
+      );
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const data = await res.json();
+
+      const normalized = data.map((w) => ({
+        id: w.WardCode,
+        name: w.WardName,
+      }));
+
+      setWards(normalized);
+    } catch (err) {
+      alert(`Failed to load wards: ${err.message}`);
+    }
+  };
+
   // Upload ảnh thật lên server
   const uploadImage = async (file) => {
     const formData = new FormData();
     formData.append("File", file);
 
     try {
-      const res = await fetch(`${apiClient.defaults.baseURL}/api/images/upload`, {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      });
+      const res = await fetch(
+        `${apiClient.defaults.baseURL}/api/images/upload`,
+        {
+          method: "POST",
+          credentials: "include",
+          body: formData,
+        }
+      );
 
       if (!res.ok) {
         const errText = await res.text();
@@ -235,13 +321,14 @@ export default function MakeManualModal({ isOpen, onClose }) {
         "phone",
         "email",
         "address",
-        "zipcode",
-        "shipState",
-        "shipCity",
-        "shipCountry",
+        "provinceId",
+        "districtId",
+        "wardId",
       ];
 
-      const missing = requiredFields.filter((f) => !customerInfo[f]?.trim());
+      const missing = requiredFields.filter(
+        (f) => !customerInfo[f]?.toString().trim()
+      );
       if (missing.length > 0) {
         setErrorMessage(
           `Please fill all required fields: ${missing.join(", ")}`
@@ -329,9 +416,12 @@ export default function MakeManualModal({ isOpen, onClose }) {
     }
 
     try {
-      const res = await fetch(`${apiClient.defaults.baseURL}/api/Product/${id}`, {
-        credentials: "include",
-      });
+      const res = await fetch(
+        `${apiClient.defaults.baseURL}/api/Product/${id}`,
+        {
+          credentials: "include",
+        }
+      );
       if (!res.ok) {
         console.warn("Product detail fetch failed, use base product");
         setCurrentProduct(product);
@@ -430,6 +520,7 @@ export default function MakeManualModal({ isOpen, onClose }) {
       linkDesign: p.config.linkFileDesign || null,
       accessory: p.config.accessory || "",
       note: p.config.note || "",
+      productionStatus: 0,
     }));
 
     const orderPayload = {
@@ -437,13 +528,14 @@ export default function MakeManualModal({ isOpen, onClose }) {
         name: customerInfo.name,
         phone: customerInfo.phone,
         email: customerInfo.email,
-        address: customerInfo.address,
+        address: `${customerInfo.address},${customerInfo.wardName}, ${customerInfo.districtName}, ${customerInfo.provinceName}`,
         address1: customerInfo.address1,
-        zipCode: customerInfo.zipcode,
-        shipState: customerInfo.shipState,
-        shipCity: customerInfo.shipCity,
-        shipCountry: customerInfo.shipCountry,
+        zipCode: "",
+        shipState: "",
+        shipCity: "",
+        shipCountry: "",
       },
+
       orderCreate: {
         orderCode: orderId?.trim() || `ORD-${Date.now()}`,
         endCustomerID: 0,
@@ -455,8 +547,14 @@ export default function MakeManualModal({ isOpen, onClose }) {
         tracking: "",
         productionStatus: "Pending",
         paymentStatus: "Unpaid",
-        orderDetails: orderDetails,
+
+        // 🔥 Quan trọng – đưa đúng vào DB
+        toProvinceId: Number(customerInfo.provinceId),
+        toDistrictId: Number(customerInfo.districtId),
+        toWardCode: customerInfo.wardId,
       },
+
+      // 🔥 Để đúng vị trí API yêu cầu
       orderDetails: orderDetails,
     };
 
@@ -464,12 +562,15 @@ export default function MakeManualModal({ isOpen, onClose }) {
     console.log(JSON.stringify(orderPayload, null, 2));
 
     try {
-      const res = await fetch(`${apiClient.defaults.baseURL}/api/Order/make-order`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(orderPayload),
-      });
+      const res = await fetch(
+        `${apiClient.defaults.baseURL}/api/Order/make-order`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(orderPayload),
+        }
+      );
 
       const text = await res.text();
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${text}`);
@@ -545,6 +646,57 @@ export default function MakeManualModal({ isOpen, onClose }) {
       }));
     };
 
+    const handleProvinceChange = (provinceId) => {
+      const province = provinces.find((p) => {
+        const pid = p.id ?? p.provinceId;
+        return pid?.toString() === provinceId;
+      });
+
+      setCustomerInfo((prev) => ({
+        ...prev,
+        provinceId: provinceId,
+        provinceName: province?.name || province?.provinceName || "",
+        districtId: "",
+        districtName: "",
+        wardId: "",
+        wardName: "",
+      }));
+
+      setDistricts([]);
+      setWards([]);
+      fetchDistricts(provinceId);
+    };
+
+    const handleDistrictChange = (districtId) => {
+      const district = districts.find((d) => {
+        const did = d.id ?? d.districtId;
+        return did?.toString() === districtId;
+      });
+
+      setCustomerInfo((prev) => ({
+        ...prev,
+        districtId: districtId,
+        districtName: district?.name || district?.districtName || "",
+        wardId: "",
+        wardName: "",
+      }));
+      setWards([]);
+      fetchWards(districtId);
+    };
+
+    const handleWardChange = (wardId) => {
+      const ward = wards.find((w) => {
+        const wid = w.id ?? w.wardId;
+        return wid?.toString() === wardId;
+      });
+
+      setCustomerInfo((prev) => ({
+        ...prev,
+        wardId: wardId,
+        wardName: ward?.name || ward?.wardName || "",
+      }));
+    };
+
     return (
       <div className="space-y-4">
         <h3 className="text-lg font-semibold">
@@ -610,50 +762,93 @@ export default function MakeManualModal({ isOpen, onClose }) {
             />
           </div>
 
-          {/* Zipcode */}
           <div>
-            <Label htmlFor="zipcode">Zipcode *</Label>
-            <Input
-              id="zipcode"
-              value={customerInfo.zipcode}
-              onChange={(e) => handleTrimmedInput("zipcode", e.target.value)}
-              placeholder="Enter zipcode"
-            />
+            <Label htmlFor="province">Province *</Label>
+            <Select
+              value={customerInfo.provinceId?.toString() || ""}
+              onValueChange={handleProvinceChange}
+              disabled={loadingProvinces}
+            >
+              <SelectTrigger id="province">
+                <SelectValue
+                  placeholder={
+                    loadingProvinces ? "Loading..." : "Select Province"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {provinces.map((p, idx) => (
+                  <SelectItem
+                    key={p.id || p.provinceId || `prov-${idx}`}
+                    value={(p.id || p.provinceId || idx).toString()}
+                  >
+                    {p.name || p.provinceName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Ship State */}
           <div>
-            <Label htmlFor="shipState">Ship State *</Label>
-            <Input
-              id="shipState"
-              value={customerInfo.shipState}
-              onChange={(e) => handleTrimmedInput("shipState", e.target.value)}
-              placeholder="Enter state"
-            />
+            <Label htmlFor="district">District *</Label>
+            <Select
+              value={customerInfo.districtId?.toString() || ""}
+              onValueChange={handleDistrictChange}
+              disabled={loadingDistricts || !customerInfo.provinceId}
+            >
+              <SelectTrigger id="district">
+                <SelectValue
+                  placeholder={
+                    loadingDistricts
+                      ? "Loading..."
+                      : customerInfo.provinceId
+                      ? "Select District"
+                      : "Select Province first"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {districts.map((d) => (
+                  <SelectItem
+                    key={d.id || d.districtId}
+                    value={(d.id || d.districtId)?.toString()}
+                  >
+                    {d.name || d.districtName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Ship City */}
           <div>
-            <Label htmlFor="shipCity">Ship City *</Label>
-            <Input
-              id="shipCity"
-              value={customerInfo.shipCity}
-              onChange={(e) => handleTrimmedInput("shipCity", e.target.value)}
-              placeholder="Enter city"
-            />
-          </div>
-
-          {/* Ship Country */}
-          <div>
-            <Label htmlFor="shipCountry">Ship Country *</Label>
-            <Input
-              id="shipCountry"
-              value={customerInfo.shipCountry}
-              onChange={(e) =>
-                handleTrimmedInput("shipCountry", e.target.value)
-              }
-              placeholder="Enter country"
-            />
+            <Label htmlFor="ward">Ward *</Label>
+            <Select
+              value={customerInfo.wardId?.toString() || ""}
+              onValueChange={handleWardChange}
+              disabled={loadingWards || !customerInfo.districtId}
+            >
+              <SelectTrigger id="ward">
+                <SelectValue
+                  placeholder={
+                    loadingWards
+                      ? "Loading..."
+                      : customerInfo.districtId
+                      ? "Select Ward"
+                      : "Select District first"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {wards.map((w) => (
+                  <SelectItem
+                    key={w.id || w.wardId}
+                    value={(w.id || w.wardId)?.toString()}
+                  >
+                    {w.name || w.wardName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>
@@ -689,15 +884,8 @@ export default function MakeManualModal({ isOpen, onClose }) {
             return (
               <div
                 key={p.productId}
-                className={`border rounded-lg p-4 cursor-pointer hover:border-blue-500 hover:shadow-md transition-all ${
-                  currentProduct?.productId === p.productId
-                    ? "ring-2 ring-blue-500"
-                    : ""
-                }`}
-                onClick={() => {
-                  setCurrentProduct(p);
-                  setCurrentStep(3);
-                }}
+                onClick={() => handleProductSelect(p)}
+                className="cursor-pointer border rounded-lg p-4 hover:shadow-lg transition-shadow"
               >
                 <img
                   src={p.itemLink || "/placeholder.svg"}
@@ -1137,7 +1325,7 @@ export default function MakeManualModal({ isOpen, onClose }) {
                               {item.config.linkImg}
                             </a>
                             <img
-                              src={item.config.linkImg}
+                              src={item.config.linkImg || "/placeholder.svg"}
                               alt="Link Image"
                               className="w-24 h-24 object-cover rounded border"
                             />
@@ -1163,7 +1351,9 @@ export default function MakeManualModal({ isOpen, onClose }) {
                               {item.config.linkThanksCard}
                             </a>
                             <img
-                              src={item.config.linkThanksCard}
+                              src={
+                                item.config.linkThanksCard || "/placeholder.svg"
+                              }
                               alt="Thanks Card"
                               className="w-24 h-24 object-cover rounded border"
                             />
@@ -1192,7 +1382,10 @@ export default function MakeManualModal({ isOpen, onClose }) {
                               item.config.linkFileDesign.endsWith(".png") ||
                               item.config.linkFileDesign.endsWith(".jpeg")) && (
                               <img
-                                src={item.config.linkFileDesign}
+                                src={
+                                  item.config.linkFileDesign ||
+                                  "/placeholder.svg"
+                                }
                                 alt="File Design"
                                 className="w-24 h-24 object-cover rounded border"
                               />
