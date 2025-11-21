@@ -43,6 +43,16 @@ export default function ManagerSidebar({ currentPage, setCurrentPage }) {
       label: "Report and Analyst",
       path: "/manager/report-analyst",
     },
+     {
+      id: "report",
+      label: "Reports",
+      path: "/manager/reports",
+    },
+     {
+      id: "operations",
+      label: "Operations & Production Report",
+      path: "/manager/operations",
+    },
   ];
 
   const handleNavigation = (item) => {
