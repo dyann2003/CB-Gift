@@ -625,7 +625,7 @@ namespace CB_Gift.Services
             ProductionStatus action,
             string sellerId,
             string? reason)
-            {
+        {
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
@@ -1079,7 +1079,7 @@ namespace CB_Gift.Services
                 Email = o.EndCustomer.Email,
                 Address = o.EndCustomer.Address,
                 SellerId = o.SellerUserId,
-                SellerName= o.SellerUser.FullName,
+                SellerName = o.SellerUser.FullName,
                 CreationDate = o.CreationDate ?? o.OrderDate,
                 TotalCost = o.TotalCost,
                 PaymentStatus = o.PaymentStatus,
@@ -1130,13 +1130,13 @@ namespace CB_Gift.Services
 
                 // ⭐ ĐÁNH DẤU TRUE NẾU CÓ 1 YÊU CẦU ĐANG "PENDING"
                 IsRefundPending = _context.Refunds.Any(r => r.OrderId == o.OrderId && r.Status == "Pending")
-             }).ToListAsync();
-             return (orders, total);
+            }).ToListAsync();
+            return (orders, total);
         }
         public async Task<(IEnumerable<OrderWithDetailsDto> Orders, int Total)> GetFilteredAndPagedOrdersForInvoiceAsync(
             string? status, // status theo CODE
             string? searchTerm,
-            string? seller, 
+            string? seller,
             string? sortColumn,
             string? sortDirection,
             DateTime? fromDate,
@@ -1148,9 +1148,14 @@ namespace CB_Gift.Services
             var query = _context.Orders
                 .Include(o => o.EndCustomer)
                 .Include(o => o.StatusOrderNavigation)
-                .Include(o=>o.SellerUser)
+                .Include(o => o.SellerUser)
                 .Include(o => o.OrderDetails)
                     .ThenInclude(od => od.ProductVariant)
+                .Where(o =>
+                    o.StatusOrder >= 10 &&
+                    o.StatusOrder <= 15 &&
+                    !o.OrderDetails.Any(od => od.ProductionStatus == null || od.ProductionStatus < ProductionStatus.FINISHED)
+                )
                 .AsQueryable();
 
             // 1. Lọc theo Status

@@ -26,22 +26,6 @@ import Swal from "sweetalert2"; // Thêm Swal
 // ✅ HÀM HELPER NÀY SẼ ĐƯỢC DÙNG TRONG JSX
 const mapProductionStatusToString = (statusId) => {
   switch (statusId) {
-    case 0:
-      return "DRAFT";
-    case 1:
-      return "CREATED";
-    case 2:
-      return "NEED_DESIGN";
-    case 3:
-      return "DESIGNING";
-    case 4:
-      return "CHECK_DESIGN";
-    case 5:
-      return "DESIGN_REDO";
-    case 6:
-      return "READY_PROD";
-    case 7:
-      return "IN_PROD";
     case 8:
       return "FINISHED";
     case 9:
@@ -51,11 +35,11 @@ const mapProductionStatusToString = (statusId) => {
     case 11:
       return "PROD_REWORK";
     case 12:
-      return "PACKING";
+      return "SHIPPING";
     case 13:
       return "HOLD";
     case 14:
-      return "CANCELLED";
+      return "REFUND";
     default:
       return "UNKNOWN";
   }
@@ -64,20 +48,14 @@ const mapProductionStatusToString = (statusId) => {
 const getStatusBadgeVariant = (statusString) => {
   switch (statusString) {
     case "QC_FAIL":
-    case "DESIGN_REDO":
-    case "PROD_REWORK":
-    case "CANCELLED":
+    case "REFUND":
     case "HOLD":
       return "destructive";
     case "QC_DONE":
     case "SHIPPED": // Thêm
     case "FINISHED":
-    case "PACKING":
+    case "SHIPPING":
       return "success";
-    case "CHECK_DESIGN":
-    case "IN_PROD":
-    case "DESIGNING":
-      return "secondary";
     case "READY_PROD":
     case "CONFIRMED": // Thêm
       return "default";
@@ -414,13 +392,12 @@ export default function CheckProduct() {
                   className="px-3 py-2 border border-gray-300 rounded-md text-sm w-full md:w-auto"
                 >
                   <option value="all">All Status</option>
-                  <option value="CHECK_DESIGN">Check Design</option>
                   <option value="FINISHED">Finished (Prod. Done)</option>
                   <option value="QC_DONE">QC Done</option>
                   <option value="QC_FAIL">QC Fail</option>
-                  <option value="PACKING">Packing</option>
-                  <option value="CANCELLED">Cancelled</option>
+                  <option value="SHIPPING">Shipping</option>
                   <option value="SHIPPED">Shipped</option>
+                  <option value="REFUND">Refund</option>
                 </select>
               </div>
 
