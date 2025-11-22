@@ -20,7 +20,6 @@ const MapPinIcon = () => <span className="text-lg">📍</span>;
 const PhoneIcon = () => <span className="text-lg">📞</span>;
 const WeightIcon = () => <span className="text-lg">⚖️</span>;
 const ClockIcon = () => <span className="text-lg">🕐</span>;
-const PrintIcon = () => <span className="text-lg">🖨️</span>; // <-- THÊM MỚI
 
 // Status Badge Component
 const StatusBadge = ({ status }) => {
@@ -49,10 +48,6 @@ export default function TrackingOrderShippingPage() {
   const [trackResult, setTrackResult] = useState(null);
   const [trackError, setTrackError] = useState(null);
   const [isTracking, setIsTracking] = useState(false);
-  
-  // THÊM MỚI: State cho việc in
-  const [isPrinting, setIsPrinting] = useState(false);
-  const [printError, setPrintError] = useState(null);
 
   const groupLogsByDate = (logs) => {
     return logs.reduce((acc, log) => {
@@ -76,7 +71,6 @@ export default function TrackingOrderShippingPage() {
     e.preventDefault();
     setTrackResult(null);
     setTrackError(null);
-    setPrintError(null); // <-- THÊM MỚI: Reset lỗi in khi tra cứu mới
 
     if (!trackCode) {
       setTrackError("Vui lòng nhập mã vận đơn.");
@@ -131,42 +125,6 @@ export default function TrackingOrderShippingPage() {
       setTrackError(err.message);
     } finally {
       setIsTracking(false);
-    }
-  };
-  
-  // Hàm xử lý in
-  const handlePrint = async (orderCode, size) => {
-    setIsPrinting(true);
-    setPrintError(null);
-    try {
-        const orderCodesList = [orderCode];
-        
-      // 1. Gọi API backend để lấy link
-      const res = await fetch(
-        `${DOTNET_API_BASE_URL}/ShippingPrint/get-link`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            OrderCodes: orderCodesList,
-            Size: size 
-          })
-        }
-      );
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.message || `Không thể lấy link in ${size}`);
-      }
-
-      // 2. Mở link trong tab mới
-      if (data.url) {
-        window.open(data.url, "_blank");
-      }
-    } catch (err) {
-      setPrintError(err.message);
-    } finally {
-      setIsPrinting(false);
     }
   };
 
@@ -244,32 +202,6 @@ export default function TrackingOrderShippingPage() {
                     </div>
                     <div className="text-5xl opacity-80"><TruckIcon /></div>
                   </div>
-                  {/* SỬA: Bọc các nút trong 1 div flex */}
-                  <div className="flex flex-wrap items-center gap-4">
-                    <StatusBadge status={trackResult.status} />
-                    
-                    {/* THÊM MỚI: Nút In A5 */}
-                    <button
-                      onClick={() => handlePrint(trackResult.orderCode, 'A5')}
-                      disabled={isPrinting}
-                      className="inline-flex items-center justify-center gap-2 px-3 py-1 rounded-full text-sm font-semibold bg-white/20 text-white hover:bg-white/30 disabled:opacity-50 transition-all"
-                    >
-                      {isPrinting ? (
-                        <LoadingSpinner />
-                      ) : (
-                        <PrintIcon />
-                      )}
-                      In A5
-                    </button>
-                    {/* (Bạn có thể thêm các nút 80x80, 52x70 ở đây) */}
-                  </div>
-                  
-                  {/* THÊM MỚI: Hiển thị lỗi in (nếu có) */}
-                  {printError && (
-                    <div className="mt-4 rounded-lg bg-black/20 p-3">
-                      <p className="text-white text-sm font-semibold">❌ Lỗi in: {printError}</p>
-                    </div>
-                  )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-6 border-t border-border">
