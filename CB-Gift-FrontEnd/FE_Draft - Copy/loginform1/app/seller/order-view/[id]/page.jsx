@@ -98,6 +98,7 @@ const mapApiToUiData = (apiData) => {
         image: item.linkImg || "/placeholder.svg", 
         printSide: item.needDesign ? "Custom" : "Standard", 
         productionCost: `${item.price?.toLocaleString()} đ`,
+        priceRaw: item.price ?? 0,
         trackingDetail: PRODUCTION_STATUS_MAP[currentStatusCode] || "UNKNOWN", 
         linkThanksCard: item.linkThanksCard, 
         linkFileDesign: item.linkFileDesign, 

@@ -2,7 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Trash2, ArrowLeft } from 'lucide-react';
+import { Trash2, ArrowLeft, Wallet, Printer } from 'lucide-react';
 
  export default function OrderHeader({
   orderId,
@@ -12,6 +12,10 @@ import { Trash2, ArrowLeft } from 'lucide-react';
   onCancel,
   trackingCode,
   onBack,
+  onOpenRefund,
+  onOpenReprint,
+  isEligible,
+  orderStatus,
 }) {
   const getStatusBadgeColor = (status) => {
     switch (status) {
@@ -61,6 +65,9 @@ import { Trash2, ArrowLeft } from 'lucide-react';
         return status;
     }
   };
+  const handleDisabledClick = (action) => {
+        alert(`Không thể ${action}. Trạng thái đơn hàng phải là SHIPPED hoặc COMPLETED. Trạng thái hiện tại: ${orderStatus}.`);
+  };
 
   return (
     <div className="border-b border-gray-200 pb-4 mb-6">
@@ -95,6 +102,37 @@ import { Trash2, ArrowLeft } from 'lucide-react';
               Cancel
             </Button>
           )} */}
+          {/* Phần Nút Hành động */}
+           {/* NÚT YÊU CẦU HOÀN TIỀN (CẤP ORDER) */}
+                    {onOpenRefund && (
+                        <Button
+                            variant="destructive"
+                            size="sm"// ✨ DISABLE NẾU KHÔNG ĐỦ ĐIỀU KIỆN ✨
+                            disabled={!isEligible} 
+                            onClick={isEligible ? onOpenRefund : () => handleDisabledClick('Hoàn tiền')}
+                            className="bg-red-500 hover:bg-red-600 text-white"
+                            // ✨ THÔNG BÁO VỚI TITLE ✨
+                            title={!isEligible ? `Trạng thái phải là SHIPPED/COMPLETED (Hiện tại: ${orderStatus})` : "Yêu cầu Hoàn tiền cho toàn bộ đơn hàng"}
+                        >
+                            <Wallet className="h-4 w-4 mr-2" /> Refund Order
+                        </Button>
+                    )}
+                    
+                    {/* NÚT YÊU CẦU IN LẠI (CẤP ORDER) */}
+                    {onOpenReprint && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            // ✨ DISABLE NẾU KHÔNG ĐỦ ĐIỀU KIỆN ✨
+                            disabled={!isEligible} 
+                            onClick={isEligible ? onOpenReprint : () => handleDisabledClick('In lại')}
+                            className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                            // ✨ THÔNG BÁO VỚI TITLE ✨
+                            title={!isEligible ? `Trạng thái phải là SHIPPED/COMPLETED (Hiện tại: ${orderStatus})` : "Yêu cầu In lại cho toàn bộ đơn hàng"}
+                        >
+                            <Printer className="h-4 w-4 mr-2" /> Reprint Order
+                        </Button>
+                    )}       
           {onBack && (
             <Button
               onClick={onBack}
