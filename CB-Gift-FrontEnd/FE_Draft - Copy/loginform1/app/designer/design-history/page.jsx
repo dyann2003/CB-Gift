@@ -390,13 +390,8 @@ export default function DesignHistoryPage() {
                         </TableCell>
 
                         <TableCell
-                          className={
-                            isDuplicateOrderCode
-                              ? "text-gray-400 font-normal"
-                              : "font-medium"
-                          }
-                        >
-                          {!isDuplicateOrderCode ? order.orderCode : "—"}
+                          className="font-medium">
+                          { order.orderCode }
                         </TableCell>
 
                         <TableCell>{order.productName}</TableCell>

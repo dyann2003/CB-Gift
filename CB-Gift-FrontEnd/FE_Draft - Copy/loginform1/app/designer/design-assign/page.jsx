@@ -379,7 +379,9 @@ export default function DesignAssignPage() {
       alert(
         "Đã gửi thiết kế đi kiểm duyệt. Đơn hàng sẽ được cập nhật trạng thái."
       );
+      fetchTasks();
     }
+    //window.location.reload();
   };
 
   const handleItemsPerPageChange = (value) => {
@@ -851,13 +853,9 @@ export default function DesignAssignPage() {
 
                         {/* ORDER CODE CELL (Đã sửa để ẩn khi trùng) */}
                         <TableCell
-                          className={
-                            isDuplicateOrderCode
-                              ? "text-gray-400 font-normal"
-                              : "font-medium"
-                          }
-                        >
-                          {!isDuplicateOrderCode ? order.orderCode : "—"}
+                          className=
+                            "font-medium">
+                         {order.orderCode} 
                         </TableCell>
 
                         <TableCell>{order.productName}</TableCell>
@@ -1434,7 +1432,9 @@ export default function DesignAssignPage() {
 
                             {currentStatus === "CHECK_DESIGN" &&
                               order.orderStatus !== "CHECK_DESIGN" &&
-                              (order.orderStatus == 4 || order.orderStatus == 6) && (
+                              (order.orderStatus == 4 ||
+                                order.orderStatus == 6) &&
+                              !isDuplicateOrderCode && (  
                                 <Button
                                   size="sm"
                                   onClick={() => handleSendToSellerCheck(order.id)}
@@ -1442,13 +1442,13 @@ export default function DesignAssignPage() {
                                 >
                                   <Send className="h-4 w-4 mr-1" /> Send to Check
                                 </Button>
-                            )}
+                              )}
                             {!(
                                 currentStatus === "CHECK_DESIGN" &&
                                 currentStatus === "DESIGNING" ||
                                 currentStatus === "NEED_DESIGN" ||
                                  currentStatus === "DESIGN_REDO" ||
-                                (order.orderStatus == 4 || order.orderStatus == 6)
+                                (order.orderStatus == 4 || order.orderStatus == 6 || order.orderStatus==3)
                               ) && (
                                 <span className="text-xs text-gray-500 block mt-1">
                                   Already sent
