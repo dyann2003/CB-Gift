@@ -82,7 +82,7 @@ export default function DesignAssignPage() {
   const [loading, setLoading] = useState(true);
   const [assignedOrders, setAssignedOrders] = useState([]);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [taskLogs, setTaskLogs] = useState([]); 
+  const [taskLogs, setTaskLogs] = useState([]);
   // --- SIGNALR: nhận assignment mới từ server ---
   const connection = useSignalR();
 
@@ -139,9 +139,12 @@ export default function DesignAssignPage() {
   const fetchMyImages = async () => {
     try {
       // SỬA URL API THÀNH '/api/images/my-images'
-      const res = await fetch(`${apiClient.defaults.baseURL}/api/images/my-images`, {
-        credentials: "include",
-      });
+      const res = await fetch(
+        `${apiClient.defaults.baseURL}/api/images/my-images`,
+        {
+          credentials: "include",
+        }
+      );
 
       if (!res.ok) {
         // Xử lý lỗi xác thực (401/403)
@@ -392,9 +395,12 @@ export default function DesignAssignPage() {
   const fetchTasks = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${apiClient.defaults.baseURL}/api/designer/tasks`, {
-        credentials: "include",
-      });
+      const res = await fetch(
+        `${apiClient.defaults.baseURL}/api/designer/tasks`,
+        {
+          credentials: "include",
+        }
+      );
 
       if (!res.ok) throw new Error(`HTTP error! ${res.status}`);
 
@@ -437,13 +443,15 @@ export default function DesignAssignPage() {
     try {
       const res = await fetch(
         `${apiClient.defaults.baseURL}/api/designer/tasks/${orderDetailId}`,
-        { credentials: "include" }
+        {
+          credentials: "include",
+        }
       );
 
       if (!res.ok) {
         throw new Error(`Failed to fetch details: ${res.status}`);
       }
-      
+
       const data = await res.json();
       const updatedTaskInfo = {
         ...data.taskInfo,
@@ -452,10 +460,9 @@ export default function DesignAssignPage() {
       };
       // CẬP NHẬT 2 STATE:
       // 1. Cập nhật selectedOrder với dữ liệu MỚI NHẤT từ API
-      setSelectedOrder(updatedTaskInfo); 
+      setSelectedOrder(updatedTaskInfo);
       // 2. Lưu trữ danh sách logs
       setTaskLogs(data.logs || []);
-
     } catch (error) {
       console.error("Error fetching task detail:", error);
       toast({
@@ -563,7 +570,7 @@ export default function DesignAssignPage() {
   let previousOrderCode = null;
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-blue-50">
       <DesignerSidebar
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}
@@ -572,18 +579,18 @@ export default function DesignAssignPage() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <DesignerHeader />
 
-        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-          <h1 className="text-2xl font-semibold text-gray-900">
+        <header className="bg-white shadow-sm border-b border-blue-200 px-6 py-4">
+          <h1 className="text-2xl font-semibold text-slate-900">
             Design Assigned
           </h1>
-          <p className="text-gray-600 mt-1">
+          <p className="text-slate-600 mt-1">
             Orders assigned to you for design work
           </p>
         </header>
 
         <main className="flex-1 overflow-y-auto p-6">
           {loading ? (
-            <div className="text-center text-gray-500 mb-6">
+            <div className="text-center text-slate-500 mb-6">
               Loading stats...
             </div>
           ) : (
@@ -597,10 +604,10 @@ export default function DesignAssignPage() {
                 }`}
                 onClick={() => setStatusFilter("NEED_DESIGN")}
               >
-                <h3 className="text-sm font-medium text-gray-500">
+                <h3 className="text-sm font-medium text-slate-500">
                   Need Design
                 </h3>
-                <p className="text-2xl font-bold text-gray-900 mt-2">
+                <p className="text-2xl font-bold text-slate-900 mt-2">
                   {filterCounts["NEED_DESIGN"] || 0}
                 </p>
               </div>
@@ -614,8 +621,10 @@ export default function DesignAssignPage() {
                 }`}
                 onClick={() => setStatusFilter("DESIGNING")}
               >
-                <h3 className="text-sm font-medium text-gray-500">Designing</h3>
-                <p className="text-2xl font-bold text-gray-900 mt-2">
+                <h3 className="text-sm font-medium text-slate-500">
+                  Designing
+                </h3>
+                <p className="text-2xl font-bold text-slate-900 mt-2">
                   {filterCounts["DESIGNING"] || 0}
                 </p>
               </div>
@@ -629,10 +638,10 @@ export default function DesignAssignPage() {
                 }`}
                 onClick={() => setStatusFilter("CHECK_DESIGN")}
               >
-                <h3 className="text-sm font-medium text-gray-500">
+                <h3 className="text-sm font-medium text-slate-500">
                   Need Check Design
                 </h3>
-                <p className="text-2xl font-bold text-gray-900 mt-2">
+                <p className="text-2xl font-bold text-slate-900 mt-2">
                   {filterCounts["CHECK_DESIGN"] || 0}
                 </p>
               </div>
@@ -646,27 +655,27 @@ export default function DesignAssignPage() {
                 }`}
                 onClick={() => setStatusFilter("DESIGN_REDO")}
               >
-                <h3 className="text-sm font-medium text-gray-500">
+                <h3 className="text-sm font-medium text-slate-500">
                   Design Error
                 </h3>
-                <p className="text-2xl font-bold text-gray-900 mt-2">
+                <p className="text-2xl font-bold text-slate-900 mt-2">
                   {filterCounts["DESIGN_REDO"] || 0}
                 </p>
               </div>
 
               {/* Total */}
               <div
-                className={`bg-white p-6 rounded-lg shadow cursor-pointer hover:ring-2 hover:ring-gray-300 transition-all ${
+                className={`bg-white p-6 rounded-lg shadow cursor-pointer hover:ring-2 hover:ring-blue-300 transition-all ${
                   statusFilter === "all"
-                    ? "ring-2 ring-offset-2 ring-gray-500"
+                    ? "ring-2 ring-offset-2 ring-blue-500"
                     : ""
                 }`}
                 onClick={() => setStatusFilter("all")}
               >
-                <h3 className="text-sm font-medium text-gray-500">
+                <h3 className="text-sm font-medium text-slate-500">
                   Total Orders
                 </h3>
-                <p className="text-2xl font-bold text-gray-900 mt-2">
+                <p className="text-2xl font-bold text-slate-900 mt-2">
                   {filterCounts.all || 0}
                 </p>
               </div>
@@ -674,18 +683,18 @@ export default function DesignAssignPage() {
           )}
 
           {/* Search and Filter Section */}
-          <div className="bg-white p-4 rounded-lg shadow mb-6">
+          <div className="bg-blue-50 p-4 sm:p-6 rounded-lg border border-blue-100 shadow-sm mb-6">
             <div className="flex flex-col gap-4">
               {/* Search bar */}
               <div className="flex gap-4 items-center">
                 <div className="flex-1">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
                     <Input
                       placeholder="Search by Order ID, Product Name..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10"
+                      className="pl-10 bg-white border-blue-100 focus:border-blue-300"
                     />
                   </div>
                 </div>
@@ -694,7 +703,7 @@ export default function DesignAssignPage() {
               {/* Month/year filter selects */}
               <div className="flex gap-4 items-center">
                 <div className="flex-1">
-                  <Label className="text-sm font-medium text-gray-700 mb-2 block">
+                  <Label className="text-sm font-medium text-slate-700 mb-2 block">
                     Filter by Month/Year
                   </Label>
                   <div className="flex gap-2">
@@ -702,7 +711,7 @@ export default function DesignAssignPage() {
                       value={selectedMonth}
                       onValueChange={setSelectedMonth}
                     >
-                      <SelectTrigger className="w-32">
+                      <SelectTrigger className="w-32 bg-white border-blue-100 focus:border-blue-300">
                         <SelectValue placeholder="Month" />
                       </SelectTrigger>
                       <SelectContent>
@@ -726,7 +735,7 @@ export default function DesignAssignPage() {
                       value={selectedYear}
                       onValueChange={setSelectedYear}
                     >
-                      <SelectTrigger className="w-32">
+                      <SelectTrigger className="w-32 bg-white border-blue-100 focus:border-blue-300">
                         <SelectValue placeholder="Year" />
                       </SelectTrigger>
                       <SelectContent>
@@ -751,6 +760,7 @@ export default function DesignAssignPage() {
                           setSelectedMonth("all-months");
                           setSelectedYear("all-years");
                         }}
+                        className="border-blue-100 hover:bg-blue-50 bg-transparent"
                       >
                         Clear Filter
                       </Button>
@@ -760,7 +770,7 @@ export default function DesignAssignPage() {
               </div>
             </div>
           </div>
-          {/* Bulk Actions (giữ nguyên) */}
+
           {selectedOrderDetails.size > 0 && (
             <div className="bg-blue-50 p-4 rounded-lg shadow mb-6 border border-blue-200">
               <div className="flex items-center justify-between">
@@ -795,37 +805,54 @@ export default function DesignAssignPage() {
             </div>
           )}
 
-          {/* Table Section */}
-          <div className="bg-white rounded-lg shadow">
+          <div className="bg-blue-50 rounded-lg shadow-sm border border-blue-100">
             {loading && (
-              <div className="p-4 text-center text-gray-500">
-                Đang tải danh sách công việc được giao...
+              <div className="p-4 text-center text-slate-500 bg-white rounded-lg">
+                Loading.......
               </div>
             )}
             {!loading && filteredOrders.length === 0 && (
-              <div className="p-4 text-center text-gray-500">
+              <div className="p-4 text-center text-slate-500 bg-white rounded-lg">
                 Không tìm thấy công việc thiết kế nào được giao.
               </div>
             )}
             {!loading && filteredOrders.length > 0 && (
               <Table>
                 <TableHeader>
-                  <TableRow>
+                  <TableRow className="bg-blue-100 hover:bg-blue-100">
                     <TableHead className="w-12">
                       <Checkbox
                         checked={selectAll}
                         onCheckedChange={handleSelectAll}
                       />
                     </TableHead>
-                    <TableHead>Detail ID</TableHead>
-                    <TableHead>Order Code</TableHead>
-                    <TableHead>Product Name</TableHead>
-                    <TableHead>Product Description</TableHead>
-                    <TableHead>Quantity</TableHead>
-                    <TableHead>Size (L x H x W)</TableHead>
-                    <TableHead>Assigned At</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
+                      Detail ID
+                    </TableHead>
+                    <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
+                      Order Code
+                    </TableHead>
+                    <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
+                      Product Name
+                    </TableHead>
+                    <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
+                      Product Description
+                    </TableHead>
+                    <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
+                      Quantity
+                    </TableHead>
+                    <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
+                      Size (L x H x W)
+                    </TableHead>
+                    <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
+                      Assigned At
+                    </TableHead>
+                    <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
+                      Status
+                    </TableHead>
+                    <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide">
+                      Actions
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -838,7 +865,10 @@ export default function DesignAssignPage() {
                       order.ProductionStatus || "NEED_DESIGN";
 
                     return (
-                      <TableRow key={order.id}>
+                      <TableRow
+                        key={order.id}
+                        className="hover:bg-blue-50 transition-colors"
+                      >
                         <TableCell>
                           <Checkbox
                             checked={selectedOrderDetails.has(order.id)}
@@ -847,26 +877,30 @@ export default function DesignAssignPage() {
                             }
                           />
                         </TableCell>
-                        <TableCell className="font-medium">
+                        <TableCell className="font-medium text-slate-900 whitespace-nowrap">
                           {order.orderDetailId}
                         </TableCell>
 
                         {/* ORDER CODE CELL (Đã sửa để ẩn khi trùng) */}
-                        <TableCell
-                          className=
-                            "font-medium">
-                         {order.orderCode} 
+                        <TableCell className="font-medium text-slate-900 whitespace-nowrap">
+                          {order.orderCode}
                         </TableCell>
 
-                        <TableCell>{order.productName}</TableCell>
-                        <TableCell>{order.productDescribe || "N/A"}</TableCell>
-                        <TableCell>{order.quantity}</TableCell>
-                        <TableCell>
+                        <TableCell className="text-slate-900">
+                          {order.productName}
+                        </TableCell>
+                        <TableCell className="text-slate-900">
+                          {order.productDescribe || "N/A"}
+                        </TableCell>
+                        <TableCell className="text-slate-900">
+                          {order.quantity}
+                        </TableCell>
+                        <TableCell className="text-slate-900">
                           {order.productDetails?.lengthCm}x
                           {order.productDetails?.heightCm}x
                           {order.productDetails?.widthCm}cm
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-slate-900">
                           {new Date(order.assignedAt).toLocaleString()}
                         </TableCell>
                         <TableCell>{getOrderStatus(order)}</TableCell>
@@ -878,22 +912,21 @@ export default function DesignAssignPage() {
                                 if (open) {
                                   // 1. Set state stale (từ bảng) để dialog mở ngay lập tức
                                   setSelectedOrder(order);
-                                  setDesignFile(null); 
+                                  setDesignFile(null);
                                   setDesignNotes("");
                                   setSelectedImageUrl("");
-                                  
+
                                   // --- GỌI API MỚI ---
                                   fetchTaskDetail(order.id); // order.id chính là orderDetailId [cite: 88]
-
                                 } else {
-                                  setSelectedOrder(null); 
+                                  setSelectedOrder(null);
                                   setTaskLogs([]); // Xóa logs khi đóng
                                 }
                               }}
                             >
                               <DialogTrigger asChild>
                                 <Button variant="outline" size="sm">
-                                  <Eye className="h-4 w-4 mr-1" /> View
+                                  <Eye className="h-4 w-4 mr-1" />
                                 </Button>
                               </DialogTrigger>
 
@@ -963,7 +996,7 @@ export default function DesignAssignPage() {
                                           </div>
                                         </div>
                                         {/* --- PHẦN MỚI THÊM: LOADING VÀ LỊCH SỬ REJECT --- */}
-                                        
+
                                         {/* 1. HIỂN THỊ LOADING */}
                                         {detailLoading && (
                                           <div className="text-center p-6 bg-gray-50 rounded-lg">
@@ -974,60 +1007,87 @@ export default function DesignAssignPage() {
                                         )}
 
                                         {/* 2. HIỂN THỊ LỊCH SỬ LOGS (ĐÃ CẬP NHẬT) */}
-                                        {!detailLoading && taskLogs.length > 0 && (
-                                          <div className="space-y-4">
-                                            <h3 className="font-semibold text-lg text-gray-900">
-                                             Design Review History
-                                            </h3>
-                                            <ul className="space-y-3">
-                                              {taskLogs.map((log) => {
-                                                const isRejection = log.eventType === 'DESIGN_REJECTED' || log.eventType === 'QC_FAIL';
-                                                const isApproval = log.eventType === 'DESIGN_APPROVED';
+                                        {!detailLoading &&
+                                          taskLogs.length > 0 && (
+                                            <div className="space-y-4">
+                                              <h3 className="font-semibold text-lg text-gray-900">
+                                                Design Review History
+                                              </h3>
+                                              <ul className="space-y-3">
+                                                {taskLogs.map((log) => {
+                                                  const isRejection =
+                                                    log.eventType ===
+                                                      "DESIGN_REJECTED" ||
+                                                    log.eventType === "QC_FAIL";
+                                                  const isApproval =
+                                                    log.eventType ===
+                                                    "DESIGN_APPROVED";
 
-                                                // Xác định style dựa trên loại log
-                                                let containerClass = "bg-gray-50 border-gray-200 p-4 rounded-lg border";
-                                                let titleClass = "font-medium text-gray-700";
-                                                let title = log.eventType; // Tiêu đề mặc định
+                                                  // Xác định style dựa trên loại log
+                                                  let containerClass =
+                                                    "bg-gray-50 border-gray-200 p-4 rounded-lg border";
+                                                  let titleClass =
+                                                    "font-medium text-gray-700";
+                                                  let title = log.eventType; // Tiêu đề mặc định
 
-                                                if (isRejection) {
-                                                  containerClass = "bg-red-50 border-red-200 p-4 rounded-lg border";
-                                                  titleClass = "font-medium text-red-700";
-                                                  title = log.eventType === 'DESIGN_REJECTED' ? 'Design Rejected' : 'QC Báo lỗi';
-                                                } else if (isApproval) {
-                                                  containerClass = "bg-green-50 border-green-200 p-4 rounded-lg border";
-                                                  titleClass = "font-medium text-green-700";
-                                                  title = 'Approved Design';
-                                                }
+                                                  if (isRejection) {
+                                                    containerClass =
+                                                      "bg-red-50 border-red-200 p-4 rounded-lg border";
+                                                    titleClass =
+                                                      "font-medium text-red-700";
+                                                    title =
+                                                      log.eventType ===
+                                                      "DESIGN_REJECTED"
+                                                        ? "Design Rejected"
+                                                        : "QC Báo lỗi";
+                                                  } else if (isApproval) {
+                                                    containerClass =
+                                                      "bg-green-50 border-green-200 p-4 rounded-lg border";
+                                                    titleClass =
+                                                      "font-medium text-green-700";
+                                                    title = "Approved Design";
+                                                  }
 
-                                                return (
-                                                  <li 
-                                                    key={log.orderDetailLogId} 
-                                                    className={containerClass}
-                                                  >
-                                                    <div className="flex justify-between items-center mb-1">
-                                                      <span className={titleClass}>
-                                                        {title}
-                                                      </span>
-                                                      <span className="text-xs text-gray-600">
-                                                        {new Date(log.createdAt).toLocaleString()}
-                                                      </span>
-                                                    </div>
-                                                    <p className="text-sm text-gray-800">
-                                                      <strong>Made by:</strong> {log.userName || 'System'}
-                                                    </p>
-                                                    
-                                                    {/* Chỉ hiển thị Lý do/Ghi chú nếu có */}
-                                                    {log.reason && (
-                                                      <p className="text-sm text-gray-800 mt-1">
-                                                        <strong>Reason Reject:</strong> {log.reason}
+                                                  return (
+                                                    <li
+                                                      key={log.orderDetailLogId}
+                                                      className={containerClass}
+                                                    >
+                                                      <div className="flex justify-between items-center mb-1">
+                                                        <span
+                                                          className={titleClass}
+                                                        >
+                                                          {title}
+                                                        </span>
+                                                        <span className="text-xs text-gray-600">
+                                                          {new Date(
+                                                            log.createdAt
+                                                          ).toLocaleString()}
+                                                        </span>
+                                                      </div>
+                                                      <p className="text-sm text-gray-800">
+                                                        <strong>
+                                                          Made by:
+                                                        </strong>{" "}
+                                                        {log.userName ||
+                                                          "System"}
                                                       </p>
-                                                    )}
-                                                  </li>
-                                                );
-                                              })}
-                                            </ul>
-                                          </div>
-                                        )}
+
+                                                      {/* Chỉ hiển thị Lý do/Ghi chú nếu có */}
+                                                      {log.reason && (
+                                                        <p className="text-sm text-gray-800 mt-1">
+                                                          <strong>
+                                                            Reason Reject:
+                                                          </strong>{" "}
+                                                          {log.reason}
+                                                        </p>
+                                                      )}
+                                                    </li>
+                                                  );
+                                                })}
+                                              </ul>
+                                            </div>
+                                          )}
                                         {/* --- KẾT THÚC PHẦN MỚI THÊM --- */}
 
                                         {/* Product Details Section */}
@@ -1141,6 +1201,7 @@ export default function DesignAssignPage() {
                                                   <img
                                                     src={
                                                       selectedOrder.linkImg ||
+                                                      "/placeholder.svg" ||
                                                       "/placeholder.svg"
                                                     }
                                                     alt={
@@ -1162,6 +1223,7 @@ export default function DesignAssignPage() {
                                                     <img
                                                       src={
                                                         selectedOrder.linkThankCard ||
+                                                        "/placeholder.svg" ||
                                                         "/placeholder.svg"
                                                       }
                                                       alt="Thank Card"
@@ -1180,6 +1242,7 @@ export default function DesignAssignPage() {
                                                     <img
                                                       src={
                                                         selectedOrder.linkFileDesign ||
+                                                        "/placeholder.svg" ||
                                                         "/placeholder.svg"
                                                       }
                                                       alt="Design File"
@@ -1194,11 +1257,15 @@ export default function DesignAssignPage() {
 
                                         {(currentStatus === "DESIGNING" ||
                                           currentStatus === "DESIGN_REDO" ||
-                                         (currentStatus === "CHECK_DESIGN" && selectedOrder.orderStatus === 4 || selectedOrder.orderStatus === 6))&& (
+                                          (currentStatus === "CHECK_DESIGN" &&
+                                            selectedOrder.orderStatus === 4) ||
+                                          selectedOrder.orderStatus === 6) && (
                                           <div className="border-t pt-4">
-                                             <h3 className="font-semibold text-lg mb-3">
+                                            <h3 className="font-semibold text-lg mb-3">
                                               {/* Sửa tiêu đề */}
-                                              {currentStatus === "CHECK_DESIGN" ? "Edit & Resubmit Design" : "Upload Design"}
+                                              {currentStatus === "CHECK_DESIGN"
+                                                ? "Edit & Resubmit Design"
+                                                : "Upload Design"}
                                             </h3>
                                             <div className="space-y-4">
                                               {/* 1. INPUT FILE MỚI & NÚT CHỌN KHO ẢNH */}
@@ -1274,6 +1341,7 @@ export default function DesignAssignPage() {
                                                               <img
                                                                 src={
                                                                   img.secureUrl ||
+                                                                  "/placeholder.svg" ||
                                                                   "/placeholder.svg"
                                                                 }
                                                                 alt={
@@ -1384,7 +1452,7 @@ export default function DesignAssignPage() {
                                           </div>
                                         )}
 
-                                        <div className="border-t pt-4">
+                                        {/* <div className="border-t pt-4">
                                           <h3 className="font-semibold text-lg mb-3">
                                             Files from Seller
                                           </h3>
@@ -1401,7 +1469,7 @@ export default function DesignAssignPage() {
                                               </p>
                                             </div>
                                           </div>
-                                        </div>
+                                        </div> */}
                                       </div>
                                     )}
                                   </DialogContent>
@@ -1415,7 +1483,7 @@ export default function DesignAssignPage() {
                                 onClick={() => handleAcceptDesign(order.id)}
                                 className="bg-green-600 hover:bg-green-700"
                               >
-                                <Check className="h-4 w-4 mr-1" /> Accept
+                                <Check className="h-4 w-4 mr-1" />
                               </Button>
                             )}
                             {/* {currentStatus === "DESIGNING" && (
@@ -1434,26 +1502,30 @@ export default function DesignAssignPage() {
                               order.orderStatus !== "CHECK_DESIGN" &&
                               (order.orderStatus == 4 ||
                                 order.orderStatus == 6) &&
-                              !isDuplicateOrderCode && (  
+                              !isDuplicateOrderCode && (
                                 <Button
                                   size="sm"
-                                  onClick={() => handleSendToSellerCheck(order.id)}
+                                  onClick={() =>
+                                    handleSendToSellerCheck(order.id)
+                                  }
                                   className="bg-blue-600 hover:bg-blue-700"
                                 >
-                                  <Send className="h-4 w-4 mr-1" /> Send to Check
+                                  <Send className="h-4 w-4 mr-1" />
                                 </Button>
                               )}
                             {!(
-                                currentStatus === "CHECK_DESIGN" &&
-                                currentStatus === "DESIGNING" ||
-                                currentStatus === "NEED_DESIGN" ||
-                                 currentStatus === "DESIGN_REDO" ||
-                                (order.orderStatus == 4 || order.orderStatus == 6 || order.orderStatus==3)
-                              ) && (
-                                <span className="text-xs text-gray-500 block mt-1">
-                                  Already sent
-                                </span>
-                              )}
+                              (currentStatus === "CHECK_DESIGN" &&
+                                currentStatus === "DESIGNING") ||
+                              currentStatus === "NEED_DESIGN" ||
+                              currentStatus === "DESIGN_REDO" ||
+                              order.orderStatus == 4 ||
+                              order.orderStatus == 6 ||
+                              order.orderStatus == 3
+                            ) && (
+                              <span className="text-xs text-red-500 font-bold block mt-1">
+                                Already sent
+                              </span>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -1464,24 +1536,24 @@ export default function DesignAssignPage() {
             )}
 
             {!loading && filteredOrders.length > 0 && (
-              <div className="border-t px-6 py-4 flex items-center justify-between">
+              <div className="border-t px-6 py-4 flex items-center justify-between bg-blue-50">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-700">Show</span>
+                  <span className="text-sm text-slate-700">Show</span>
                   <select
                     value={itemsPerPage}
                     onChange={(e) => handleItemsPerPageChange(e.target.value)}
-                    className="px-2 py-1 border border-gray-300 rounded-md text-sm"
+                    className="px-2 py-1 border border-blue-100 rounded-md text-sm bg-white focus:border-blue-300"
                   >
                     <option value="5">5</option>
                     <option value="10">10</option>
                     <option value="20">20</option>
                     <option value="50">50</option>
                   </select>
-                  <span className="text-sm text-gray-700">per page</span>
+                  <span className="text-sm text-slate-700">per page</span>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-700">
+                  <span className="text-sm text-slate-700">
                     Page {page} of {totalPages} ({filteredOrders.length} total)
                   </span>
                 </div>
@@ -1492,7 +1564,7 @@ export default function DesignAssignPage() {
                     size="sm"
                     onClick={() => setPage(page - 1)}
                     disabled={page === 1}
-                    className="disabled:opacity-50"
+                    className="disabled:opacity-50 border-blue-100 hover:bg-blue-50"
                   >
                     <ChevronLeft className="h-4 w-4" />
                     <span className="hidden sm:inline ml-1">Previous</span>
@@ -1529,7 +1601,7 @@ export default function DesignAssignPage() {
                     size="sm"
                     onClick={() => setPage(page + 1)}
                     disabled={page === totalPages}
-                    className="disabled:opacity-50"
+                    className="disabled:opacity-50 border-blue-100 hover:bg-blue-50"
                   >
                     <span className="hidden sm:inline mr-1">Next</span>
                     <ChevronRight className="h-4 w-4" />

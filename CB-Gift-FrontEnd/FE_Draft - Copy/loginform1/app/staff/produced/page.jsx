@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import StaffSidebar from "@/components/layout/staff/sidebar";
 import StaffHeader from "@/components/layout/staff/header";
-import apiClient from "../../../lib/apiClient";
 
 const FilterIcon = () => (
   <svg
@@ -147,16 +146,16 @@ export default function ProducedPage() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <StaffHeader />
 
-        <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
+        <main className="flex-1 overflow-y-auto bg-blue-50 p-6">
           <div className="max-w-7xl mx-auto">
             <div className="mb-8">
-              <div className="bg-white p-4 sm:p-6 rounded-lg border-2 border-green-200 shadow-sm">
+              <div className="bg-white p-4 sm:p-6 rounded-lg border-2 border-blue-200 shadow-sm">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h1 className="text-lg sm:text-xl font-semibold text-green-800">
+                    <h1 className="text-lg sm:text-xl font-semibold text-blue-800">
                       Produced Orders
                     </h1>
-                    <p className="text-sm sm:text-base text-green-600 mt-1">
+                    <p className="text-sm sm:text-base text-blue-600 mt-1">
                       Orders that have been completed
                     </p>
                   </div>
@@ -165,9 +164,9 @@ export default function ProducedPage() {
             </div>
 
             {/* Filters */}
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-8 flex items-center flex-wrap gap-4">
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-blue-100 mb-8 flex items-center flex-wrap gap-4">
               <FilterIcon />
-              <h3 className="text-md font-semibold text-gray-700 mr-4">
+              <h3 className="text-md font-semibold text-slate-700 mr-4">
                 Filters:
               </h3>
 
@@ -178,7 +177,7 @@ export default function ProducedPage() {
                     e.target.value ? Number.parseInt(e.target.value) : null
                   )
                 }
-                className="bg-gray-100 border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                className="bg-blue-50 border border-blue-100 rounded-md shadow-sm p-2 text-sm text-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="">All Product Types</option>
                 {getUniqueCategories().map((cat) => (
@@ -192,14 +191,14 @@ export default function ProducedPage() {
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="bg-gray-100 border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                className="bg-blue-50 border border-blue-100 rounded-md shadow-sm p-2 text-sm text-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
               <button
                 onClick={() => {
                   setSelectedCategory(null);
                   setSelectedDate("");
                 }}
-                className="text-sm text-blue-600 hover:underline ml-auto pr-2"
+                className="text-sm text-blue-600 hover:text-blue-800 hover:underline ml-auto pr-2"
               >
                 Clear Filters
               </button>
@@ -208,23 +207,23 @@ export default function ProducedPage() {
             {/* Content Area */}
             <div className="space-y-8">
               {isLoading ? (
-                <div className="text-center py-10 bg-white rounded-lg shadow-md">
-                  <p className="text-gray-500">Loading...</p>
+                <div className="text-center py-10 bg-white rounded-lg shadow-md border border-blue-100">
+                  <p className="text-slate-500">Loading...</p>
                 </div>
               ) : error ? (
-                <div className="text-center py-10 bg-white rounded-lg shadow-md">
+                <div className="text-center py-10 bg-white rounded-lg shadow-md border border-blue-100">
                   <p className="text-red-500 font-semibold">{error}</p>
                 </div>
               ) : productionData.length === 0 ? (
-                <div className="text-center py-10 bg-white rounded-lg shadow-md">
-                  <p className="text-gray-500">No orders found.</p>
+                <div className="text-center py-10 bg-white rounded-lg shadow-md border border-blue-100">
+                  <p className="text-slate-500">No orders found.</p>
                 </div>
               ) : (
                 productionData.map((category) => (
                   <div key={category.categoryId}>
-                    <h2 className="text-2xl font-bold text-gray-700">
+                    <h2 className="text-2xl font-bold text-slate-800">
                       {category.categoryName}
-                      <span className="text-lg font-medium text-gray-500 ml-2">
+                      <span className="text-lg font-medium text-slate-600 ml-2">
                         ({category.totalItems} orders)
                       </span>
                     </h2>
@@ -232,10 +231,10 @@ export default function ProducedPage() {
                       {category.dateGroups.map((dateGroup) => (
                         <div
                           key={dateGroup.groupDate}
-                          className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200"
+                          className="bg-white rounded-xl shadow-md overflow-hidden border border-blue-100"
                         >
                           <div className="bg-green-300 p-3">
-                            <h3 className="font-bold text-green-800">
+                            <h3 className="font-bold text-green-900">
                               {new Date(dateGroup.groupDate).toLocaleDateString(
                                 "en-US",
                                 {
@@ -251,38 +250,38 @@ export default function ProducedPage() {
                           </div>
                           <div className="overflow-x-auto">
                             <table className="min-w-full text-sm">
-                              <thead className="bg-gray-50">
+                              <thead className="bg-blue-50">
                                 <tr>
-                                  <th className="p-3 text-left font-semibold text-gray-600 w-12">
+                                  <th className="p-3 text-left font-semibold text-slate-700 w-12">
                                     #
                                   </th>
-                                  <th className="p-3 text-left font-semibold text-gray-600 w-24">
+                                  <th className="p-3 text-left font-semibold text-slate-700 w-24">
                                     Image
                                   </th>
-                                  <th className="p-3 text-left font-semibold text-gray-600">
+                                  <th className="p-3 text-left font-semibold text-slate-700">
                                     Name
                                   </th>
-                                  <th className="p-3 text-center font-semibold text-gray-600">
+                                  <th className="p-3 text-center font-semibold text-slate-700">
                                     Quantity
                                   </th>
-                                  <th className="p-3 text-left font-semibold text-gray-600">
+                                  <th className="p-3 text-left font-semibold text-slate-700">
                                     Note
                                   </th>
                                   <th
-                                    className="p-3 text-center font-semibold text-gray-600"
+                                    className="p-3 text-center font-semibold text-slate-700"
                                     colSpan="4"
                                   >
                                     Documents
                                   </th>
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-gray-200">
+                              <tbody className="divide-y divide-blue-100">
                                 {dateGroup.details.map((detail, index) => (
                                   <tr
                                     key={detail.planDetailId}
-                                    className="hover:bg-gray-50"
+                                    className="hover:bg-blue-50 transition-colors"
                                   >
-                                    <td className="p-3 text-center text-gray-500">
+                                    <td className="p-3 text-center text-slate-500">
                                       {index + 1}
                                     </td>
                                     <td className="p-3">
@@ -290,24 +289,25 @@ export default function ProducedPage() {
                                         src={
                                           detail.imageUrl ||
                                           "https://placehold.co/100x100/e2e8f0/adb5bd?text=N/A" ||
+                                          "/placeholder.svg" ||
                                           "/placeholder.svg"
                                         }
                                         alt={detail.customerName}
-                                        className="w-16 h-16 object-cover rounded-md border"
+                                        className="w-16 h-16 object-cover rounded-md border border-blue-100"
                                       />
                                     </td>
                                     <td className="p-3">
-                                      <div className="font-bold text-gray-800">
+                                      <div className="font-bold text-slate-800">
                                         {detail.customerName}
                                       </div>
-                                      <div className="text-xs text-gray-500">
+                                      <div className="text-xs text-slate-500">
                                         {detail.orderCode}
                                       </div>
                                     </td>
-                                    <td className="p-3 text-center font-medium text-gray-700">
+                                    <td className="p-3 text-center font-medium text-slate-700">
                                       {detail.quantity}
                                     </td>
-                                    <td className="p-3 text-gray-600 max-w-xs truncate">
+                                    <td className="p-3 text-slate-600 max-w-xs truncate">
                                       {detail.noteOrEngravingContent || "N/A"}
                                     </td>
                                     <td className="p-3 text-center">
