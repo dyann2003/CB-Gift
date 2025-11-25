@@ -30,7 +30,7 @@ namespace CB_Gift.Services
         private readonly ReferenceDataCache _cache;
         public OrderService(CBGiftDbContext context, IMapper mapper, ILogger<OrderService> logger,
             INotificationService notificationService, IHubContext<NotificationHub> hubContext, OrderFactory orderFactory,
-            IValidator<OrderImportRowDto> validator,ReferenceDataCache cache, IShippingService shippingService)
+            IValidator<OrderImportRowDto> validator, ReferenceDataCache cache, IShippingService shippingService)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
             _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
@@ -1360,7 +1360,7 @@ namespace CB_Gift.Services
                 dto.RejectionReason = latestRefund.StaffRejectionReason;
 
                 // Nếu trạng thái Order đang là Refunded hoặc Refund Pending, ưu tiên hiển thị lý do Refund
-                
+
             }
             return dto;
         }
@@ -1481,7 +1481,7 @@ namespace CB_Gift.Services
 
                     OrderID = row.Cell(1).GetString(),
                     OrderCode = row.Cell(2).GetString(),
-                    
+
                     OrderDate = DateTime.TryParse(row.Cell(3).GetString(), out var date)
             ? date
             : DateTime.UtcNow,
@@ -1552,6 +1552,6 @@ namespace CB_Gift.Services
 
             return result;
         }
-      
+
     }
 }

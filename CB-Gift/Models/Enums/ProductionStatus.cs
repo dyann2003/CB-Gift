@@ -28,6 +28,7 @@
         // Khác
         HOLD,  //13
         HOLD_RP, //14
+        REFUND // 15
         CANCELLED 
     }
 }
