@@ -6,26 +6,29 @@ namespace CB_Gift.Mapper
 {
     public class OrderProfile : Profile
     {
-            public OrderProfile()
-            {
-                CreateMap<Order, OrderDto>()
-                    .ForMember(dest => dest.CustomerId, opt => opt.MapFrom(src => src.EndCustomerId))
-                    .ForMember(dest => dest.CustomerName, opt => opt.MapFrom(src => src.EndCustomer.Name))
-                    .ForMember(dest => dest.SellerId, opt => opt.MapFrom(src => src.SellerUserId))
-                    .ForMember(dest => dest.StatusOderName, opt => opt.MapFrom(src => src.StatusOrderNavigation.NameVi));
-                CreateMap<OrderDto, Order>();
-                CreateMap<Order, OrderWithDetailsDto>()
-               .ForMember(dest => dest.CustomerId, opt => opt.MapFrom(src => src.EndCustomer.CustId))
+        public OrderProfile()
+        {
+            CreateMap<Order, OrderDto>()
+                .ForMember(dest => dest.CustomerId, opt => opt.MapFrom(src => src.EndCustomerId))
                 .ForMember(dest => dest.CustomerName, opt => opt.MapFrom(src => src.EndCustomer.Name))
-                .ForMember(dest => dest.Phone, opt => opt.MapFrom(src => src.EndCustomer.Phone))
-                .ForMember(dest => dest.Email, opt => opt.MapFrom(src => src.EndCustomer.Email))
-                .ForMember(dest => dest.Address, opt => opt.MapFrom(src => src.EndCustomer.Address))
-                .ForMember(dest => dest.Address1, opt => opt.MapFrom(src => src.EndCustomer.Address1))
-                .ForMember(dest => dest.Zipcode, opt => opt.MapFrom(src => src.EndCustomer.Zipcode))
-                .ForMember(dest => dest.ShipState, opt => opt.MapFrom(src => src.EndCustomer.ShipState))
-                .ForMember(dest => dest.ShipCity, opt => opt.MapFrom(src => src.EndCustomer.ShipCity))
-                .ForMember(dest => dest.ShipCountry, opt => opt.MapFrom(src => src.EndCustomer.ShipCountry))
                 .ForMember(dest => dest.SellerId, opt => opt.MapFrom(src => src.SellerUserId))
+                .ForMember(dest => dest.StatusOderName, opt => opt.MapFrom(src => src.StatusOrderNavigation.NameVi));
+            CreateMap<OrderDto, Order>();
+            CreateMap<Order, OrderWithDetailsDto>()
+           .ForMember(dest => dest.CustomerId, opt => opt.MapFrom(src => src.EndCustomer.CustId))
+            .ForMember(dest => dest.CustomerName, opt => opt.MapFrom(src => src.EndCustomer.Name))
+            .ForMember(dest => dest.Phone, opt => opt.MapFrom(src => src.EndCustomer.Phone))
+            .ForMember(dest => dest.Email, opt => opt.MapFrom(src => src.EndCustomer.Email))
+            .ForMember(dest => dest.Address, opt => opt.MapFrom(src => src.EndCustomer.Address))
+            .ForMember(dest => dest.Address1, opt => opt.MapFrom(src => src.EndCustomer.Address1))
+            .ForMember(dest => dest.Zipcode, opt => opt.MapFrom(src => src.EndCustomer.Zipcode))
+            .ForMember(dest => dest.ShipState, opt => opt.MapFrom(src => src.EndCustomer.ShipState))
+            .ForMember(dest => dest.ShipCity, opt => opt.MapFrom(src => src.EndCustomer.ShipCity))
+            .ForMember(dest => dest.ShipCountry, opt => opt.MapFrom(src => src.EndCustomer.ShipCountry))
+            .ForMember(dest => dest.SellerId, opt => opt.MapFrom(src => src.SellerUserId))
+            .ForMember(dest => dest.SellerName, opt => opt.MapFrom(src => src.SellerUser.FullName))
+            .ForMember(dest => dest.StatusOderName, opt => opt.MapFrom(src => src.StatusOrderNavigation.NameVi))
+            .ForMember(dest => dest.Details, opt => opt.MapFrom(src => src.OrderDetails));
                 .ForMember(dest => dest.SellerName, opt => opt.MapFrom(src => src.SellerUser.FullName))
                 .ForMember(dest => dest.StatusOderName, opt => opt.MapFrom(src => src.StatusOrderNavigation.Code))
                 .ForMember(dest => dest.Details, opt => opt.MapFrom(src => src.OrderDetails));
@@ -51,9 +54,13 @@ namespace CB_Gift.Mapper
                 .ForMember(dest => dest.TotalCost, opt => opt.MapFrom(src => src.TotalCost))
                 .ForMember(dest => dest.CostScan, opt => opt.MapFrom(src => src.CostScan ?? 1))
                 .ForMember(dest => dest.ActiveTts, opt => opt.MapFrom(src => src.ActiveTTS))
-                .ForMember(dest => dest.ProductionStatus, opt => opt.MapFrom(src => src.ProductionStatus ?? "CREATED"))
+                .ForMember(dest => dest.OrderCode, opt => opt.MapFrom(src => src.OrderCode))
+                .ForMember(dest => dest.ProductionStatus, opt => opt.MapFrom(src => src.ProductionStatus ?? "Created"))
                 .ForMember(dest => dest.PaymentStatus, opt => opt.MapFrom(src => src.PaymentStatus ?? "UNPAID"))
-                .ForMember(dest => dest.StatusOrder, opt => opt.MapFrom(_ => 1))
+                .ForMember(dest => dest.StatusOrder, opt => opt.MapFrom(src => src.StatusOrder ?? 1))
+                .ForMember(dest => dest.ToDistrictId, opt => opt.MapFrom(src => src.ToDistrictId))
+                .ForMember(dest => dest.ToProvinceId, opt => opt.MapFrom(src => src.ToProvinceId))
+                .ForMember(dest => dest.ToWardCode, opt => opt.MapFrom(src => src.ToWardCode))
                 .ForMember(dest => dest.CreationDate, opt => opt.MapFrom(_ => DateTime.UtcNow));
 
             CreateMap<OrderDetailCreateRequest, OrderDetail>()
@@ -90,7 +97,7 @@ namespace CB_Gift.Mapper
                 .ForMember(dest => dest.Details, opt => opt.MapFrom(src => src.OrderDetails));
             CreateMap<EndCustomerUpdateRequest, EndCustomer>();
         }
-        }
-
     }
+
+}
 
