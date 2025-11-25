@@ -182,6 +182,7 @@ builder.Services.AddScoped<IAiStudioService, AiStudioService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ICancellationService, CancellationService>();
 builder.Services.AddScoped<IRefundService, RefundService>();
+builder.Services.AddScoped<IReprintService, ReprintService>();
 builder.Services.AddScoped<ILocationService, GhnLocationService>();
 builder.Services.AddScoped<IShippingService, GhnShippingService>();
 builder.Services.AddScoped<IGhnPrintService, GhnPrintService>();

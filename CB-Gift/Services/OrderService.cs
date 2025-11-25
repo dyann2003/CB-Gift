@@ -826,6 +826,7 @@ namespace CB_Gift.Services
             var order = await _context.Orders
                                       .Include(o => o.OrderDetails)
                                         .ThenInclude(od => od.ProductVariant)
+                                        .ThenInclude(pv => pv.Product)
                                       .Include(o => o.EndCustomer)
                                       .FirstOrDefaultAsync(o => o.OrderId == orderId);
 
@@ -880,7 +881,7 @@ namespace CB_Gift.Services
                 Height = (int)Math.Ceiling(order.OrderDetails.Sum(od => (od.ProductVariant.HeightCm ?? 0m) * od.Quantity)),
                 Items = order.OrderDetails.Select(od => new OrderItemRequest
                 {
-                    Name = od.ProductVariant.Sku,
+                    Name = od.ProductVariant.Product.ProductName,
                     Quantity = od.Quantity,
                     Weight = (int)Math.Ceiling((od.ProductVariant.WeightGram ?? 0m) * od.Quantity)
                 }).ToList()
