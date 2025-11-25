@@ -1,9 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
-import SellerSidebar from "@/components/layout/seller/sidebar";
-import SellerHeader from "@/components/layout/seller/header";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import React from "react";
@@ -55,7 +53,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
 import MakeManualModal from "@/components/modals/make-manual-modal";
 import {
   Search,
@@ -73,7 +70,6 @@ import {
   ListTodo,
   ChevronLeft,
   ChevronRight,
-  CalendarIcon,
   FileDown,
   Trash2,
   FileEdit,
@@ -187,6 +183,19 @@ const STATS_CONFIG = [
   },
 ];
 
+const getInitialDateRange = () => {
+  return { from: undefined, to: undefined };
+};
+
+// Hàm tiện ích để chuyển đổi chuỗi "yyyy-mm-dd" sang Date object (ở UTC)
+const convertStringToDate = (dateString) => {
+  if (!dateString) return undefined;
+  // Dùng Date.UTC để đảm bảo ngày tháng được parse là UTC 00:00:00
+  const [year, month, day] = dateString.split("-").map(Number);
+  // Month trong JS Date là 0-indexed.
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+};
+
 export default function ManageOrder() {
   const [currentPage, setCurrentPage] = useState("manage-order");
   const [searchTerm, setSearchTerm] = useState("");
@@ -195,44 +204,40 @@ export default function ManageOrder() {
   const [selectAll, setSelectAll] = useState(false);
   const [showMakeManualModal, setShowMakeManualModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
-  // This seems unused, consider removing
   const [isEditMode, setIsEditMode] = useState(false);
   const [editedOrder, setEditedOrder] = useState(null);
 
-  // ✅ Cập nhật state Page và ItemsPerPage
   const [page, setPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [dateRange, setDateRange] = useState({ from: null, to: null });
-
   const [isDateFilterOpen, setIsDateFilterOpen] = useState(false);
 
-  // ✅ Cập nhật state Sắp xếp
-  const [sortColumn, setSortColumn] = useState("orderDate"); // Mặc định sắp xếp theo ngày
-  const [sortDirection, setSortDirection] = useState("desc"); // Mặc định giảm dần
+  const [sortColumn, setSortColumn] = useState("orderDate");
+  const [sortDirection, setSortDirection] = useState("desc");
 
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [showCannotAssignDialog, setShowCannotAssignDialog] = useState(false);
   const [cannotAssignMessage, setCannotAssignMessage] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  // Added for dialog state management
   const [showResultDialog, setShowResultDialog] = useState(false);
   const [resultMessage, setResultMessage] = useState("");
   const [isAssignPopupOpen, setIsAssignPopupOpen] = useState(false);
   const [designers, setDesigners] = useState([]);
   const [selectedDesignerId, setSelectedDesignerId] = useState("");
+  const [selectedStatusCode, setSelectedStatusCode] = useState(null);
+
   const [showDesignCheckDialog, setShowDesignCheckDialog] = useState(false);
-  const [designCheckAction, setDesignCheckAction] = useState(null); // 'approve' or 'reject'
+  const [designCheckAction, setDesignCheckAction] = useState(null);
   const [designCheckOrderId, setDesignCheckOrderId] = useState(null);
-  //Theo dõi trạng thái loading của từng chi tiết
   const [isSubmittingDetail, setIsSubmittingDetail] = useState(null);
+
+  const [dateRange, setDateRange] = useState(getInitialDateRange());
 
   const [expandedOrderId, setExpandedOrderId] = useState(null);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [showErrorDialog, setShowErrorDialog] = useState(false);
-
-  const [selectedDateOption, setSelectedDateOption] = useState("day"); // giá trị mặc định
+  const [totalOrdersCount, setTotalOrdersCount] = useState(0);
 
   const [orderStats, setOrderStats] = useState({
     total: 0,
@@ -241,13 +246,6 @@ export default function ManageOrder() {
     completedCount: 0,
     stageGroups: {},
   });
-
-  // Define all possible status codes (optional, dễ đọc hơn)
-  const STATUS = {
-    CHECK_DESIGN: 4,
-    NEED_DESIGN: 2,
-    REDESIGN: 3,
-  };
 
   const getProductionStatusName = (status) => {
     switch (Number(status)) {
@@ -286,27 +284,18 @@ export default function ManageOrder() {
     }
   };
 
-  // Utility: check if the product detail can be approved/rejected
-  // status code 4 là "Cần Check Design"
-  // const canApproveOrReject = (item) => {
-  //   const statusVal = Number(item.status);
-  //   const productionVal = Number(item.productionStatus);
-  //   return statusVal === 4 && productionVal === 4;
-  // };
   const canApproveOrReject = (order, item) => {
     const orderStatus = Number(order.statusOrder);
     const itemProductionStatus = Number(item.productionStatus);
-
-    // Chỉ hiện nút khi Order là 5 VÀ Detail là 4
     return orderStatus === 5 && itemProductionStatus === 4;
   };
-  // orders: chỉ chứa dữ liệu dữ liệu trang hiện tại
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const [selectedStatConfig, setSelectedStatConfig] = useState(null);
   const toggleDateFilter = () => setIsDateFilterOpen(!isDateFilterOpen);
+
   const uploadImage = async (file) => {
     const formData = new FormData();
     formData.append("File", file);
@@ -327,7 +316,6 @@ export default function ManageOrder() {
 
       const data = await res.json();
       console.log("Upload success:", data);
-      // Cập nhật để ưu tiên secureUrl
       return data.secureUrl || data.url || data.path || null;
     } catch (err) {
       console.error("Upload error:", err);
@@ -336,6 +324,7 @@ export default function ManageOrder() {
       return null;
     }
   };
+
   const hasDesignFile = (order) => {
     if (!order.products || order.products.length === 0) return false;
     return order.products.some(
@@ -343,27 +332,19 @@ export default function ManageOrder() {
     );
   };
 
-  // ===============================================
-  // === HÀM CẬP NHẬT - BẠN HÃY DÁN HÀM NÀY VÀO ===
-  // ===============================================
   const openRefundPopup = async (order) => {
     let proofUrl = null;
 
     const { value: reason } = await Swal.fire({
       title: `Refund order #${order.orderId}`,
-
-      // ✅ [THAY ĐỔI 1]: Cập nhật HTML
       html: `
       <textarea id="refundReason" class="swal2-textarea" placeholder="Nhập lý do hoàn tiền (tối thiểu 5 ký tự)"></textarea>
-      
       <input type="file" id="refundMediaInput" accept="image/*,video/*" style="margin-top: 10px;" />
-      
       <div id="uploadStatus" style="margin-top:10px; display:none;">
         <div class="swal2-loader" style="display:inline-block;"></div>
         <span>Loading file...</span>
       </div>
-      
-            <img id="refundImagePreview" style="display:none; margin-top: 10px; max-width:100%; max-height:150px; border-radius: 5px;" />
+      <img id="refundImagePreview" style="display:none; margin-top: 10px; max-width:100%; max-height:150px; border-radius: 5px;" />
       <video id="refundVideoPreview" controls style="display:none; margin-top: 10px; max-width:100%; max-height:150px; border-radius: 5px;"></video>
     `,
       showCancelButton: true,
@@ -372,7 +353,6 @@ export default function ManageOrder() {
       confirmButtonColor: "#d97706",
       cancelButtonColor: "#6b7280",
 
-      // ✅ [THAY ĐỔI 2]: Cập nhật didOpen để lấy đúng ID
       didOpen: () => {
         const fileInput = document.getElementById("refundMediaInput");
         const imgPreview = document.getElementById("refundImagePreview");
@@ -383,12 +363,10 @@ export default function ManageOrder() {
           const file = e.target.files[0];
           if (!file) return;
 
-          // ✅ [THAY ĐỔI 3]: Ẩn cả 2 preview khi bắt đầu upload
           uploadStatus.style.display = "block";
           imgPreview.style.display = "none";
           videoPreview.style.display = "none";
 
-          // Gọi hàm upload (đã trỏ đến endpoint /upload-media)
           const uploadedUrl = await uploadImage(file);
 
           uploadStatus.style.display = "none";
@@ -396,7 +374,6 @@ export default function ManageOrder() {
           if (uploadedUrl) {
             proofUrl = uploadedUrl;
 
-            // Logic này giờ sẽ chạy ĐÚNG
             if (file.type.startsWith("video/")) {
               videoPreview.src = proofUrl;
               videoPreview.style.display = "block";
@@ -415,7 +392,6 @@ export default function ManageOrder() {
       },
 
       preConfirm: () => {
-        // (Giữ nguyên, không đổi)
         const reasonValue = document.getElementById("refundReason").value;
         if (!reasonValue || reasonValue.trim().length < 5) {
           Swal.showValidationMessage("Lý do hoàn tiền phải ít nhất 5 ký tự!");
@@ -425,7 +401,6 @@ export default function ManageOrder() {
       },
     });
 
-    // Phần còn lại của hàm (gọi API refund) giữ nguyên
     if (!reason) return;
     try {
       const response = await fetch(
@@ -434,7 +409,7 @@ export default function ManageOrder() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ reason, proofUrl }), // proofUrl sẽ là link video hoặc ảnh
+          body: JSON.stringify({ reason, proofUrl }),
         }
       );
 
@@ -485,10 +460,8 @@ export default function ManageOrder() {
       },
     });
 
-    // Nếu nhấn Cancel
     if (!reason) return;
 
-    // Gọi API
     try {
       const response = await fetch(
         `${apiClient.defaults.baseURL}/api/Order/${order.id}/request-cancellation`,
@@ -509,7 +482,6 @@ export default function ManageOrder() {
         });
       }
 
-      // Thành công
       Swal.fire({
         icon: "success",
         title: "Success!",
@@ -526,150 +498,144 @@ export default function ManageOrder() {
       });
     }
   };
-  // ✅ STATE MỚI: Lưu tổng số lượng đơn hàng (từ BE)
-  const [totalOrdersCount, setTotalOrdersCount] = useState(0);
 
-  const fetchOrders = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  // ✅ SỬ DỤNG useCallback CHO fetchOrders
+  const fetchOrders = useCallback(
+    async (statusOverride = undefined) => {
+      try {
+        setLoading(true);
+        setError(null);
 
-      // 1. Xác định Status Filter (BE cần tên Status đầy đủ)
-      const selectedStatConfigInList = STATS_CONFIG.find(
-        (stat) => stat.title === selectedStat
-      );
-      const statusFilter =
-        selectedStatConfig?.statusFilter ||
-        selectedStatConfigInList?.statusFilter ||
-        (selectedStat !== "Total Order" ? selectedStat : null);
+        let statusValue = null;
 
-      // 2. Xây dựng Query Parameters
-      const params = new URLSearchParams({
-        page: page.toString(),
-        pageSize: itemsPerPage.toString(),
-        searchTerm: searchTerm,
-        sortColumn: sortColumn || "orderDate", // Mặc định sortColumn
-        sortDirection: sortDirection,
-      });
+        if (statusOverride !== undefined) {
+          statusValue = statusOverride;
+        } else if (selectedStatusCode) {
+          statusValue = selectedStatusCode;
+        } else {
+          const selectedStatConfigInList = STATS_CONFIG.find(
+            (stat) => stat.title === selectedStat
+          );
+          const statusFilterFromConfig = selectedStatConfigInList?.statusFilter;
+          if (selectedStat !== "Total Order" && statusFilterFromConfig) {
+            statusValue = statusFilterFromConfig;
+          }
+        }
 
-      if (statusFilter && selectedStat !== "Total Order") {
-        params.append("status", statusFilter);
+        const params = new URLSearchParams({
+          page: page.toString(),
+          pageSize: itemsPerPage.toString(),
+          searchTerm: searchTerm || "",
+          sortColumn: sortColumn || "orderDate",
+          sortDirection: sortDirection,
+        });
+
+        if (statusValue) {
+          params.append("status", statusValue);
+        }
+
+        // ✅ LOGIC LỌC NGÀY ĐƯỢC SỬA ĐỂ DÙNG dateRange (Date Objects)
+        if (dateRange?.from instanceof Date) {
+          // Gửi ngày bắt đầu (00:00:00 UTC của ngày đó)
+          params.append("fromDate", dateRange.from.toISOString());
+        }
+
+        if (dateRange?.to instanceof Date) {
+          // Lấy ngày kết thúc và tăng thêm 1 ngày UTC để bao phủ trọn vẹn ngày cuối
+          const nextDay = new Date(dateRange.to.valueOf());
+          nextDay.setUTCDate(nextDay.getUTCDate() + 1); // Sử dụng setUTCDate để cộng thêm ngày, giữ nguyên múi giờ UTC
+          params.append("toDate", nextDay.toISOString());
+        }
+
+        const url = `${
+          apiClient.defaults.baseURL
+        }/api/Seller?${params.toString()}`;
+
+        const response = await fetch(url, { credentials: "include" });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const { total, orders: data } = await response.json();
+        setTotalOrdersCount(total);
+
+        const mappedOrders = data.map((order) => ({
+          id: order.orderId,
+          orderId: order.orderCode,
+          statusOrder: order.statusOrder,
+          orderDate: new Date(order.orderDate).toISOString().split("T")[0],
+          customerName: order.customerName,
+          phone: order.phone || "",
+          email: order.email || "",
+          paymentStatus: order.paymentStatus || "",
+          products: order.details.map((detail) => ({
+            name: detail.productName || `Product ${detail.productVariantID}`,
+            quantity: detail.quantity,
+            price: detail.price,
+            size: detail.size || "",
+            accessory: detail.accessory || "",
+            activeTTS: order.activeTts || false,
+            linkFileDesign: detail.linkFileDesign,
+            linkThanksCard: detail.linkThanksCard,
+            linkImg: detail.linkImg,
+            orderDetailID: detail.orderDetailID,
+            status: detail.status,
+            productionStatus: detail.productionStatus,
+          })),
+          address: order.address || "",
+          shipTo: "",
+          status: order.statusOderName,
+          totalAmount: `$${order.totalCost.toFixed(2)}`,
+          timeCreated: new Date(order.creationDate).toLocaleString(),
+          selected: false,
+          customerInfo: {
+            name: order.customerName,
+            phone: order.phone,
+            email: order.email,
+            address: order.address,
+            city: order.city,
+            state: order.state,
+            zipcode: order.zipcode,
+            country: order.country,
+          },
+          orderNotes: order.details[0]?.note || "",
+          uploadedFiles: {
+            linkImg: {
+              name: "image.jpg",
+              url: order.details[0]?.linkImg || "/placeholder.svg",
+            },
+            linkThanksCard: {
+              name: "thanks-card.jpg",
+              url: order.details[0]?.linkThanksCard || "#",
+            },
+            linkFileDesign: {
+              name: "design-file.psd",
+              url: order.details[0]?.linkFileDesign || "#",
+            },
+          },
+        }));
+
+        setOrders(mappedOrders);
+      } catch (err) {
+        console.error("[v0] Error fetching orders:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
       }
+    },
+    [
+      page,
+      itemsPerPage,
+      searchTerm,
+      selectedStat,
+      selectedStatusCode,
+      sortColumn,
+      sortDirection,
+      dateRange,
+    ]
+  );
 
-      if (searchTerm) params.append("search", searchTerm);
-      if (dateRange?.from)
-        params.append("fromDate", dateRange.from.toISOString());
-      if (dateRange?.to) params.append("toDate", dateRange.to.toISOString());
-
-      const url = `${
-        apiClient.defaults.baseURL
-      }/api/Seller?${params.toString()}`;
-
-      // 3. Gọi API với URL có tham số
-      const response = await fetch(url, {
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      // 4. Nhận response có { total, orders }
-      const { total, orders: data } = await response.json();
-      console.log("📦 Orders fetched:", data);
-
-      setTotalOrdersCount(total);
-
-      // 5. Logic map data (Ánh xạ từ BE DTO sang FE model)
-      const mappedOrders = data.map((order) => ({
-        id: order.orderId,
-        orderId: order.orderCode,
-        statusOrder: order.statusOrder,
-        orderDate: new Date(order.orderDate).toISOString().split("T")[0],
-        customerName: order.customerName,
-        phone: order.phone || "",
-        email: order.email || "",
-        paymentStatus: order.paymentStatus || "",
-        products: order.details.map((detail) => ({
-          name: detail.productName || `Product ${detail.productVariantID}`,
-          quantity: detail.quantity,
-          price: detail.price,
-          size: detail.size || "",
-          accessory: detail.accessory || "",
-          activeTTS: order.activeTts || false, // Đã sửa từ activeTTS sang activeTts
-          linkFileDesign: detail.linkFileDesign,
-          linkThanksCard: detail.linkThanksCard,
-          linkImg: detail.linkImg,
-
-          orderDetailID: detail.orderDetailID,
-          status: detail.status,
-          productionStatus: detail.productionStatus,
-        })),
-        address: order.address || "",
-        shipTo: "",
-        status: order.statusOderName,
-        totalAmount: `$${order.totalCost.toFixed(2)}`,
-        timeCreated: new Date(order.creationDate).toLocaleString(),
-        selected: false,
-        customerInfo: {
-          name: order.customerName,
-          phone: order.phone,
-          email: order.email,
-          address: order.address,
-          city: order.city,
-          state: order.state,
-          zipcode: order.zipcode,
-          country: order.country,
-        },
-        orderNotes: order.details[0]?.note || "",
-        uploadedFiles: {
-          linkImg: {
-            name: "image.jpg",
-            url: order.details[0]?.linkImg || "/placeholder.svg",
-          },
-          linkThanksCard: {
-            name: "thanks-card.jpg",
-            url: order.details[0]?.linkThanksCard || "#",
-          },
-          linkFileDesign: {
-            name: "design-file.psd",
-            url: order.details[0]?.linkFileDesign || "#",
-          },
-        },
-      }));
-
-      setOrders(mappedOrders);
-    } catch (err) {
-      console.error("[v0] Error fetching orders:", err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ✅ Dependency Array: Gọi lại fetchOrders khi bất kỳ tham số filter/pagination/sort nào thay đổi
-  useEffect(() => {
-    fetchStats();
-    fetchOrders();
-  }, [page, itemsPerPage, searchTerm, selectedStat, sortColumn, sortDirection]);
-
-  const stats = STATS_CONFIG; // Keep this reference for other parts that use stats
-
-  // fetchStats: async () => {
-  //   try {
-  //     const res = await fetch("${apiClient.defaults.baseURL}/api/Seller/stats", {
-  //       credentials: "include",
-  //     });
-  //     if (!res.ok) throw new Error("Failed to fetch stats");
-  //     const data = await res.json();
-  //     setOrderStats(data);
-  //   } catch (error) {
-  //     console.error("Error fetching stats:", error);
-  //   }
-  // };
-
-  // ✅ Dù
-  const fetchStats = async () => {
+  // ✅ Bọc fetchStats trong useCallback
+  const fetchStats = useCallback(async () => {
     try {
       const res = await fetch(
         `${apiClient.defaults.baseURL}/api/Seller/stats`,
@@ -683,34 +649,45 @@ export default function ManageOrder() {
     } catch (error) {
       console.error("Error fetching stats:", error);
     }
-  };
+  }, []);
 
-  // ✅ Dùng useMemo để tính toán số lượng thống kê
+  useEffect(() => {
+    fetchStats();
+    fetchOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    page,
+    itemsPerPage,
+    searchTerm,
+    selectedStat,
+    selectedStatusCode,
+    sortColumn,
+    sortDirection,
+    dateRange,
+    fetchOrders,
+    fetchStats,
+  ]);
+
+  const stats = STATS_CONFIG;
+
   const statsWithCounts = useMemo(() => {
     let newStats = STATS_CONFIG.map((stat) => ({
       ...stat,
-      // Tạm thời tính các status khác trên dữ liệu trang hiện tại (chỉ có 10-20 orders)
-      // Để chính xác, cần một API BE riêng chỉ trả về COUNT theo từng Status.
       value: stat.statusFilter
         ? orders.filter((o) => o.status === stat.statusFilter).length
         : 0,
     }));
 
-    // Cập nhật Total Order bằng totalOrdersCount từ BE
     newStats = newStats.map((stat, i) =>
       i === 0 ? { ...stat, value: totalOrdersCount } : stat
     );
     return newStats;
   }, [orders, stats, totalOrdersCount]);
 
-  // ❌ Loại bỏ logic Filter/Sort/Pagination ở FE
-
   const totalPages = Math.ceil(totalOrdersCount / itemsPerPage);
-  // orders đã là dữ liệu phân trang (paginatedOrders)
   const paginatedOrders = orders;
 
   const handleSort = (column) => {
-    // Luôn setPage(1) khi đổi sắp xếp để BE trả về dữ liệu mới từ trang đầu
     if (sortColumn === column) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
     } else {
@@ -733,33 +710,65 @@ export default function ManageOrder() {
 
   const handleSearchChange = (value) => {
     setSearchTerm(value);
-    setPage(1); // Quay về trang 1 khi tìm kiếm
+    setPage(1);
   };
 
   const handleStatClick = (statTitle) => {
     setSelectedStat(statTitle);
-    setPage(1); // Quay về trang 1 khi lọc status
+    setPage(1);
   };
 
   const handleItemsPerPageChange = (value) => {
     setItemsPerPage(Number(value));
-    setPage(1); // Quay về trang 1 khi đổi số lượng item
+    setPage(1);
   };
 
-  // Giữ lại handleDateSelect, nhưng nó không ảnh hưởng đến fetchOrders hiện tại
-  const handleDateSelect = (range) => {
-    setDateRange(range);
+  // ✅ SỬA LOGIC DÙNG dateRange và Date Objects
+  const handleFromDateInputChange = (e) => {
+    const dateString = e.target.value;
+    const newDate = convertStringToDate(dateString);
+
+    setDateRange((prev) => {
+      let toDate = prev.to;
+      // Reset toDate nếu newDate lớn hơn toDate cũ
+      if (newDate && toDate && newDate.getTime() > toDate.getTime()) {
+        toDate = undefined;
+      }
+      return { from: newDate, to: toDate };
+    });
     setPage(1);
-    fetchOrders(); // 🔁 tự reload lại khi đổi ngày
-    fetchStats(); // cập nhật lại thống kê
+  };
+
+  // ✅ SỬA LOGIC DÙNG dateRange và Date Objects
+  const handleToDateInputChange = (e) => {
+    const dateString = e.target.value;
+    const newDate = convertStringToDate(dateString);
+
+    setDateRange((prev) => {
+      let fromDate = prev.from;
+      // Reset fromDate nếu newDate nhỏ hơn fromDate cũ
+      if (newDate && fromDate && newDate.getTime() < fromDate.getTime()) {
+        fromDate = undefined;
+      }
+      return { from: fromDate, to: newDate };
+    });
+    setPage(1);
+  };
+
+  // ✅ HÀM MỚI: Clear tất cả các bộ lọc
+  const handleClearAllFilters = () => {
+    setSearchTerm("");
+    setDateRange(getInitialDateRange());
+    setSelectedStat("Total Order");
+    setSelectedStatusCode(null);
+    setPage(1);
+    // Fetch sẽ được gọi qua useEffect
   };
 
   const handleOpenAssignPopup = async () => {
-    // Lấy danh sách order đã chọn
     const selectedOrdersData = orders.filter((order) =>
       selectedOrders.includes(order.id)
     );
-    // Kiểm tra có order nào KHÔNG phải là Draft (Nháp)
     const nonDraftOrders = selectedOrdersData.filter(
       (order) => order.status !== "DRAFT"
     );
@@ -771,7 +780,6 @@ export default function ManageOrder() {
       return;
     }
 
-    // Nếu tất cả đều hợp lệ, fetch danh sách designer
     try {
       const res = await fetch(
         `${apiClient.defaults.baseURL}/api/Seller/my-designer`,
@@ -790,7 +798,17 @@ export default function ManageOrder() {
   };
 
   const handleConfirmAssignDesigner = async () => {
-    // ✅ Kiểm tra nếu chưa chọn designer hoặc chưa chọn order
+    const confirm = await Swal.fire({
+      icon: "question",
+      title: "Confirm Assign Designer",
+      text: `Are you sure you want to assign ${selectedOrders.length} order(s) to this designer?`,
+      showCancelButton: true,
+      confirmButtonText: "Yes, assign",
+      cancelButtonText: "Cancel",
+    });
+
+    if (!confirm.isConfirmed) return;
+
     if (!selectedDesignerId || selectedOrders.length === 0) {
       setErrorMessage("⚠️ Please select a designer and at least one order.");
       setShowErrorDialog(true);
@@ -798,48 +816,59 @@ export default function ManageOrder() {
     }
 
     try {
-      // ✅ Gọi API assign cho từng order
       for (const orderId of selectedOrders) {
         const res = await fetch(
           `${apiClient.defaults.baseURL}/api/Seller/orders/${orderId}/assign-designer`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-
             credentials: "include",
             body: JSON.stringify({ designerUserId: selectedDesignerId }),
           }
         );
+
         if (!res.ok) throw new Error(`Failed to assign for order ${orderId}`);
       }
 
-      // ✅ Hiển thị popup thành công
-      setSuccessMessage(
-        `✅ Successfully assigned designer to ${selectedOrders.length} order(s).`
-      );
-      setShowSuccessDialog(true);
+      Swal.fire({
+        icon: "success",
+        title: "Success!",
+        text: `Assigned designer to ${selectedOrders.length} order(s).`,
+        timer: 1500,
+        showConfirmButton: false,
+      });
 
-      // ✅ Đóng popup chọn designer
       setIsAssignPopupOpen(false);
       setSelectedDesignerId("");
 
-      // ✅ Reload lại dữ liệu sau 1.5s để cập nhật dữ liệu
       setTimeout(() => {
-        fetchOrders(); // ✅ GỌI LẠI fetchOrders THAY CHO window.location.reload()
+        fetchOrders();
         fetchStats();
         setSelectedOrders([]);
         setSelectAll(false);
-      }, 1500);
+      }, 800);
     } catch (err) {
-      console.error("❌ Assign designer failed:", err);
-      setErrorMessage(`❌ Failed to assign: ${err.message}`);
-      setShowErrorDialog(true);
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: err.message,
+      });
     }
   };
 
   const handleExport = async () => {
+    const confirm = await Swal.fire({
+      icon: "question",
+      title: "Export Orders?",
+      text: "Do you want to export the order list?",
+      showCancelButton: true,
+      confirmButtonText: "Yes, export",
+      cancelButtonText: "Cancel",
+    });
+
+    if (!confirm.isConfirmed) return;
+
     try {
-      // Xây query params giống fetchOrders để export theo cùng bộ lọc hiện tại
       const selectedStatConfigInList = STATS_CONFIG.find(
         (stat) => stat.title === selectedStat
       );
@@ -849,27 +878,29 @@ export default function ManageOrder() {
         (selectedStat !== "Total Order" ? selectedStat : null);
 
       const params = new URLSearchParams({
-        // note: export không dùng page/pageSize, BE sẽ ignore hoặc trả full
         searchTerm: searchTerm || "",
         sortColumn: sortColumn || "orderDate",
         sortDirection: sortDirection || "desc",
       });
 
-      if (statusFilter && selectedStat !== "Total Order") {
-        params.append("status", statusFilter);
+      if (selectedStatusCode) {
+        params.append("statusCode", selectedStatusCode);
       }
-      if (dateRange?.from)
+      // ✅ LOGIC EXPORT DÙNG dateRange
+      if (dateRange?.from instanceof Date)
         params.append("fromDate", dateRange.from.toISOString());
-      if (dateRange?.to) params.append("toDate", dateRange.to.toISOString());
+      if (dateRange?.to instanceof Date) {
+        const nextDay = new Date(dateRange.to.valueOf());
+        nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+        params.append("toDate", nextDay.toISOString());
+      }
 
       const url = `${
         apiClient.defaults.baseURL
       }/api/Seller/export?${params.toString()}`;
-
-      // Gọi API để nhận file - server trả file xlsx
       const res = await fetch(url, {
         method: "GET",
-        credentials: "include", // giữ auth cookie
+        credentials: "include",
       });
 
       if (!res.ok) {
@@ -880,28 +911,25 @@ export default function ManageOrder() {
       const blob = await res.blob();
       const fileName = `Orders_${new Date().toISOString().slice(0, 10)}.xlsx`;
 
-      // Dùng file-saver (bạn đang import saveAs ở trên)
       saveAs(blob, fileName);
 
-      // Thông báo thành công
       Swal.fire({
         icon: "success",
-        title: "Export completed",
-        text: "File đã được tải về.",
+        title: "Export Completed",
+        text: "File downloaded successfully.",
         timer: 1500,
         showConfirmButton: false,
       });
     } catch (err) {
-      console.error("Export failed:", err);
       Swal.fire({
         icon: "error",
-        title: "Export failed",
-        text: err.message || "Có lỗi khi xuất file.",
+        title: "Export Failed",
+        text: err.message,
       });
     }
   };
 
-  // Helper: định dạng MySQL
+  // Helper: định dạng MySQL (giữ lại nhưng không dùng)
   function formatMySQLDate(dateStr) {
     if (!dateStr) return "";
     const date = new Date(dateStr);
@@ -916,7 +944,6 @@ export default function ManageOrder() {
   const handleDelete = async (orderId) => {
     if (!orderId) return;
     try {
-      // 🔍 Tìm đơn hàng trong danh sách hiện tại
       const orderToDelete = orders.find((o) => o.id === orderId);
       if (!orderToDelete) {
         setResultMessage("⚠️ Không tìm thấy đơn hàng để xóa.");
@@ -924,7 +951,6 @@ export default function ManageOrder() {
         return;
       }
 
-      // ❌ Nếu không phải trạng thái Draft (Nháp), chặn xóa
       if (orderToDelete.status !== "Draft (Nháp)") {
         setResultMessage(
           `Can't delete the order have status "${orderToDelete.status}". Only can delete the order have status Draft".`
@@ -932,8 +958,6 @@ export default function ManageOrder() {
         setShowResultDialog(true);
         return;
       }
-
-      // ✅ Gọi API xóa
 
       const response = await fetch(
         `${apiClient.defaults.baseURL}/api/Order/${orderId}`,
@@ -949,7 +973,7 @@ export default function ManageOrder() {
         setOrders((prev) => prev.filter((o) => o.id !== orderId));
 
         setResultMessage(result.message || "Delete Successfully");
-        fetchOrders(); // ✅ Gọi lại fetchOrders để cập nhật danh sách và count
+        fetchOrders();
         fetchStats();
       } else {
         setResultMessage(result.message || "Can't delete this order");
@@ -964,11 +988,20 @@ export default function ManageOrder() {
 
   const handleStatusClick = (status) => {
     console.log("🔍 Clicked status:", status);
-    setSelectedStat(status); // Cập nhật selectedStat để biết đang chọn status nào
-    setSelectedStatConfig({ statusFilter: status }); // lưu lại status filter thực tế
+    setSelectedStat(status);
+    setSelectedStatConfig({ statusFilter: status });
     setPage(1);
-    fetchOrders(); // load danh sách đơn theo status
-    fetchStats(); // load lại 4 cục
+    fetchOrders();
+    fetchStats();
+  };
+
+  const handleStatusCodeClick = (code) => {
+    const newStatusCode = selectedStatusCode === code ? null : code;
+    setSelectedStatusCode(newStatusCode);
+    setSelectedStat(newStatusCode === null ? "Total Order" : newStatusCode);
+    setPage(1);
+    fetchOrders(newStatusCode);
+    fetchStats();
   };
 
   const handleSelectAll = () => {
@@ -998,7 +1031,7 @@ export default function ManageOrder() {
       selectedOrders.includes(order.id)
     );
     const nonDraftOrders = selectedOrdersData.filter(
-      (order) => order.status !== "Draft (Nháp)"
+      (order) => order.status !== "DRAFT"
     );
     if (nonDraftOrders.length > 0) {
       setCannotAssignMessage(
@@ -1025,7 +1058,6 @@ export default function ManageOrder() {
     link.click();
   };
 
-  // ✅ Cập nhật: Gọi API GET /api/Seller/{id} để lấy chi tiết 1 đơn hàng
   const handleViewDetails = async (order) => {
     try {
       console.log("🧾 Selected order (before fetch):", order);
@@ -1044,7 +1076,6 @@ export default function ManageOrder() {
         return;
       }
 
-      // ⭐ SỬA LẠI MAPPING: Bổ sung orderDetailId và productionStatus
       const mappedOrder = {
         id: fullOrder.orderId,
         orderId: fullOrder.orderCode,
@@ -1100,7 +1131,6 @@ export default function ManageOrder() {
           linkFileDesign: detail.linkFileDesign,
           linkThanksCard: detail.linkThanksCard,
           linkImg: detail.linkImg,
-          // === BỔ SUNG TRƯỜNG CÒN THIẾU ===
           orderDetailId: detail.orderDetailID,
           productionStatus: detail.productionStatus,
         })),
@@ -1127,7 +1157,6 @@ export default function ManageOrder() {
   };
 
   const handleCancelEdit = () => {
-    // Sửa: Dùng editedOrder hiện tại để reset nếu selectedOrder chưa được set
     setEditedOrder(editedOrder);
     setIsEditMode(false);
     setIsDialogOpen(false);
@@ -1203,7 +1232,6 @@ export default function ManageOrder() {
       setShowSuccessDialog(true);
       setIsDialogOpen(false);
 
-      // ✅ GỌI LẠI fetchOrders THAY CHO window.location.reload()
       setTimeout(() => {
         fetchOrders();
         fetchStats();
@@ -1259,7 +1287,6 @@ export default function ManageOrder() {
       setShowSuccessDialog(true);
       setIsDialogOpen(false);
 
-      // ✅ GỌI LẠI fetchOrders THAY CHO window.location.reload()
       setTimeout(() => {
         fetchOrders();
         fetchStats();
@@ -1286,7 +1313,6 @@ export default function ManageOrder() {
         }
       );
 
-      // ✅ Dùng text() + try parse JSON để tránh lỗi
       const text = await res.text();
       let data = {};
       try {
@@ -1313,7 +1339,6 @@ export default function ManageOrder() {
   };
 
   const handleRejectOrderDetail = async (orderDetailId) => {
-    // Hiển thị modal nhập lý do từ chối
     const { value: reason } = await Swal.fire({
       title: `Reject application details `,
       input: "textarea",
@@ -1338,7 +1363,6 @@ export default function ManageOrder() {
       },
     });
 
-    // Nếu user bấm "Hủy" thì thoát
     if (!reason) return;
 
     setIsSubmittingDetail(orderDetailId);
@@ -1369,7 +1393,6 @@ export default function ManageOrder() {
         throw new Error(data.message || `HTTP ${res.status}`);
       }
 
-      // ✅ Thành công
       await Swal.fire({
         icon: "success",
         title: "Request sent!",
@@ -1414,15 +1437,25 @@ export default function ManageOrder() {
 
   const handleAssignStaff = async () => {
     if (selectedOrders.length === 0) {
-      setCannotAssignMessage(
-        "Please select at least one order to assign to staff."
-      );
+      setCannotAssignMessage("Please select at least one order.");
       setShowCannotAssignDialog(true);
       return;
     }
 
+    const confirm = await Swal.fire({
+      icon: "question",
+      title: "Confirm Assign Staff",
+      text: `Assign ${selectedOrders.length} order(s) to staff?`,
+      showCancelButton: true,
+      confirmButtonText: "Yes",
+      cancelButtonText: "Cancel",
+    });
+
+    if (!confirm.isConfirmed) return;
+
     try {
       const failedOrders = [];
+
       for (const orderId of selectedOrders) {
         try {
           const res = await fetch(
@@ -1430,41 +1463,42 @@ export default function ManageOrder() {
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              credentials: "include", // Added credentials to send authentication token
+              credentials: "include",
             }
           );
-          if (!res.ok) {
-            const errorData = await res.json().catch(() => ({}));
-            console.error("[v0] Assign staff error:", errorData);
-            failedOrders.push(orderId);
-          }
+
+          if (!res.ok) failedOrders.push(orderId);
         } catch (err) {
-          console.error("[v0] Assign staff failed for order:", orderId, err);
           failedOrders.push(orderId);
         }
       }
 
       if (failedOrders.length === 0) {
-        setSuccessMessage(
-          `✅ Successfully assigned ${selectedOrders.length} order(s) to staff.`
-        );
-        setShowSuccessDialog(true);
+        Swal.fire({
+          icon: "success",
+          title: "Success!",
+          text: `Assigned ${selectedOrders.length} order(s) to staff.`,
+          timer: 1500,
+          showConfirmButton: false,
+        });
+
         setSelectedOrders([]);
         setSelectAll(false);
         fetchOrders();
         fetchStats();
       } else {
-        setCannotAssignMessage(
-          `Failed to assign ${failedOrders.length} order(s) to staff. Please try again.`
-        );
-        setShowCannotAssignDialog(true);
+        Swal.fire({
+          icon: "warning",
+          title: "Some orders failed",
+          text: `${failedOrders.length} orders failed to assign.`,
+        });
       }
     } catch (err) {
-      console.error("[v0] Assign staff error:", err);
-      setCannotAssignMessage(
-        "An error occurred while assigning orders to staff."
-      );
-      setShowCannotAssignDialog(true);
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: err.message,
+      });
     }
   };
 
@@ -1472,7 +1506,6 @@ export default function ManageOrder() {
 
   const handleImportSuccess = (importedData) => {
     console.log("Imported data:", importedData);
-    // Here you can add API call to save the imported data
     Swal.fire({
       icon: "success",
       title: "Import Successful",
@@ -1483,17 +1516,11 @@ export default function ManageOrder() {
 
   return (
     <div className="flex h-screen bg-blue-50">
-      {/* changed from bg-slate-50 to bg-blue-50 */}
-      {/* <SellerSidebar
-        currentPage={currentPage}
-        setCurrentPage={setCurrentPage}
-      /> */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">
           <div className="space-y-6">
             {/* Welcome Header */}
             <div className="bg-blue-50 p-4 sm:p-6 rounded-lg border-2 border-blue-200 shadow-sm">
-              {/* unified to blue-50 and blue-200 */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h1 className="text-lg sm:text-xl font-semibold text-slate-900">
@@ -1506,45 +1533,12 @@ export default function ManageOrder() {
                 <div className="mt-3 sm:mt-0">
                   <div className="flex items-center gap-2 text-sm text-slate-700">
                     <Package className="h-4 w-4" />
-                    <span>{totalOrdersCount} orders</span>{" "}
-                    {/* ✅ Sửa: Dùng totalOrdersCount */}
+                    <span>{totalOrdersCount} orders</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* --- 4 BOX THỐNG KÊ --- */}
-            <div className="grid grid-cols-4 gap-4 mb-6">
-              <div className="bg-white shadow p-4 rounded-lg text-center">
-                <h3 className="text-gray-500 text-sm font-medium">Total</h3>
-                <p className="text-2xl font-bold">{orderStats.total}</p>
-              </div>
-
-              <div className="bg-yellow-50 shadow p-4 rounded-lg text-center">
-                <h3 className="text-yellow-700 text-sm font-medium">
-                  Need Action
-                </h3>
-                <p className="text-2xl font-bold text-yellow-600">
-                  {orderStats.needActionCount}
-                </p>
-              </div>
-
-              <div className="bg-red-50 shadow p-4 rounded-lg text-center">
-                <h3 className="text-red-700 text-sm font-medium">Urgent</h3>
-                <p className="text-2xl font-bold text-red-600">
-                  {orderStats.urgentCount}
-                </p>
-              </div>
-
-              <div className="bg-green-50 shadow p-4 rounded-lg text-center">
-                <h3 className="text-green-700 text-sm font-medium">
-                  Completed
-                </h3>
-                <p className="text-2xl font-bold text-green-600">
-                  {orderStats.completedCount}
-                </p>
-              </div>
-            </div>
             {/* --- DROPDOWN GIAI ĐOẠN --- */}
             <div className="flex flex-wrap justify-between gap-4 mb-8">
               {Object.entries(orderStats.stageGroups || {}).map(
@@ -1557,7 +1551,6 @@ export default function ManageOrder() {
                     <details
                       className="group w-full"
                       onToggle={(e) => {
-                        // Ngăn các box khác bị reflow khi mở 1 box
                         e.currentTarget.scrollIntoView({
                           block: "nearest",
                           behavior: "smooth",
@@ -1572,8 +1565,14 @@ export default function ManageOrder() {
                         {statusList.map((s) => (
                           <button
                             key={s.status}
-                            onClick={() => handleStatusClick(s.status)}
-                            className="flex justify-between w-full px-3 py-2 hover:bg-gray-100 text-sm text-gray-700 rounded-md"
+                            onClick={() => handleStatusCodeClick(s.status)}
+                            className={`flex justify-between w-full px-3 py-2 text-sm rounded-md
+                              ${
+                                selectedStatusCode === s.status
+                                  ? "bg-blue-100 font-bold text-blue-700"
+                                  : "hover:bg-gray-100 text-gray-700"
+                              }
+                            `}
                           >
                             <span>{s.status}</span>
                             <span className="font-semibold">{s.count}</span>
@@ -1586,46 +1585,7 @@ export default function ManageOrder() {
               )}
             </div>
 
-            {/* <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2 sm:gap-3">
-              {statsWithCounts.map((stat, index) => {
-                const IconComponent = stat.icon;
-                const isActive = selectedStat === stat.title;
-                return (
-                  <div
-                    key={index}
-                    onClick={() => handleStatClick(stat.title)}
-                    className={`p-3 rounded-lg border-2 ${
-                      stat.color
-                    } hover:shadow-lg transition-all cursor-pointer ${
-                      isActive
-                        ? "ring-2 ring-indigo-500 shadow-lg scale-105"
-                        : ""
-                    }`}
-                  >
-                    <div className="flex flex-col items-center text-center gap-2">
-                      <IconComponent className={`h-5 w-5 ${stat.iconColor}`} />
-                      <div>
-                        <p className="text-lg font-bold text-slate-900">
-                          {stat.value}
-                        </p>
-
-                        <h3 className="text-[10px] sm:text-xs font-medium text-slate-600 uppercase tracking-wide">
-                          {stat.title}
-                        </h3>
-                      </div>
-                    </div>
-                    {isActive && (
-                      <div className="mt-1 text-[10px] font-medium text-indigo-600 text-center">
-                        ✓ Active
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div> */}
-
             <div className="bg-blue-50 p-4 sm:p-6 rounded-lg shadow-sm border border-blue-100">
-              {/* changed to bg-blue-50 */}
               <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-end justify-between">
                 <div className="flex flex-col sm:flex-row gap-4 flex-1 w-full">
                   <div className="flex-1 max-w-xs">
@@ -1648,56 +1608,48 @@ export default function ManageOrder() {
 
                   <div className="flex-1 max-w-xs">
                     <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Filter by Date
+                      From Date
                     </label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className="w-full justify-start text-left font-normal
-                            bg-white border-blue-100 hover:border-blue-300 hover:bg-blue-50"
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {dateRange.from ? (
-                            dateRange.to ? (
-                              <>
-                                {format(dateRange.from, "MMM dd, yyyy")} -{" "}
-                                {format(dateRange.to, "MMM dd, yyyy")}
-                              </>
-                            ) : (
-                              format(dateRange.from, "MMM dd, yyyy")
-                            )
-                          ) : (
-                            <span>Pick a date range</span>
-                          )}
-                        </Button>
-                      </PopoverTrigger>
+                    <Input
+                      type="date"
+                      // ✅ SỬA: Dùng dateRange.from và format Date Object sang string
+                      value={
+                        dateRange.from instanceof Date
+                          ? format(dateRange.from, "yyyy-MM-dd")
+                          : ""
+                      }
+                      onChange={handleFromDateInputChange}
+                      className="w-full bg-white border-blue-100 focus:border-blue-300"
+                      // Giới hạn max date là toDate (nếu có)
+                      max={
+                        dateRange.to instanceof Date
+                          ? format(dateRange.to, "yyyy-MM-dd")
+                          : ""
+                      }
+                    />
+                  </div>
 
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="range"
-                          selected={dateRange}
-                          onSelect={handleDateSelect}
-                          numberOfMonths={2}
-                          initialFocus
-                        />
-
-                        {(dateRange.from || dateRange.to) && (
-                          <div className="p-3 border-t">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="w-full bg-transparent border-blue-100 hover:bg-blue-50"
-                              onClick={() =>
-                                handleDateSelect({ from: null, to: null })
-                              }
-                            >
-                              Clear Filter
-                            </Button>
-                          </div>
-                        )}
-                      </PopoverContent>
-                    </Popover>
+                  <div className="flex-1 max-w-xs">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      To Date
+                    </label>
+                    <Input
+                      type="date"
+                      // ✅ SỬA: Dùng dateRange.to và format Date Object sang string
+                      value={
+                        dateRange.to instanceof Date
+                          ? format(dateRange.to, "yyyy-MM-dd")
+                          : ""
+                      }
+                      onChange={handleToDateInputChange}
+                      className="w-full bg-white border-blue-100 focus:border-blue-300"
+                      // Giới hạn min date là fromDate (nếu có)
+                      min={
+                        dateRange.from instanceof Date
+                          ? format(dateRange.from, "yyyy-MM-dd")
+                          : ""
+                      }
+                    />
                   </div>
                 </div>
 
@@ -1711,24 +1663,6 @@ export default function ManageOrder() {
                     <span className="hidden sm:inline">Export file</span>
                     <span className="sm:hidden">Export</span>
                   </Button>
-                  {/* <Button
-                    variant="outline"
-                    onClick={() =>
-                      document.getElementById("file-input").click()
-                    }
-                    className="border-blue-100 hover:bg-blue-50"
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
-                    <span className="hidden sm:inline">Import file</span>
-                    <span className="sm:hidden">Import</span>
-                  </Button> */}
-                  {/* <input
-                    id="file-input"
-                    type="file"
-                    className="hidden"
-                    onChange={handleFileImport}
-                    accept=".csv,.xlsx,.xls"
-                  /> */}
                   <Button
                     variant="outline"
                     onClick={() => setShowImportModal(true)}
@@ -1776,6 +1710,21 @@ export default function ManageOrder() {
               >
                 Assign Staff ({selectedOrders.length})
               </Button>
+
+              {/* ✅ NÚT CLEAR ALL FILTERS */}
+              {(searchTerm ||
+                dateRange.from ||
+                dateRange.to ||
+                selectedStatusCode) && (
+                <Button
+                  variant="outline"
+                  onClick={handleClearAllFilters}
+                  className="bg-white border-red-200 text-red-600 hover:bg-red-50"
+                >
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Clear Filters
+                </Button>
+              )}
             </div>
 
             <AlertDialog
@@ -1819,7 +1768,6 @@ export default function ManageOrder() {
             </AlertDialog>
 
             <div className="bg-blue-50 rounded-lg shadow-sm border border-blue-100">
-              {/* unified bg color */}
               {loading ? (
                 <div className="flex items-center justify-center p-12">
                   <div className="text-center">
@@ -1850,7 +1798,6 @@ export default function ManageOrder() {
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-blue-100 hover:bg-blue-100">
-                          {/* updated header bg */}
                           <TableHead className="font-medium text-slate-700 uppercase text-xs tracking-wide whitespace-nowrap">
                             <Checkbox
                               checked={selectAll}
@@ -1910,12 +1857,8 @@ whitespace-nowrap"
                           </TableRow>
                         ) : (
                           paginatedOrders.map((order) => (
-                            <>
-                              <TableRow
-                                key={order.id}
-                                className="hover:bg-blue-50 transition-colors"
-                              >
-                                {/* updated hover color */}
+                            <React.Fragment key={order.id}>
+                              <TableRow className="hover:bg-blue-50 transition-colors">
                                 <TableCell>
                                   <Checkbox
                                     checked={selectedOrders.includes(order.id)}
@@ -1924,17 +1867,10 @@ whitespace-nowrap"
                                     }
                                   />
                                 </TableCell>
-                                {/* <TableCell className="font-medium text-slate-900 whitespace-nowrap">
-                                  {order.orderId}
-                                </TableCell> */}
                                 <TableCell className="font-medium text-slate-900 whitespace-nowrap">
-                                  {/* Sử dụng component Link để bọc nội dung */}
                                   <Link
-                                    // Thêm thuộc tính target="_blank"
                                     target="_blank"
-                                    // Thuộc tính rel="noopener noreferrer" được khuyến nghị cho bảo mật
                                     rel="noopener noreferrer"
-                                    // Vẫn giữ đường dẫn tương đối đúng để chuyển đến /seller/order-view/[id]
                                     href={`../seller/order-view/${order.id}`}
                                     className="hover:underline text-blue-600"
                                   >
@@ -2027,7 +1963,7 @@ whitespace-nowrap"
                                             View Details
                                           </Button>
 
-                                          {order.status === "Đã Ship" ? (
+                                          {order.status === "Đã Ship" && (
                                             <Button
                                               variant="ghost"
                                               size="sm"
@@ -2038,18 +1974,6 @@ whitespace-nowrap"
                                             >
                                               <RotateCcw className="h-4 w-4 mr-2" />
                                               Refund
-                                            </Button>
-                                          ) : (
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              onClick={() =>
-                                                openCancelPopup(order)
-                                              }
-                                              className="justify-start text-red-600 hover:text-red-700"
-                                            >
-                                              <XCircle className="h-4 w-4 mr-2" />
-                                              Cancel
                                             </Button>
                                           )}
 
@@ -2068,49 +1992,10 @@ whitespace-nowrap"
                                       </PopoverContent>
                                     </Popover>
 
-                                    {/* {order.status === "Cần Check Design" && (
-                                      <>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="bg-transparent hover:bg-green-50 text-green-600 hover:text-green-700 border-green-200"
-                                          onClick={() =>
-                                            handleApproveDesign(order.id)
-                                          }
-                                          title="Approve Design"
-                                        >
-                                          ✓
-                                        </Button>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="bg-transparent hover:bg-red-50 text-red-600 hover:text-red-700 border-red-200"
-                                          onClick={() =>
-                                            handleRejectDesign(order.id)
-                                          }
-                                          title="Reject Design"
-                                        >
-                                          ✕
-                                        </Button>
-                                      </>
-                                    )} */}
                                     <Dialog
                                       open={isDialogOpen}
                                       onOpenChange={setIsDialogOpen}
                                     >
-                                      <DialogTrigger asChild>
-                                        {/* <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="bg-transparent hover:bg-blue-100 border-blue-200"
-                                          onClick={() =>
-                                            handleViewDetails(order)
-                                          }
-                                          title="View Details"
-                                        >
-                                          <Eye className="h-4 w-4 mr-1" />
-                                        </Button> */}
-                                      </DialogTrigger>
                                       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
                                         <DialogHeader>
                                           <DialogTitle className="flex items-center justify-between">
@@ -2143,7 +2028,6 @@ whitespace-nowrap"
                                                       onChange={(e) =>
                                                         handleCustomerInfoChange(
                                                           "name",
-
                                                           e.target.value
                                                         )
                                                       }
@@ -2170,7 +2054,6 @@ whitespace-nowrap"
                                                       onChange={(e) =>
                                                         handleCustomerInfoChange(
                                                           "phone",
-
                                                           e.target.value
                                                         )
                                                       }
@@ -2197,7 +2080,6 @@ whitespace-nowrap"
                                                       onChange={(e) =>
                                                         handleCustomerInfoChange(
                                                           "email",
-
                                                           e.target.value
                                                         )
                                                       }
@@ -2224,7 +2106,6 @@ whitespace-nowrap"
                                                       onChange={(e) =>
                                                         handleCustomerInfoChange(
                                                           "address",
-
                                                           e.target.value
                                                         )
                                                       }
@@ -2251,7 +2132,6 @@ whitespace-nowrap"
                                                       onChange={(e) =>
                                                         handleCustomerInfoChange(
                                                           "address1",
-
                                                           e.target.value
                                                         )
                                                       }
@@ -2278,7 +2158,6 @@ whitespace-nowrap"
                                                       onChange={(e) =>
                                                         handleCustomerInfoChange(
                                                           "zipcode",
-
                                                           e.target.value
                                                         )
                                                       }
@@ -2297,20 +2176,26 @@ whitespace-nowrap"
                                                   </Label>
 
                                                   {isEditMode ? (
-                                                    <Input
+                                                    <Select
                                                       value={
                                                         editedOrder.customerInfo
                                                           .city
                                                       }
-                                                      onChange={(e) =>
+                                                      onValueChange={(value) =>
                                                         handleCustomerInfoChange(
                                                           "city",
-
-                                                          e.target.value
+                                                          value
                                                         )
                                                       }
                                                       className="mt-1 border-blue-100 focus:border-blue-300"
-                                                    />
+                                                    >
+                                                      <SelectTrigger>
+                                                        <SelectValue />
+                                                      </SelectTrigger>
+                                                      <SelectContent>
+                                                        {/* Thêm các SelectItem cần thiết */}
+                                                      </SelectContent>
+                                                    </Select>
                                                   ) : (
                                                     <p className="font-medium text-slate-900 mt-1">
                                                       {editedOrder.customerInfo
@@ -2332,7 +2217,6 @@ whitespace-nowrap"
                                                       onChange={(e) =>
                                                         handleCustomerInfoChange(
                                                           "state",
-
                                                           e.target.value
                                                         )
                                                       }
@@ -2359,7 +2243,6 @@ whitespace-nowrap"
                                                       onChange={(e) =>
                                                         handleCustomerInfoChange(
                                                           "country",
-
                                                           e.target.value
                                                         )
                                                       }
@@ -2400,7 +2283,6 @@ whitespace-nowrap"
                                                               onChange={(e) =>
                                                                 handleProductChange(
                                                                   index,
-
                                                                   "name",
                                                                   e.target.value
                                                                 )
@@ -2426,7 +2308,6 @@ whitespace-nowrap"
                                                               onChange={(e) =>
                                                                 handleProductChange(
                                                                   index,
-
                                                                   "size",
                                                                   e.target.value
                                                                 )
@@ -2455,7 +2336,6 @@ whitespace-nowrap"
                                                                 handleProductChange(
                                                                   index,
                                                                   "quantity",
-
                                                                   Number.parseInt(
                                                                     e.target
                                                                       .value
@@ -2488,7 +2368,7 @@ whitespace-nowrap"
                                                             Total Price
                                                           </Label>
 
-                                                          <p className="font-bold text-indigo-600 mt-1">
+                                                          <p className="font-bold text-indigo-600 text-lg mt-1">
                                                             $
                                                             {(
                                                               (product.price ||
@@ -2512,7 +2392,6 @@ whitespace-nowrap"
                                                               onChange={(e) =>
                                                                 handleProductChange(
                                                                   index,
-
                                                                   "accessory",
                                                                   e.target.value
                                                                 )
@@ -2542,7 +2421,6 @@ whitespace-nowrap"
                                                             ) =>
                                                               handleProductChange(
                                                                 index,
-
                                                                 "activeTTS",
                                                                 checked
                                                               )
@@ -2581,9 +2459,6 @@ whitespace-nowrap"
                                                                   <img
                                                                     src={
                                                                       product.linkFileDesign ||
-                                                                      "/placeholder.svg" ||
-                                                                      "/placeholder.svg" ||
-                                                                      "/placeholder.svg" ||
                                                                       "/placeholder.svg"
                                                                     }
                                                                     alt="Design File"
@@ -2593,7 +2468,6 @@ whitespace-nowrap"
                                                                     ) => {
                                                                       console.log(
                                                                         "[v0] Design file image failed to load:",
-
                                                                         e.target
                                                                           .src
                                                                       );
@@ -2681,9 +2555,6 @@ whitespace-nowrap"
                                                                   <img
                                                                     src={
                                                                       product.linkThanksCard ||
-                                                                      "/placeholder.svg" ||
-                                                                      "/placeholder.svg" ||
-                                                                      "/placeholder.svg" ||
                                                                       "/placeholder.svg"
                                                                     }
                                                                     alt="Thanks Card"
@@ -2693,7 +2564,6 @@ whitespace-nowrap"
                                                                     ) => {
                                                                       console.log(
                                                                         "[v0] Thanks card image failed to load:",
-
                                                                         e.target
                                                                           .src
                                                                       );
@@ -2766,101 +2636,82 @@ whitespace-nowrap"
                                                               </Button>
                                                             </div>
                                                           </div>
-                                                          {/* Product Image */}
-
-                                                          <div className="border border-blue-100 rounded-lg p-3 hover:shadow-md transition-shadow bg-blue-50">
-                                                            <Label className="text-xs text-slate-500 font-medium">
-                                                              Product Image
-                                                            </Label>
-                                                            <div className="mt-2">
-                                                              {product.linkImg &&
-                                                              product.linkImg !==
-                                                                "#" ? (
-                                                                <>
-                                                                  <img
-                                                                    src={
-                                                                      product.linkImg ||
-                                                                      "/placeholder.svg" ||
-                                                                      "/placeholder.svg" ||
-                                                                      "/placeholder.svg" ||
-                                                                      "/placeholder.svg"
-                                                                    }
-                                                                    alt="Product Image"
-                                                                    className="w-full h-32 object-cover rounded border border-blue-200"
-                                                                    onError={(
-                                                                      e
-                                                                    ) => {
-                                                                      console.log(
-                                                                        "[v0] Product image failed to load:",
-
-                                                                        e.target
-                                                                          .src
-                                                                      );
-                                                                      e.target.style.display =
-                                                                        "none";
-                                                                      e.target.nextElementSibling.style.display =
-                                                                        "flex";
-                                                                    }}
-                                                                  />
-
-                                                                  <div className="w-full h-32 bg-blue-100 rounded border border-blue-200 flex items-center justify-center">
-                                                                    <QrCode className="h-8 w-8 text-indigo-400" />
-                                                                  </div>
-                                                                </>
-                                                              ) : (
-                                                                <div className="w-full h-32 bg-blue-100 rounded border border-blue-200 flex items-center justify-center">
-                                                                  <QrCode className="h-8 w-8 text-indigo-400" />
-                                                                </div>
-                                                              )}
-
-                                                              <p className="text-xs mt-2 text-slate-600 truncate">
-                                                                product-image-
-                                                                {index + 1}.jpg
-                                                              </p>
-
-                                                              {product.linkImg &&
-                                                                product.linkImg !==
-                                                                  "#" && (
-                                                                  <a
-                                                                    href={
-                                                                      product.linkImg
-                                                                    }
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className="text-xs text-indigo-600 hover:underline block mt-1 truncate"
-                                                                  >
-                                                                    View file
-                                                                  </a>
-                                                                )}
-
-                                                              <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                className="mt-2 w-full bg-transparent hover:bg-blue-100 border-blue-200"
-                                                                onClick={() =>
-                                                                  handleDownload(
-                                                                    {
-                                                                      name: `product-image-${
-                                                                        index +
-                                                                        1
-                                                                      }.jpg`,
-                                                                      url: product.linkImg,
-                                                                    }
-                                                                  )
-                                                                }
-                                                                disabled={
-                                                                  !product.linkImg ||
-                                                                  product.linkImg ===
-                                                                    "#"
-                                                                }
-                                                              >
-                                                                <Download className="h-4 w-4 mr-2" />
-                                                                Download
-                                                              </Button>
-                                                            </div>
-                                                          </div>
                                                         </div>
                                                       </div>
+
+                                                      {product.orderDetailId && (
+                                                        <div className="mt-4 pt-4 border-t border-gray-100">
+                                                          <h5 className="font-semibold text-sm text-slate-700 mb-2">
+                                                            Detail ID: #
+                                                            {
+                                                              product.orderDetailId
+                                                            }
+                                                          </h5>
+                                                          <div className="flex items-center gap-3">
+                                                            <button
+                                                              className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded border ${
+                                                                canApproveOrReject(
+                                                                  order,
+                                                                  product
+                                                                )
+                                                                  ? "bg-green-50 text-green-700 border-green-200 hover:shadow"
+                                                                  : "opacity-50 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-200"
+                                                              }`}
+                                                              onClick={() =>
+                                                                handleApproveOrderDetail(
+                                                                  product.orderDetailId
+                                                                )
+                                                              }
+                                                              disabled={
+                                                                isSubmittingDetail ===
+                                                                  product.orderDetailId ||
+                                                                !canApproveOrReject(
+                                                                  order,
+                                                                  product
+                                                                )
+                                                              }
+                                                            >
+                                                              {isSubmittingDetail ===
+                                                              product.orderDetailId ? (
+                                                                <span className="inline-block animate-spin w-4 h-4 border-2 rounded-full mr-2 border-current"></span>
+                                                              ) : (
+                                                                "✓ Approve Design"
+                                                              )}
+                                                            </button>
+
+                                                            <button
+                                                              className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded border ${
+                                                                canApproveOrReject(
+                                                                  order,
+                                                                  product
+                                                                )
+                                                                  ? "bg-red-50 text-red-700 border-red-200 hover:shadow"
+                                                                  : "opacity-50 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-200"
+                                                              }`}
+                                                              onClick={() =>
+                                                                handleRejectOrderDetail(
+                                                                  product.orderDetailId
+                                                                )
+                                                              }
+                                                              disabled={
+                                                                isSubmittingDetail ===
+                                                                  product.orderDetailId ||
+                                                                !canApproveOrReject(
+                                                                  order,
+                                                                  product
+                                                                )
+                                                              }
+                                                            >
+                                                              {isSubmittingDetail ===
+                                                              product.orderDetailId ? (
+                                                                <span className="inline-block animate-spin w-4 h-4 border-2 rounded-full mr-2 border-current"></span>
+                                                              ) : (
+                                                                "✕ Reject Design"
+                                                              )}
+                                                            </button>
+                                                          </div>
+                                                        </div>
+                                                      )}
                                                     </div>
                                                   )
                                                 )}
@@ -2879,7 +2730,6 @@ whitespace-nowrap"
                                                       onChange={(e) =>
                                                         handleFieldChange(
                                                           "orderNotes",
-
                                                           e.target.value
                                                         )
                                                       }
@@ -2911,7 +2761,6 @@ whitespace-nowrap"
                                                       onValueChange={(value) =>
                                                         handleFieldChange(
                                                           "status",
-
                                                           value
                                                         )
                                                       }
@@ -3000,7 +2849,6 @@ whitespace-nowrap"
                                                   </p>
                                                 </div>
                                               </div>
-                                              {/* 👇 THÊM KHỐI NÀY VÀO NGAY DƯỚI 👇 */}
                                               {(editedOrder.reason ||
                                                 editedOrder.rejectionReason ||
                                                 editedOrder.refundAmount >
@@ -3024,7 +2872,6 @@ whitespace-nowrap"
                                                   </h3>
 
                                                   <div className="space-y-3 text-sm">
-                                                    {/* 1. Số tiền hoàn (nếu có) */}
                                                     {editedOrder.refundAmount >
                                                       0 && (
                                                       <div className="flex justify-between items-center bg-white p-2 rounded border border-gray-200">
@@ -3041,7 +2888,6 @@ whitespace-nowrap"
                                                       </div>
                                                     )}
 
-                                                    {/* 2. Lý do yêu cầu (Seller/Khách gửi) */}
                                                     {editedOrder.reason && (
                                                       <div>
                                                         <span className="block font-medium text-gray-700 mb-1">
@@ -3053,7 +2899,6 @@ whitespace-nowrap"
                                                       </div>
                                                     )}
 
-                                                    {/* 3. Link bằng chứng (Proof URL) */}
                                                     {editedOrder.proofUrl && (
                                                       <div>
                                                         <span className="block font-medium text-gray-700 mb-1">
@@ -3094,7 +2939,6 @@ whitespace-nowrap"
                                                       </div>
                                                     )}
 
-                                                    {/* 4. Lý do từ chối (Staff gửi - nếu có) */}
                                                     {editedOrder.rejectionReason && (
                                                       <div className="mt-2">
                                                         <span className="block font-medium text-red-700 mb-1">
@@ -3111,7 +2955,6 @@ whitespace-nowrap"
                                                       </div>
                                                     )}
 
-                                                    {/* 5. Cảnh báo đang chờ duyệt */}
                                                     {editedOrder.isRefundPending && (
                                                       <div className="mt-2 flex items-center gap-2 text-amber-600 font-bold bg-amber-100 p-2 rounded justify-center">
                                                         <span className="animate-pulse">
@@ -3123,23 +2966,7 @@ whitespace-nowrap"
                                                   </div>
                                                 </div>
                                               )}
-                                              {/* 👆 KẾT THÚC PHẦN THÊM 👆 */}
                                             </div>
-
-                                            {/* QR Code Section */}
-                                            {/* <div
-                                              className="bg-blue-50 p-4 rounded-lg border
-                                              border-blue-100"
-                                            >
-                                              <h4 className="font-medium mb-2 text-slate-900">
-                                                QR Code for Order{" "}
-                                                {editedOrder.orderId}
-                                              </h4>
-
-                                              <div className="w-32 h-32 bg-white border-2 border-blue-300 rounded flex items-center justify-center">
-                                                <QrCode className="h-16 w-16 text-indigo-400" />
-                                              </div>
-                                            </div> */}
                                           </div>
                                         )}
 
@@ -3199,13 +3026,9 @@ whitespace-nowrap"
                                     </Dialog>
                                     <AlertDialog>
                                       <AlertDialogTrigger asChild>
-                                        {/* <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="bg-transparent hover:bg-red-50 text-red-600 hover:text-red-700 border-red-200"
-                                        >
-                                          <Trash2 className="h-4 w-4" />
-                                        </Button> */}
+                                        {/* <Button variant="outline" size="sm" className="bg-transparent hover:bg-red-50 text-red-600 hover:text-red-700 border-red-200">
+                                            <Trash2 className="h-4 w-4" />
+                                          </Button> */}
                                       </AlertDialogTrigger>
                                       <AlertDialogContent>
                                         <AlertDialogHeader>
@@ -3234,99 +3057,6 @@ whitespace-nowrap"
                                       </AlertDialogContent>
                                     </AlertDialog>
                                   </div>
-                                  {/* === Refund hoặc Cancel icon === */}
-                                  {/* <Dialog>
-                                    <DialogTrigger asChild>
-                                      {order.status === "Đã Ship" ? (
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="bg-transparent hover:bg-amber-50 text-amber-600 hover:text-amber-700 border-amber-200"
-                                          title="Refund Order"
-                                        >
-                                          <RotateCcw className="h-4 w-4" />
-                                        </Button>
-                                      ) : (
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="bg-transparent hover:bg-red-50 text-red-600 hover:text-red-700 border-red-200"
-                                          title="Cancel Order"
-                                        >
-                                          <XCircle className="h-4 w-4" />
-                                        </Button>
-                                      )}
-                                    </DialogTrigger>
-
-                                    <DialogContent className="max-w-md">
-                                      <DialogHeader>
-                                        <DialogTitle>
-                                          {order.status === "Đã Ship"
-                                            ? "Refund Order"
-                                            : "Cancel Order"}
-                                        </DialogTitle>
-                                        <DialogDescription>
-                                          Vui lòng nhập lý do{" "}
-                                          {order.status === "Đã Ship"
-                                            ? "hoàn tiền"
-                                            : "hủy"}{" "}
-                                          đơn hàng này.
-                                        </DialogDescription>
-                                      </DialogHeader>
-
-                                      <Textarea
-                                        placeholder={`Nhập lý do ${
-                                          order.status === "Đã Ship"
-                                            ? "refund"
-                                            : "cancel"
-                                        }...`}
-                                        className="mt-2 border-blue-100 focus:border-blue-300"
-                                        id={`reason-${order.id}`}
-                                      />
-
-                                      <DialogFooter>
-                                        <Button
-                                          onClick={() => {
-                                            const reason =
-                                              document.getElementById(
-                                                `reason-${order.id}`
-                                              ).value;
-                                            if (!reason.trim()) {
-                                              alert(
-                                                "Vui lòng nhập lý do trước khi xác nhận."
-                                              );
-                                              return;
-                                            }
-                                            console.log(
-                                              `📝 ${
-                                                order.status === "Đã Ship"
-                                                  ? "Refund"
-                                                  : "Cancel"
-                                              } order ${order.id} với lý do:`,
-                                              reason
-                                            );
-                                            // TODO: Gọi API refund hoặc cancel ở đây
-                                            alert(
-                                              `${
-                                                order.status === "Đã Ship"
-                                                  ? "Refund"
-                                                  : "Cancel"
-                                              } thành công cho đơn #${
-                                                order.orderId
-                                              }!`
-                                            );
-                                          }}
-                                          className={`${
-                                            order.status === "Đã Ship"
-                                              ? "bg-amber-600 hover:bg-amber-700"
-                                              : "bg-red-600 hover:bg-red-700"
-                                          } text-white`}
-                                        >
-                                          Xác nhận
-                                        </Button>
-                                      </DialogFooter>
-                                    </DialogContent>
-                                  </Dialog> */}
                                 </TableCell>
                               </TableRow>
 
@@ -3361,7 +3091,6 @@ whitespace-nowrap"
                                                   <img
                                                     src={
                                                       item.linkImg ||
-                                                      "/placeholder.svg" ||
                                                       "/placeholder.svg"
                                                     }
                                                     alt={
@@ -3369,6 +3098,16 @@ whitespace-nowrap"
                                                       "Product"
                                                     }
                                                     className="w-16 h-16 rounded object-cover border border-blue-200"
+                                                    onError={(e) => {
+                                                      console.log(
+                                                        "Error loading image:",
+                                                        e.target.src
+                                                      );
+                                                      e.target.style.display =
+                                                        "none";
+                                                      e.target.nextElementSibling.style.display =
+                                                        "flex";
+                                                    }}
                                                   />
                                                 ) : (
                                                   <div className="w-16 h-16 rounded bg-blue-100 border border-blue-200 flex items-center justify-center text-slate-400 text-xs">
@@ -3512,7 +3251,7 @@ whitespace-nowrap"
                                     </TableCell>
                                   </TableRow>
                                 )}
-                            </>
+                            </React.Fragment>
                           ))
                         )}
                       </TableBody>

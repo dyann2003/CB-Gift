@@ -69,8 +69,11 @@ namespace CB_Gift.Services
 
             // 1. Lọc theo Status
             if (!string.IsNullOrEmpty(status))
-                // Đã sửa lỗi NameEn, chỉ dùng NameVi (tên trạng thái của bạn)
-                query = query.Where(o => o.StatusOrderNavigation.NameVi == status);
+                // ✅ Logic MỚI: Cho phép lọc theo NameVi HOẶC Code
+                query = query.Where(o =>
+                    o.StatusOrderNavigation.NameVi == status ||
+                    o.StatusOrderNavigation.Code == status
+                );
 
             // 2. Xử lý Tìm kiếm
             if (!string.IsNullOrEmpty(searchTerm))
@@ -90,7 +93,7 @@ namespace CB_Gift.Services
                 query = query.Where(o => o.OrderDate >= fromDate.Value);
 
             if (toDate.HasValue)
-                query = query.Where(o => o.OrderDate <= toDate.Value);
+                query = query.Where(o => o.OrderDate < toDate.Value);
 
 
             // 3. Đếm tổng số lượng (sau khi lọc, trước khi phân trang)
@@ -863,6 +866,7 @@ namespace CB_Gift.Services
             var order = await _context.Orders
                                       .Include(o => o.OrderDetails)
                                         .ThenInclude(od => od.ProductVariant)
+                                        .ThenInclude(pv => pv.Product)
                                       .Include(o => o.EndCustomer)
                                       .FirstOrDefaultAsync(o => o.OrderId == orderId);
 
@@ -917,7 +921,7 @@ namespace CB_Gift.Services
                 Height = (int)Math.Ceiling(order.OrderDetails.Sum(od => (od.ProductVariant.HeightCm ?? 0m) * od.Quantity)),
                 Items = order.OrderDetails.Select(od => new OrderItemRequest
                 {
-                    Name = od.ProductVariant.Sku,
+                    Name = od.ProductVariant.Product.ProductName,
                     Quantity = od.Quantity,
                     Weight = (int)Math.Ceiling((od.ProductVariant.WeightGram ?? 0m) * od.Quantity)
                 }).ToList()
@@ -978,7 +982,7 @@ namespace CB_Gift.Services
             var statusCounts = await _context.Orders
                 .AsNoTracking()
                 .Where(o => o.SellerUserId == sellerUserId)
-                .GroupBy(o => o.StatusOrderNavigation.NameVi)
+                .GroupBy(o => o.StatusOrderNavigation.Code)   // Dùng status CODE
                 .Select(g => new { Status = g.Key, Count = g.Count() })
                 .ToListAsync();
 
@@ -988,48 +992,75 @@ namespace CB_Gift.Services
 
             int total = dict.Values.Sum();
 
-            // --- Gom nhóm cho 4 cục lớn ---
-            var needActionStatuses = new[] { "Cần Design", "Cần Check Design" };
-            var urgentStatuses = new[] { "Thiết kế Lại (Design Lỗi)", "Sản xuất Lại", "Cancel", "Hoàn Hàng" };
-            var completedStatuses = new[] { "Sản xuất Xong", "Đã Kiểm tra Chất lượng", "Đã Ship" };
 
-            int needActionCount = needActionStatuses.Sum(s => dict.ContainsKey(s) ? dict[s] : 0);
-            int urgentCount = urgentStatuses.Sum(s => dict.ContainsKey(s) ? dict[s] : 0);
-            int completedCount = completedStatuses.Sum(s => dict.ContainsKey(s) ? dict[s] : 0);
-
-            // --- Gom theo từng giai đoạn dropdown ---
-            var designStage = new[] { "Cần Design", "Cần Check Design", "Thiết kế Lại (Design Lỗi)" };
-            var productionStage = new[] { "Sẵn sàng Sản xuất", "Đang Sản xuất", "Sản xuất Xong", "Sản xuất Lại", "Lỗi Sản xuất (Cần Rework)" };
-            var shippingStage = new[] { "Đang Đóng gói", "Đã Kiểm tra Chất lượng", "Đã Ship", "Hoàn Hàng" };
-            var otherStage = new[] { "Tạm Dừng/Chờ", "Cancel", "Draft (Nháp)" };
-
-            var stageGroups = new Dictionary<string, List<OrderStatsDto.StatusCountItem>>
+            // ================== PHASES ==================
+            var designPhase = new[]
             {
-                ["Design Phase"] = designStage
-                    .Where(s => dict.ContainsKey(s))
-                    .Select(s => new OrderStatsDto.StatusCountItem { Status = s, Count = dict[s] })
-                    .ToList(),
-                ["Manufacture Phase"] = productionStage
-                    .Where(s => dict.ContainsKey(s))
-                    .Select(s => new OrderStatsDto.StatusCountItem { Status = s, Count = dict[s] })
-                    .ToList(),
-                ["Delivery Phase"] = shippingStage
-                    .Where(s => dict.ContainsKey(s))
-                    .Select(s => new OrderStatsDto.StatusCountItem { Status = s, Count = dict[s] })
-                    .ToList(),
-                ["Ohters"] = otherStage
-                    .Where(s => dict.ContainsKey(s))
-                    .Select(s => new OrderStatsDto.StatusCountItem { Status = s, Count = dict[s] })
-                    .ToList(),
+                "DRAFT", "NEEDDESIGN", "DESIGNING",
+                "CHECKDESIGN", "DESIGN_REDO", "CONFIRMED"
             };
 
+            var manufacturePhase = new[]
+            {
+                "READY_PROD", "INPROD", "FINISHED",
+                "PROD_REWORK", "QC_DONE", "QC_FAIL"
+            };
+
+            var deliveryPhase = new[]
+            {
+                "SHIPPING", "SHIPPED"
+            };
+
+            var refundPhase = new[]
+            {
+                "HOLD_RF", "HOLD_RP", "REFUND"
+            };
+
+            // ================== GROUP OBJECT ==================
+            var stageGroups = new Dictionary<string, List<OrderStatsDto.StatusCountItem>>
+            {
+                ["Design Phase"] = designPhase
+          .Select(s => new OrderStatsDto.StatusCountItem
+          {
+              Status = s,
+              Count = dict.ContainsKey(s) ? dict[s] : 0
+          })
+          .ToList(),
+
+                ["Manufacture Phase"] = manufacturePhase
+          .Select(s => new OrderStatsDto.StatusCountItem
+          {
+              Status = s,
+              Count = dict.ContainsKey(s) ? dict[s] : 0
+          })
+          .ToList(),
+
+                ["Delivery Phase"] = deliveryPhase
+          .Select(s => new OrderStatsDto.StatusCountItem
+          {
+              Status = s,
+              Count = dict.ContainsKey(s) ? dict[s] : 0
+          })
+          .ToList(),
+
+                ["Refund / Reprint Phase"] = refundPhase
+          .Select(s => new OrderStatsDto.StatusCountItem
+          {
+              Status = s,
+              Count = dict.ContainsKey(s) ? dict[s] : 0
+          })
+          .ToList()
+            };
+
+
+            // ================== RETURN DTO ==================
             return new OrderStatsDto
             {
                 Total = total,
                 StatusCounts = dict,
-                NeedActionCount = needActionCount,
-                UrgentCount = urgentCount,
-                CompletedCount = completedCount,
+                NeedActionCount = 0,
+                UrgentCount = 0,
+                CompletedCount = 0,
                 StageGroups = stageGroups
             };
         }

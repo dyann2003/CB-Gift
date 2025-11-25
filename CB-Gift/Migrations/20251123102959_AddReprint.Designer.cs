@@ -4,6 +4,7 @@ using CB_Gift.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CB_Gift.Migrations
 {
     [DbContext(typeof(CBGiftDbContext))]
-    partial class CBGiftDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251123102959_AddReprint")]
+    partial class AddReprint
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -979,10 +982,7 @@ namespace CB_Gift.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("varchar(100)");
 
-                    b.Property<int?>("OrderDetailId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("OrderId")
+                    b.Property<int>("OrderId")
                         .HasColumnType("int");
 
                     b.Property<string>("ProofUrl")
@@ -1012,8 +1012,6 @@ namespace CB_Gift.Migrations
                         .HasColumnType("varchar(20)");
 
                     b.HasKey("RefundId");
-
-                    b.HasIndex("OrderDetailId");
 
                     b.HasIndex("OrderId");
 
@@ -1586,13 +1584,11 @@ namespace CB_Gift.Migrations
 
             modelBuilder.Entity("CB_Gift.Models.Refund", b =>
                 {
-                    b.HasOne("CB_Gift.Models.OrderDetail", "OrderDetail")
-                        .WithMany()
-                        .HasForeignKey("OrderDetailId");
-
                     b.HasOne("CB_Gift.Models.Order", "Order")
                         .WithMany()
-                        .HasForeignKey("OrderId");
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("CB_Gift.Data.AppUser", "RequestedBySeller")
                         .WithMany()
@@ -1605,8 +1601,6 @@ namespace CB_Gift.Migrations
                         .HasForeignKey("ReviewedByStaffId");
 
                     b.Navigation("Order");
-
-                    b.Navigation("OrderDetail");
 
                     b.Navigation("RequestedBySeller");
 

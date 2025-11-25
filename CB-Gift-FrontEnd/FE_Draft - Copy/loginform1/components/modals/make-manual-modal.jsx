@@ -74,6 +74,15 @@ export default function MakeManualModal({ isOpen, onClose }) {
   const [orderId, setOrderId] = useState("");
   const [isOrderIdSet, setIsOrderIdSet] = useState(false);
   const [activeTTS, setActiveTTS] = useState(false);
+  const [searchProvince, setSearchProvince] = useState("");
+  const [searchDistrict, setSearchDistrict] = useState("");
+  const [searchWard, setSearchWard] = useState("");
+  const [openProvinceDropdown, setOpenProvinceDropdown] = useState(false);
+  const [openDistrictDropdown, setOpenDistrictDropdown] = useState(false);
+  const [openWardDropdown, setOpenWardDropdown] = useState(false);
+  const [hoverProvince, setHoverProvince] = useState(null);
+  const [hoverDistrict, setHoverDistrict] = useState(null);
+  const [hoverWard, setHoverWard] = useState(null);
   const linkThanksCardRef = useRef(null);
   const linkFileDesignRef = useRef(null);
   const linkImgRef = useRef(null);
@@ -150,11 +159,16 @@ export default function MakeManualModal({ isOpen, onClose }) {
   const [products, setProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [productsError, setProductsError] = useState(null);
+  const [productSearchTerm, setProductSearchTerm] = useState("");
+  const [productCurrentPage, setProductCurrentPage] = useState(1);
+  const [productItemsPerPage, setProductItemsPerPage] = useState(5);
 
   useEffect(() => {
     if (!isOpen) return;
     fetchProducts();
     fetchProvinces();
+    setProductCurrentPage(1);
+    setProductSearchTerm("");
   }, [isOpen]);
 
   const fetchProducts = async () => {
@@ -201,6 +215,7 @@ export default function MakeManualModal({ isOpen, onClose }) {
   };
 
   const fetchDistricts = async (provinceId) => {
+    setLoadingDistricts(true);
     try {
       const res = await fetch(
         `https://localhost:7015/api/Location/districts/${provinceId}`,
@@ -219,10 +234,13 @@ export default function MakeManualModal({ isOpen, onClose }) {
       setDistricts(normalized);
     } catch (err) {
       alert(`Failed to load districts: ${err.message}`);
+    } finally {
+      setLoadingDistricts(false);
     }
   };
 
   const fetchWards = async (districtId) => {
+    setLoadingWards(true);
     try {
       const res = await fetch(
         `https://localhost:7015/api/Location/wards/${districtId}`,
@@ -241,6 +259,8 @@ export default function MakeManualModal({ isOpen, onClose }) {
       setWards(normalized);
     } catch (err) {
       alert(`Failed to load wards: ${err.message}`);
+    } finally {
+      setLoadingWards(false);
     }
   };
 
@@ -664,6 +684,8 @@ export default function MakeManualModal({ isOpen, onClose }) {
 
       setDistricts([]);
       setWards([]);
+      setOpenProvinceDropdown(false);
+      setSearchProvince("");
       fetchDistricts(provinceId);
     };
 
@@ -681,6 +703,8 @@ export default function MakeManualModal({ isOpen, onClose }) {
         wardName: "",
       }));
       setWards([]);
+      setOpenDistrictDropdown(false);
+      setSearchDistrict("");
       fetchWards(districtId);
     };
 
@@ -695,7 +719,25 @@ export default function MakeManualModal({ isOpen, onClose }) {
         wardId: wardId,
         wardName: ward?.name || ward?.wardName || "",
       }));
+      setOpenWardDropdown(false);
+      setSearchWard("");
     };
+
+    const filteredProvinces = provinces.filter((p) =>
+      (p.name || p.provinceName)
+        .toLowerCase()
+        .includes(searchProvince.toLowerCase())
+    );
+
+    const filteredDistricts = districts.filter((d) =>
+      (d.name || d.districtName)
+        .toLowerCase()
+        .includes(searchDistrict.toLowerCase())
+    );
+
+    const filteredWards = wards.filter((w) =>
+      (w.name || w.wardName).toLowerCase().includes(searchWard.toLowerCase())
+    );
 
     return (
       <div className="space-y-4">
@@ -764,151 +806,429 @@ export default function MakeManualModal({ isOpen, onClose }) {
 
           <div>
             <Label htmlFor="province">Province *</Label>
-            <Select
-              value={customerInfo.provinceId?.toString() || ""}
-              onValueChange={handleProvinceChange}
-              disabled={loadingProvinces}
-            >
-              <SelectTrigger id="province">
-                <SelectValue
-                  placeholder={
-                    loadingProvinces ? "Loading..." : "Select Province"
-                  }
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setOpenProvinceDropdown(!openProvinceDropdown)}
+                disabled={loadingProvinces}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-left flex justify-between items-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                <span>
+                  {customerInfo.provinceName ||
+                    (loadingProvinces ? "Loading..." : "Select Province")}
+                </span>
+                <ChevronDown
+                  size={20}
+                  className={openProvinceDropdown ? "rotate-180" : ""}
                 />
-              </SelectTrigger>
-              <SelectContent>
-                {provinces.map((p, idx) => (
-                  <SelectItem
-                    key={p.id || p.provinceId || `prov-${idx}`}
-                    value={(p.id || p.provinceId || idx).toString()}
-                  >
-                    {p.name || p.provinceName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              </button>
+
+              {openProvinceDropdown && (
+                <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 rounded-md bg-white shadow-lg z-50">
+                  <Input
+                    type="text"
+                    placeholder="Search province..."
+                    value={searchProvince}
+                    onChange={(e) => setSearchProvince(e.target.value)}
+                    className="m-2 border-gray-300"
+                  />
+                  <div className="max-h-60 overflow-y-auto">
+                    {filteredProvinces.length > 0 ? (
+                      filteredProvinces.map((p, idx) => (
+                        <button
+                          key={p.id || p.provinceId || `prov-${idx}`}
+                          type="button"
+                          onClick={() =>
+                            handleProvinceChange(
+                              (p.id || p.provinceId || idx).toString()
+                            )
+                          }
+                          onMouseEnter={() =>
+                            setHoverProvince(p.id || p.provinceId || idx)
+                          }
+                          onMouseLeave={() => setHoverProvince(null)}
+                          className={`w-full px-3 py-2 text-left transition-colors ${
+                            hoverProvince === (p.id || p.provinceId || idx)
+                              ? "bg-blue-100 text-blue-900"
+                              : customerInfo.provinceId?.toString() ===
+                                (p.id || p.provinceId || idx)?.toString()
+                              ? "bg-blue-50 text-blue-700"
+                              : "hover:bg-gray-50"
+                          }`}
+                        >
+                          {p.name || p.provinceName}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-2 text-gray-500">
+                        No province found
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div>
             <Label htmlFor="district">District *</Label>
-            <Select
-              value={customerInfo.districtId?.toString() || ""}
-              onValueChange={handleDistrictChange}
-              disabled={loadingDistricts || !customerInfo.provinceId}
-            >
-              <SelectTrigger id="district">
-                <SelectValue
-                  placeholder={
-                    loadingDistricts
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() =>
+                  customerInfo.provinceId &&
+                  setOpenDistrictDropdown(!openDistrictDropdown)
+                }
+                disabled={loadingDistricts || !customerInfo.provinceId}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-left flex justify-between items-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:bg-gray-100"
+              >
+                <span>
+                  {customerInfo.districtName ||
+                    (loadingDistricts
                       ? "Loading..."
                       : customerInfo.provinceId
                       ? "Select District"
-                      : "Select Province first"
-                  }
+                      : "Select Province first")}
+                </span>
+                <ChevronDown
+                  size={20}
+                  className={openDistrictDropdown ? "rotate-180" : ""}
                 />
-              </SelectTrigger>
-              <SelectContent>
-                {districts.map((d) => (
-                  <SelectItem
-                    key={d.id || d.districtId}
-                    value={(d.id || d.districtId)?.toString()}
-                  >
-                    {d.name || d.districtName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              </button>
+
+              {openDistrictDropdown && customerInfo.provinceId && (
+                <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 rounded-md bg-white shadow-lg z-50">
+                  <Input
+                    type="text"
+                    placeholder="Search district..."
+                    value={searchDistrict}
+                    onChange={(e) => setSearchDistrict(e.target.value)}
+                    className="m-2 border-gray-300"
+                  />
+                  <div className="max-h-60 overflow-y-auto">
+                    {filteredDistricts.length > 0 ? (
+                      filteredDistricts.map((d) => (
+                        <button
+                          key={d.id || d.districtId}
+                          type="button"
+                          onClick={() =>
+                            handleDistrictChange(
+                              (d.id || d.districtId)?.toString()
+                            )
+                          }
+                          onMouseEnter={() =>
+                            setHoverDistrict(d.id || d.districtId)
+                          }
+                          onMouseLeave={() => setHoverDistrict(null)}
+                          className={`w-full px-3 py-2 text-left transition-colors ${
+                            hoverDistrict === (d.id || d.districtId)
+                              ? "bg-blue-100 text-blue-900"
+                              : customerInfo.districtId?.toString() ===
+                                (d.id || d.districtId)?.toString()
+                              ? "bg-blue-50 text-blue-700"
+                              : "hover:bg-gray-50"
+                          }`}
+                        >
+                          {d.name || d.districtName}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-2 text-gray-500">
+                        No district found
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div>
             <Label htmlFor="ward">Ward *</Label>
-            <Select
-              value={customerInfo.wardId?.toString() || ""}
-              onValueChange={handleWardChange}
-              disabled={loadingWards || !customerInfo.districtId}
-            >
-              <SelectTrigger id="ward">
-                <SelectValue
-                  placeholder={
-                    loadingWards
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() =>
+                  customerInfo.districtId &&
+                  setOpenWardDropdown(!openWardDropdown)
+                }
+                disabled={loadingWards || !customerInfo.districtId}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-left flex justify-between items-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:bg-gray-100"
+              >
+                <span>
+                  {customerInfo.wardName ||
+                    (loadingWards
                       ? "Loading..."
                       : customerInfo.districtId
                       ? "Select Ward"
-                      : "Select District first"
-                  }
+                      : "Select District first")}
+                </span>
+                <ChevronDown
+                  size={20}
+                  className={openWardDropdown ? "rotate-180" : ""}
                 />
-              </SelectTrigger>
-              <SelectContent>
-                {wards.map((w) => (
-                  <SelectItem
-                    key={w.id || w.wardId}
-                    value={(w.id || w.wardId)?.toString()}
-                  >
-                    {w.name || w.wardName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              </button>
+
+              {openWardDropdown && customerInfo.districtId && (
+                <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 rounded-md bg-white shadow-lg z-50">
+                  <Input
+                    type="text"
+                    placeholder="Search ward..."
+                    value={searchWard}
+                    onChange={(e) => setSearchWard(e.target.value)}
+                    className="m-2 border-gray-300"
+                  />
+                  <div className="max-h-60 overflow-y-auto">
+                    {filteredWards.length > 0 ? (
+                      filteredWards.map((w) => (
+                        <button
+                          key={w.id || w.wardId}
+                          type="button"
+                          onClick={() =>
+                            handleWardChange((w.id || w.wardId)?.toString())
+                          }
+                          onMouseEnter={() => setHoverWard(w.id || w.wardId)}
+                          onMouseLeave={() => setHoverWard(null)}
+                          className={`w-full px-3 py-2 text-left transition-colors ${
+                            hoverWard === (w.id || w.wardId)
+                              ? "bg-blue-100 text-blue-900"
+                              : customerInfo.wardId?.toString() ===
+                                (w.id || w.wardId)?.toString()
+                              ? "bg-blue-50 text-blue-700"
+                              : "hover:bg-gray-50"
+                          }`}
+                        >
+                          {w.name || w.wardName}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-2 text-gray-500">
+                        No ward found
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
     );
   };
 
-  const renderStep2 = () => (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold">Step 2: Select Product</h3>
+  const renderStep2 = () => {
+    const filteredProducts = products.filter(
+      (p) =>
+        p.productName
+          ?.toLowerCase()
+          .includes(productSearchTerm.toLowerCase()) ||
+        p.describe?.toLowerCase().includes(productSearchTerm.toLowerCase())
+    );
 
-      {loadingProducts ? (
-        <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+    const totalProducts = filteredProducts.length;
+    const totalPages = Math.ceil(totalProducts / productItemsPerPage);
+    const startIndex = (productCurrentPage - 1) * productItemsPerPage;
+    const paginatedProducts = filteredProducts.slice(
+      startIndex,
+      startIndex + productItemsPerPage
+    );
+
+    return (
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold">Step 2: Select Product</h3>
+
+        <div className="flex gap-2 items-center">
+          <Input
+            type="text"
+            placeholder="Search products by name or description..."
+            value={productSearchTerm}
+            onChange={(e) => {
+              setProductSearchTerm(e.target.value);
+              setProductCurrentPage(1); // Reset to first page when searching
+            }}
+            className="flex-1"
+          />
         </div>
-      ) : productsError ? (
-        <div className="p-4 bg-red-50 rounded border border-red-200">
-          <p className="text-red-700">
-            Error loading products: {productsError}
-          </p>
-          <Button variant="outline" onClick={fetchProducts}>
-            Retry
-          </Button>
+
+        <div className="flex justify-between items-center">
+          <div className="flex gap-2 items-center">
+            <Label className="text-sm">Items per page:</Label>
+            <Select
+              value={productItemsPerPage.toString()}
+              onValueChange={(val) => {
+                setProductItemsPerPage(Number(val));
+                setProductCurrentPage(1);
+              }}
+            >
+              <SelectTrigger className="w-20">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="5">5</SelectItem>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="20">20</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <span className="text-sm text-gray-600">
+            Page {productCurrentPage} of {totalPages || 1} ({totalProducts}{" "}
+            items)
+          </span>
         </div>
-      ) : products.length === 0 ? (
-        <div className="text-gray-600">No products found</div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {products.map((p) => {
-            const price = p.variants?.length
-              ? Math.min(...p.variants.map((v) => v.totalCost))
-              : 0;
 
-            return (
-              <div
-                key={p.productId}
-                onClick={() => handleProductSelect(p)}
-                className="cursor-pointer border rounded-lg p-4 hover:shadow-lg transition-shadow"
-              >
-                <img
-                  src={p.itemLink || "/placeholder.svg"}
-                  alt={p.productName}
-                  className="w-full h-32 object-cover rounded-md mb-3"
-                />
+        {loadingProducts ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+          </div>
+        ) : productsError ? (
+          <div className="p-4 bg-red-50 rounded border border-red-200">
+            <p className="text-red-700">
+              Error loading products: {productsError}
+            </p>
+            <Button variant="outline" onClick={fetchProducts}>
+              Retry
+            </Button>
+          </div>
+        ) : filteredProducts.length === 0 ? (
+          <div className="text-gray-600">
+            {productSearchTerm
+              ? "No products match your search"
+              : "No products found"}
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {paginatedProducts.map((p) => {
+                const price = p.variants?.length
+                  ? Math.min(...p.variants.map((v) => v.totalCost))
+                  : 0;
 
-                <h4 className="font-semibold text-sm mb-2">{p.productName}</h4>
+                return (
+                  <div
+                    key={p.productId}
+                    onClick={() => handleProductSelect(p)}
+                    className="cursor-pointer border rounded-lg p-4 hover:shadow-lg transition-shadow"
+                  >
+                    <img
+                      src={
+                        p.itemLink ||
+                        "/placeholder.svg?height=128&width=256&query=product"
+                      }
+                      alt={p.productName}
+                      className="w-full h-32 object-cover rounded-md mb-3"
+                    />
 
-                <p className="text-xs text-gray-600 mb-2 line-clamp-2">
-                  {p.describe}
-                </p>
+                    <h4 className="font-semibold text-sm mb-2">
+                      {p.productName}
+                    </h4>
 
-                <p className="text-sm font-bold text-blue-600">
-                  ${price.toFixed(2)}
-                </p>
+                    <p className="text-xs text-gray-600 mb-2 line-clamp-2">
+                      {p.describe}
+                    </p>
+
+                    <p className="text-sm font-bold text-blue-600">
+                      ${price.toFixed(2)}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex justify-center gap-1 mt-4 flex-wrap">
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setProductCurrentPage((p) => Math.max(1, p - 1))
+                  }
+                  disabled={productCurrentPage === 1}
+                >
+                  Previous
+                </Button>
+
+                <div className="flex items-center gap-1">
+                  {/* Show first page */}
+                  <Button
+                    variant={productCurrentPage === 1 ? "default" : "outline"}
+                    onClick={() => setProductCurrentPage(1)}
+                    className="w-10"
+                  >
+                    1
+                  </Button>
+
+                  {/* Show ellipsis if needed before current page */}
+                  {productCurrentPage > 3 && (
+                    <span className="px-2 text-gray-500">...</span>
+                  )}
+
+                  {/* Show pages around current page */}
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((page) => {
+                      // Show current page and 1 page before/after
+                      if (page === productCurrentPage) return true;
+                      if (
+                        page === productCurrentPage - 1 &&
+                        productCurrentPage > 2
+                      )
+                        return true;
+                      if (
+                        page === productCurrentPage + 1 &&
+                        productCurrentPage < totalPages - 1
+                      )
+                        return true;
+                      return false;
+                    })
+                    .map((page) => (
+                      <Button
+                        key={page}
+                        variant={
+                          productCurrentPage === page ? "default" : "outline"
+                        }
+                        onClick={() => setProductCurrentPage(page)}
+                        className="w-10"
+                      >
+                        {page}
+                      </Button>
+                    ))}
+
+                  {/* Show ellipsis if needed after current page */}
+                  {productCurrentPage < totalPages - 2 && (
+                    <span className="px-2 text-gray-500">...</span>
+                  )}
+
+                  {/* Show last page if more than 1 page */}
+                  {totalPages > 1 && (
+                    <Button
+                      variant={
+                        productCurrentPage === totalPages
+                          ? "default"
+                          : "outline"
+                      }
+                      onClick={() => setProductCurrentPage(totalPages)}
+                      className="w-10"
+                    >
+                      {totalPages}
+                    </Button>
+                  )}
+                </div>
+
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setProductCurrentPage((p) => Math.min(totalPages, p + 1))
+                  }
+                  disabled={productCurrentPage === totalPages}
+                >
+                  Next
+                </Button>
               </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
 
   const renderStep3 = () => (
     <div className="space-y-4">
@@ -1384,6 +1704,7 @@ export default function MakeManualModal({ isOpen, onClose }) {
                               <img
                                 src={
                                   item.config.linkFileDesign ||
+                                  "/placeholder.svg" ||
                                   "/placeholder.svg"
                                 }
                                 alt="File Design"

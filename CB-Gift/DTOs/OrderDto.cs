@@ -103,13 +103,11 @@ namespace CB_Gift.DTOs
         public string? Tracking {  get; set; }
         public string? ProductionStatus { get; set; }
         public string? PaymentStatus { get; set; }
+        public int? StatusOrder { get; set; }
         //  public List<OrderDetailCreateRequest>? OrderDetails { get; set; }
-
-        public int? ToProvinceId { get; set; }
-
         public int? ToDistrictId { get; set; }
+        public int? ToProvinceId { get; set; }
         public string? ToWardCode { get; set; }
-
 
         public OrderCreateRequest()
         {
