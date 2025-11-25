@@ -5,8 +5,11 @@ using CB_Gift.DTOs;
 using CB_Gift.Hubs;
 using CB_Gift.Models;
 using CB_Gift.Models.Enums;
+using CB_Gift.Orders.Import;
 using CB_Gift.Services.IService;
+using ClosedXML.Excel;
 using CloudinaryDotNet.Core;
+using FluentValidation;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using System.Linq;
@@ -22,9 +25,12 @@ namespace CB_Gift.Services
         private readonly INotificationService _notificationService;
         private readonly IHubContext<NotificationHub> _hubContext;
         private readonly IShippingService _shippingService;
+        private readonly OrderFactory _orderFactory;
+        private readonly IValidator<OrderImportRowDto> _validator;
+        private readonly ReferenceDataCache _cache;
         public OrderService(CBGiftDbContext context, IMapper mapper, ILogger<OrderService> logger,
-            INotificationService notificationService, IHubContext<NotificationHub> hubContext,
-            IShippingService shippingService)
+            INotificationService notificationService, IHubContext<NotificationHub> hubContext, OrderFactory orderFactory,
+            IValidator<OrderImportRowDto> validator,ReferenceDataCache cache, IShippingService shippingService)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
             _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
@@ -32,6 +38,9 @@ namespace CB_Gift.Services
             _notificationService = notificationService;
             _hubContext = hubContext;
             _shippingService = shippingService;
+            _orderFactory = orderFactory;
+            _validator = validator;
+            _cache = cache;
         }
 
 
@@ -60,8 +69,11 @@ namespace CB_Gift.Services
 
             // 1. Lọc theo Status
             if (!string.IsNullOrEmpty(status))
-                // Đã sửa lỗi NameEn, chỉ dùng NameVi (tên trạng thái của bạn)
-                query = query.Where(o => o.StatusOrderNavigation.NameVi == status);
+                // ✅ Logic MỚI: Cho phép lọc theo NameVi HOẶC Code
+                query = query.Where(o =>
+                    o.StatusOrderNavigation.NameVi == status ||
+                    o.StatusOrderNavigation.Code == status
+                );
 
             // 2. Xử lý Tìm kiếm
             if (!string.IsNullOrEmpty(searchTerm))
@@ -81,7 +93,7 @@ namespace CB_Gift.Services
                 query = query.Where(o => o.OrderDate >= fromDate.Value);
 
             if (toDate.HasValue)
-                query = query.Where(o => o.OrderDate <= toDate.Value);
+                query = query.Where(o => o.OrderDate < toDate.Value);
 
 
             // 3. Đếm tổng số lượng (sau khi lọc, trước khi phân trang)
@@ -186,7 +198,32 @@ namespace CB_Gift.Services
             var dto = await query
             .ProjectTo<OrderWithDetailsDto>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync();
+            // Nếu không tìm thấy đơn (hoặc không thuộc về seller này), trả về null luôn
+            if (dto == null) return null;
 
+            // 3. 👇 BỔ SUNG: Truy vấn thủ công bảng Refunds và CancellationRequests
+            // (Copy logic từ GetManagerOrderDetailAsync sang)
+
+            var latestRefund = await _context.Refunds
+                .Where(r => r.OrderId == orderId)
+                .OrderByDescending(r => r.CreatedAt)
+                .FirstOrDefaultAsync();
+
+
+            // 4. 👇 BỔ SUNG: Điền dữ liệu vào DTO
+
+            // --- Ưu tiên 1: Xử lý Hoàn tiền (Refund) ---
+            if (latestRefund != null)
+            {
+                dto.LatestRefundId = latestRefund.RefundId;
+                dto.IsRefundPending = (latestRefund.Status == "Pending");
+                dto.RefundAmount = latestRefund.Amount;
+
+                // Lấy lý do và bằng chứng
+                dto.Reason = latestRefund.Reason; // Lý do Seller gửi
+                dto.RejectionReason = latestRefund.StaffRejectionReason; // Lý do Staff từ chối
+                dto.ProofUrl = latestRefund.ProofUrl; // Link bằng chứng
+            }
             return dto;
         }
 
@@ -349,7 +386,7 @@ namespace CB_Gift.Services
             var order = _mapper.Map<Order>(request.OrderCreate);
             order.SellerUserId = sellerUserId;
             order.EndCustomerId = customerId;
-            order.OrderDate = DateTime.Now;
+            //order.OrderDate = DateTime.Now; // ẩn đi vì khi tạo chỉ là draft thi lưu vào creation date rồi
             order.ProductionStatus = "Created";
             order.StatusOrder = 1;
             // Nếu ActiveTTS = true thì cộng thêm CostScan vào tổng
@@ -385,7 +422,8 @@ namespace CB_Gift.Services
                     Accessory = item.Accessory,
                     Note = item.Note,
                     Price = price,
-                    CreatedDate = DateTime.UtcNow
+                    CreatedDate = DateTime.UtcNow,
+                    ProductionStatus = ProductionStatus.DRAFT
                 };
                 details.Add(detail);
             }
@@ -783,6 +821,8 @@ namespace CB_Gift.Services
                 // Giả định 7 là Order Status cho CONFIRMED/READY_PROD
                 const int READY_PROD_ORDER_STATUS = 7;
                 order.StatusOrder = READY_PROD_ORDER_STATUS;
+                // cập nhật trạng thái order được confirm
+                order.OrderDate = DateTime.Now;
 
                 // 4. Cập nhật HÀNG LOẠT ProductionStatus của các OrderDetail
                 foreach (var detail in order.OrderDetails)
@@ -942,7 +982,7 @@ namespace CB_Gift.Services
             var statusCounts = await _context.Orders
                 .AsNoTracking()
                 .Where(o => o.SellerUserId == sellerUserId)
-                .GroupBy(o => o.StatusOrderNavigation.NameVi)
+                .GroupBy(o => o.StatusOrderNavigation.Code)   // Dùng status CODE
                 .Select(g => new { Status = g.Key, Count = g.Count() })
                 .ToListAsync();
 
@@ -952,62 +992,89 @@ namespace CB_Gift.Services
 
             int total = dict.Values.Sum();
 
-            // --- Gom nhóm cho 4 cục lớn ---
-            var needActionStatuses = new[] { "Cần Design", "Cần Check Design" };
-            var urgentStatuses = new[] { "Thiết kế Lại (Design Lỗi)", "Sản xuất Lại", "Cancel", "Hoàn Hàng" };
-            var completedStatuses = new[] { "Sản xuất Xong", "Đã Kiểm tra Chất lượng", "Đã Ship" };
 
-            int needActionCount = needActionStatuses.Sum(s => dict.ContainsKey(s) ? dict[s] : 0);
-            int urgentCount = urgentStatuses.Sum(s => dict.ContainsKey(s) ? dict[s] : 0);
-            int completedCount = completedStatuses.Sum(s => dict.ContainsKey(s) ? dict[s] : 0);
-
-            // --- Gom theo từng giai đoạn dropdown ---
-            var designStage = new[] { "Cần Design", "Cần Check Design", "Thiết kế Lại (Design Lỗi)" };
-            var productionStage = new[] { "Sẵn sàng Sản xuất", "Đang Sản xuất", "Sản xuất Xong", "Sản xuất Lại", "Lỗi Sản xuất (Cần Rework)" };
-            var shippingStage = new[] { "Đang Đóng gói", "Đã Kiểm tra Chất lượng", "Đã Ship", "Hoàn Hàng" };
-            var otherStage = new[] { "Tạm Dừng/Chờ", "Cancel", "Draft (Nháp)" };
-
-            var stageGroups = new Dictionary<string, List<OrderStatsDto.StatusCountItem>>
+            // ================== PHASES ==================
+            var designPhase = new[]
             {
-                ["Design Phase"] = designStage
-                    .Where(s => dict.ContainsKey(s))
-                    .Select(s => new OrderStatsDto.StatusCountItem { Status = s, Count = dict[s] })
-                    .ToList(),
-                ["Manufacture Phase"] = productionStage
-                    .Where(s => dict.ContainsKey(s))
-                    .Select(s => new OrderStatsDto.StatusCountItem { Status = s, Count = dict[s] })
-                    .ToList(),
-                ["Delivery Phase"] = shippingStage
-                    .Where(s => dict.ContainsKey(s))
-                    .Select(s => new OrderStatsDto.StatusCountItem { Status = s, Count = dict[s] })
-                    .ToList(),
-                ["Ohters"] = otherStage
-                    .Where(s => dict.ContainsKey(s))
-                    .Select(s => new OrderStatsDto.StatusCountItem { Status = s, Count = dict[s] })
-                    .ToList(),
+                "DRAFT", "NEEDDESIGN", "DESIGNING",
+                "CHECKDESIGN", "DESIGN_REDO", "CONFIRMED"
             };
 
+            var manufacturePhase = new[]
+            {
+                "READY_PROD", "INPROD", "FINISHED",
+                "PROD_REWORK", "QC_DONE", "QC_FAIL"
+            };
+
+            var deliveryPhase = new[]
+            {
+                "SHIPPING", "SHIPPED"
+            };
+
+            var refundPhase = new[]
+            {
+                "HOLD_RF", "HOLD_RP", "REFUND"
+            };
+
+            // ================== GROUP OBJECT ==================
+            var stageGroups = new Dictionary<string, List<OrderStatsDto.StatusCountItem>>
+            {
+                ["Design Phase"] = designPhase
+          .Select(s => new OrderStatsDto.StatusCountItem
+          {
+              Status = s,
+              Count = dict.ContainsKey(s) ? dict[s] : 0
+          })
+          .ToList(),
+
+                ["Manufacture Phase"] = manufacturePhase
+          .Select(s => new OrderStatsDto.StatusCountItem
+          {
+              Status = s,
+              Count = dict.ContainsKey(s) ? dict[s] : 0
+          })
+          .ToList(),
+
+                ["Delivery Phase"] = deliveryPhase
+          .Select(s => new OrderStatsDto.StatusCountItem
+          {
+              Status = s,
+              Count = dict.ContainsKey(s) ? dict[s] : 0
+          })
+          .ToList(),
+
+                ["Refund / Reprint Phase"] = refundPhase
+          .Select(s => new OrderStatsDto.StatusCountItem
+          {
+              Status = s,
+              Count = dict.ContainsKey(s) ? dict[s] : 0
+          })
+          .ToList()
+            };
+
+
+            // ================== RETURN DTO ==================
             return new OrderStatsDto
             {
                 Total = total,
                 StatusCounts = dict,
-                NeedActionCount = needActionCount,
-                UrgentCount = urgentCount,
-                CompletedCount = completedCount,
+                NeedActionCount = 0,
+                UrgentCount = 0,
+                CompletedCount = 0,
                 StageGroups = stageGroups
             };
         }
 
         public async Task<(IEnumerable<OrderWithDetailsDto> Orders, int Total)> GetFilteredAndPagedOrdersAsync(
-    string? status,
-    string? searchTerm,
-    string? sortColumn,
-    string? sellerId,
-    string? sortDirection,
-    DateTime? fromDate,
-    DateTime? toDate,
-    int page,
-    int pageSize)
+            string? status,
+            string? searchTerm,
+            string? sortColumn,
+            string? sellerId,
+            string? sortDirection,
+            DateTime? fromDate,
+            DateTime? toDate,
+            int page,
+            int pageSize)
         {
             // ví dụ code
             var query = _context.Orders
@@ -1093,7 +1160,7 @@ namespace CB_Gift.Services
                 // --- ⭐ THÊM LOGIC TÍNH TOÁN CÁC TRƯỜNG MỚI ---
 
                 // Lấy lý do YÊU CẦU (của Seller)
-                Reason = (o.StatusOrder == 17) // 17 = CANCELLED
+                Reason = (o.StatusOrder == 16) // 16 = HOLD
                     ? (from cr in _context.CancellationRequests
                        where cr.OrderId == o.OrderId
                        orderby cr.CreatedAt descending
@@ -1189,7 +1256,8 @@ namespace CB_Gift.Services
 
             if (!string.IsNullOrEmpty(seller))
             {
-                projectedQuery = projectedQuery.Where(dto => dto.SellerId == seller);
+                projectedQuery = projectedQuery.Where(dto => dto.SellerId == seller ||
+                                                     dto.SellerName == seller);
             }
 
             // 5. Lấy tổng số (sau khi đã lọc)
@@ -1253,11 +1321,237 @@ namespace CB_Gift.Services
 
             return sellerNames;
         }
+        public async Task<OrderWithDetailsDto?> GetManagerOrderDetailAsync(int orderId)
+        {
+            // BƯỚC 1: Lấy thông tin Order gốc (Giữ nguyên các Include cũ, KHÔNG Include Refund/Cancel)
+            var orderEntity = await _context.Orders
+                .Include(o => o.EndCustomer)
+                .Include(o => o.StatusOrderNavigation)
+                .Include(o => o.OrderDetails)
+                    .ThenInclude(od => od.ProductVariant)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(o => o.OrderId == orderId);
 
+            if (orderEntity == null) return null;
 
+            // BƯỚC 2: Map sang DTO (Sử dụng AutoMapper như bình thường)
+            var dto = _mapper.Map<OrderWithDetailsDto>(orderEntity);
 
+            // BƯỚC 3: Truy vấn thủ công bảng Refunds (Tìm theo OrderId)
+            // Vì không có Navigation Property nên ta query trực tiếp từ DbSet _context.Refunds
+            var latestRefund = await _context.Refunds
+                .Where(r => r.OrderId == orderId)
+                .OrderByDescending(r => r.CreatedAt)
+                .FirstOrDefaultAsync();
 
+            // BƯỚC 5: Logic điền dữ liệu vào DTO (Mapping thủ công các trường manager cần)
 
+            // --- Xử lý logic Hoàn tiền (Refund) ---
+            if (latestRefund != null)
+            {
+                dto.LatestRefundId = latestRefund.RefundId;
+                dto.IsRefundPending = (latestRefund.Status == "Pending"); // Hoặc check null tùy logic của bạn
+                dto.RefundAmount = latestRefund.Amount;
 
+                // Reason: Lý do Seller/Khách yêu cầu
+                dto.Reason = latestRefund.Reason;
+                dto.ProofUrl = latestRefund.ProofUrl;
+                // RejectionReason: Lý do Staff từ chối
+                dto.RejectionReason = latestRefund.StaffRejectionReason;
+
+                // Nếu trạng thái Order đang là Refunded hoặc Refund Pending, ưu tiên hiển thị lý do Refund
+                
+            }
+            return dto;
+        }
+
+        private DateTime? GetDateTimeSafe(IXLCell cell)
+        {
+            if (cell == null || cell.IsEmpty())
+                return null;
+
+            // Nếu là DateTime / Number chuẩn của Excel
+            if (cell.DataType == XLDataType.DateTime || cell.DataType == XLDataType.Number)
+            {
+                try
+                {
+                    return cell.GetDateTime();
+                }
+                catch
+                {
+                    // bỏ qua, thử parse string bên dưới
+                }
+            }
+
+            var text = cell.GetString().Trim();
+            if (string.IsNullOrWhiteSpace(text))
+                return null;
+
+            // Thử parse tự do
+            if (DateTime.TryParse(text, out var dt))
+                return dt;
+
+            return null;
+        }
+
+        private bool? GetBoolSafe(IXLCell cell)
+        {
+            if (cell == null || cell.IsEmpty())
+                return null;
+
+            if (cell.DataType == XLDataType.Boolean)
+                return cell.GetBoolean();
+
+            var text = cell.GetString().Trim().ToLower();
+            if (text == "true" || text == "1" || text == "yes" || text == "y")
+                return true;
+            if (text == "false" || text == "0" || text == "no" || text == "n")
+                return false;
+
+            return null;
+        }
+
+        private decimal? GetDecimalSafe(IXLCell cell)
+        {
+            if (cell == null || cell.IsEmpty())
+                return null;
+
+            if (cell.DataType == XLDataType.Number)
+                return (decimal)cell.GetDouble();
+
+            var text = cell.GetString().Trim();
+            if (decimal.TryParse(text, out var value))
+                return value;
+
+            return null;
+        }
+
+        private int GetIntSafe(IXLCell cell, int defaultValue = 0)
+        {
+            if (cell == null || cell.IsEmpty())
+                return defaultValue;
+
+            if (cell.DataType == XLDataType.Number)
+                return (int)cell.GetDouble();
+
+            var text = cell.GetString().Trim();
+            if (int.TryParse(text, out var value))
+                return value;
+
+            return defaultValue;
+        }
+        private static string? Clean(string? s)
+        {
+            if (string.IsNullOrWhiteSpace(s))
+                return null;
+
+            // Loại mọi whitespace unicode
+            var cleaned = System.Text.RegularExpressions.Regex.Replace(s, @"\s+", "");
+
+            return string.IsNullOrWhiteSpace(cleaned) ? null : cleaned.Trim();
+        }
+        public async Task<OrderImportResult> ImportFromExcelAsync(IFormFile file, string sellerUserId)
+        {
+            if (file == null || file.Length == 0)
+                throw new ArgumentException("File rỗng hoặc không tồn tại.", nameof(file));
+
+            // Đảm bảo cache đã load Product / ProductVariant
+            await _cache.LoadAsync();
+
+            var result = new OrderImportResult();
+
+            using var stream = file.OpenReadStream();
+            using var workbook = new XLWorkbook(stream);
+
+            // Ưu tiên sheet "Payments", nếu không có thì lấy sheet đầu tiên
+            IXLWorksheet worksheet;
+            if (!workbook.TryGetWorksheet("Payments", out worksheet))
+            {
+                worksheet = workbook.Worksheet(1);
+            }
+
+            var rows = worksheet.RangeUsed().RowsUsed().Skip(1); // bỏ header
+            result.TotalRows = rows.Count();
+
+            foreach (var row in rows)
+            {
+                var dto = new OrderImportRowDto
+                {
+                    RowNumber = row.RowNumber(),
+
+                    OrderID = row.Cell(1).GetString(),
+                    OrderCode = row.Cell(2).GetString(),
+                    
+                    OrderDate = DateTime.TryParse(row.Cell(3).GetString(), out var date)
+            ? date
+            : DateTime.UtcNow,
+                    CustomerName = row.Cell(4).GetString(),
+                    Phone = row.Cell(5).GetString(),
+                    Email = Clean(row.Cell(6).GetString()),
+                    Address = row.Cell(7).GetString(),
+                    Zipcode = row.Cell(24).GetString(),
+
+                    ShipState = row.Cell(23).GetString(),
+                    ShipCity = row.Cell(22).GetString(),
+                    ShipCountry = row.Cell(21).GetString(),
+
+                    PaymentStatus = row.Cell(12).GetString(),
+                    ActiveTTS = GetBoolSafe(row.Cell(25)),
+
+                    TotalCost = GetDecimalSafe(row.Cell(11)),
+                    StatusOrder = GetIntSafe(row.Cell(17), 0),
+                    Note = row.Cell(13).GetString(),
+                    ProductName = row.Cell(9).GetString(),
+                    SizeInch = row.Cell(8).GetString(),
+                    Accessory = row.Cell(17).GetString(),
+                    Quantity = GetIntSafe(row.Cell(10), 1),
+                    LinkImg = row.Cell(14).GetString(),
+                    LinkThanksCard = row.Cell(15).GetString(),
+                    LinkFileDesign = row.Cell(16).GetString(),
+
+                    TotalAmount = GetDecimalSafe(row.Cell(18)),
+                    OrderNotes = row.Cell(19).GetString(),
+                    TimeCreated = GetDateTimeSafe(row.Cell(20))
+                };
+
+                // Validate
+                var validation = await _validator.ValidateAsync(dto);
+
+                if (!validation.IsValid)
+                {
+                    result.Errors.Add(new OrderImportRowError
+                    {
+                        RowNumber = dto.RowNumber,
+                        Messages = validation.Errors
+                                              .Select(e => e.ErrorMessage)
+                                              .ToList()
+                    });
+                    continue; // bỏ qua dòng này
+                }
+
+                try
+                {
+                    var order = _orderFactory.CreateOrderEntityAsync(dto, sellerUserId);
+                    _context.Orders.Add(await order);
+                    result.SuccessCount++;
+                }
+                catch (Exception ex)
+                {
+                    result.Errors.Add(new OrderImportRowError
+                    {
+                        RowNumber = dto.RowNumber,
+                        Messages = new List<string> { $"Lỗi tạo Order: {ex.Message}" }
+                    });
+                }
+            }
+
+            if (result.SuccessCount > 0)
+            {
+                await _context.SaveChangesAsync();
+            }
+
+            return result;
+        }
+      
     }
 }

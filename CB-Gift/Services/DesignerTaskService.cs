@@ -127,7 +127,7 @@ namespace CB_Gift.Services
                 var currentStatus = orderDetail.ProductionStatus ?? ProductionStatus.NEED_DESIGN;
 
                 // Logic nghiệp vụ: Chỉ cho phép upload khi đang ở DESIGNING hoặc DESIGN_REDO
-                if (currentStatus != ProductionStatus.DESIGNING && currentStatus != ProductionStatus.DESIGN_REDO)
+                if (currentStatus != ProductionStatus.DESIGNING && currentStatus != ProductionStatus.DESIGN_REDO && currentStatus != ProductionStatus.CHECK_DESIGN)
                 {
                     throw new InvalidOperationException($"Cannot upload design file. Current status is {currentStatus}. Must be DESIGNING or DESIGN_REDO.");
                 }
@@ -701,7 +701,7 @@ namespace CB_Gift.Services
                     _logger.LogWarning(ex,"Lỗi khi gửi thông báo SignalR cho AssignDesignerToOrderAsync");
                 }
                 // ✅ KẾT THÚC GỬI THÔNG BÁO
-
+                order.OrderDate = assignmentTime;
                 // Lưu tất cả các thay đổi vào cơ sở dữ liệu.
                 await _context.SaveChangesAsync();
 
@@ -843,5 +843,244 @@ namespace CB_Gift.Services
              return true;
          }*/
 
+        public async Task<DesignTaskDetailDto> GetTaskDetailAsync(int orderDetailId, string designerId)
+        {
+            // 1. Lấy thông tin Task chính (logic tương tự như GetAssignedTasksAsync nhưng cho 1 item)
+            var taskInfo = await _context.OrderDetails
+                .Include(od => od.Order)
+                .Include(od => od.ProductVariant.Product)
+                .Where(od => od.OrderDetailId == orderDetailId && od.AssignedDesignerUserId == designerId)
+                .Select(od => new DesignTaskDto
+                {
+                    // SAO CHÉP TẤT CẢ CÁC TRƯỜNG TỪ selector TRONG HÀM GetAssignedTasksAsync
+                    OrderDetailId = od.OrderDetailId,
+                    OrderId = od.OrderId,
+                    OrderCode = od.Order.OrderCode,
+                    ProductName = od.ProductVariant.Product.ProductName,
+                    ProductDescribe = od.ProductVariant.Product.Describe,
+                    ProductTemplate = od.ProductVariant.Product.Template,
+                    OrderStatus = od.Order.StatusOrder,
+                    Quantity = od.Quantity,
+                    LinkImg = od.LinkImg,
+                    LinkThankCard = od.LinkThanksCard,
+                    LinkFileDesign = od.LinkFileDesign,
+                    Note = od.Note,
+                    AssignedAt = od.AssignedAt,
+                    ProductionStatus = od.ProductionStatus.ToString(),
+                    // Chúng ta sẽ lấy 'Reason' từ bảng Logs bên dưới
+                    ProductDetails = od.ProductVariant != null ? new ProductDetails
+                    {
+                        ProductVariantId = od.ProductVariant.ProductVariantId.ToString(),
+                        LengthCm = od.ProductVariant.LengthCm,
+                        HeightCm = od.ProductVariant.HeightCm,
+                        WidthCm = od.ProductVariant.WidthCm,
+                        ThicknessMm = od.ProductVariant.ThicknessMm,
+                        SizeInch = od.ProductVariant.SizeInch,
+                        Layer = od.ProductVariant.Layer,
+                        CustomShape = od.ProductVariant.CustomShape,
+                        Sku = od.ProductVariant.Sku
+                    } : null
+                })
+                .AsNoTracking()
+                .FirstOrDefaultAsync();
+
+            if (taskInfo == null)
+            {
+                // Không tìm thấy task hoặc designer không có quyền
+                return null;
+            }
+
+            // 2. Lấy danh sách các log bị từ chối (REJECTED hoặc QC_FAIL)
+            var relevantEventTypes = new[] { "DESIGN_REJECTED", "QC_FAIL", "DESIGN_APPROVED", };
+
+            var logs = await _context.OrderDetailLogs
+                .Include(log => log.ActorUser) // Join với bảng User để lấy tên
+                .Where(log => log.OrderDetailId == orderDetailId && relevantEventTypes.Contains(log.EventType))
+                .OrderByDescending(log => log.CreatedAt) // Mới nhất lên trước
+                .Select(log => new OrderDetailLogDto
+                {
+                    OrderDetailLogId = log.OrderDetailLogId,
+                    EventType = log.EventType,
+                    Reason = log.Reason,
+                    CreatedAt = log.CreatedAt,
+                    // Lấy tên đầy đủ, nếu không có thì lấy UserName
+                    UserName = log.ActorUser.FullName ?? log.ActorUser.UserName
+                })
+                .ToListAsync();
+
+            // 3. Kết hợp lại và trả về
+            return new DesignTaskDetailDto
+            {
+                TaskInfo = taskInfo,
+                Logs = logs
+            };
+        }
+        // Lấy các task đã qua bước thiết kế (để hiển thị lịch sử)
+        public async Task<PaginatedResult<DesignTaskDto>> GetDesignedHistoryAsync(
+         string designerId,
+         int? productId, // THÊM MỚI
+         string? sellerId,
+         string? searchTerm,
+         DateTime? startDate,
+         DateTime? endDate,
+         int page,
+         int pageSize)
+        {
+            // Các trạng thái "Pending" - Sẽ BỊ LOẠI KHỎI history
+            var pendingStatuses = new[]
+            {
+                ProductionStatus.DRAFT,
+                ProductionStatus.CREATED,
+                ProductionStatus.NEED_DESIGN,
+                ProductionStatus.DESIGNING,
+                ProductionStatus.DESIGN_REDO
+            };
+
+            var queryable = _context.OrderDetails
+                .Include(od => od.Order)
+                .Include(od => od.ProductVariant.Product)
+                .Where(od => od.AssignedDesignerUserId == designerId &&
+                             od.NeedDesign == true &&
+                             od.ProductionStatus.HasValue &&
+                             !pendingStatuses.Contains(od.ProductionStatus.Value));
+
+            // 1. Áp dụng Filter
+            if (productId.HasValue) // THÊM MỚI
+            {
+                queryable = queryable.Where(od => od.ProductVariant.Product.ProductId == productId.Value);
+            }
+
+            if (!string.IsNullOrEmpty(sellerId))
+            {
+                queryable = queryable.Where(od => od.Order.SellerUserId == sellerId);
+            }
+
+            if (startDate.HasValue)
+            {
+                var start = startDate.Value.Date;
+                queryable = queryable.Where(od => od.AssignedAt >= start);
+            }
+
+            if (endDate.HasValue)
+            {
+                var end = endDate.Value.Date.AddDays(1).AddTicks(-1);
+                queryable = queryable.Where(od => od.AssignedAt <= end);
+            }
+
+            if (!string.IsNullOrEmpty(searchTerm))
+            {
+                var term = searchTerm.ToLower().Trim();
+                queryable = queryable.Where(od =>
+                    od.Order.OrderCode.ToLower().Contains(term) ||
+                    od.ProductVariant.Product.ProductName.ToLower().Contains(term)
+                );
+            }
+
+            // 2. Lấy tổng số lượng (TRƯỚC KHI Phân trang)
+            var totalCount = await queryable.CountAsync();
+
+            // 3. Áp dụng Phân trang và Sắp xếp
+            var items = await queryable
+                .OrderByDescending(od => od.AssignedAt) // Sắp xếp mới nhất lên trước
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(od => new DesignTaskDto
+                {
+                    OrderDetailId = od.OrderDetailId,
+                    OrderId = od.OrderId,
+                    OrderCode = od.Order.OrderCode,
+                    ProductName = od.ProductVariant.Product.ProductName,
+                    ProductDescribe = od.ProductVariant.Product.Describe,
+                    ProductTemplate = od.ProductVariant.Product.Template,
+                    OrderStatus = od.Order.StatusOrder,
+                    Quantity = od.Quantity,
+                    LinkImg = od.LinkImg,
+                    LinkThankCard = od.LinkThanksCard,
+                    LinkFileDesign = od.LinkFileDesign,
+                    Note = od.Note,
+                    AssignedAt = od.AssignedAt,
+                    // LUÔN LUÔN TRẢ VỀ "Completed"
+                    ProductionStatus = "Completed",
+
+                    // Vẫn lấy Reason nếu nó đã từng bị REDO
+                    Reason = (od.ProductionStatus == ProductionStatus.DESIGN_REDO || od.ProductionStatus == ProductionStatus.QC_FAIL)
+                       ? (from log in _context.OrderDetailLogs
+                          where log.OrderDetailId == od.OrderDetailId &&
+                                (log.EventType == "DESIGN_REJECTED" || log.EventType == "QC_FAIL")
+                          orderby log.CreatedAt descending
+                          select log.Reason
+                         ).FirstOrDefault()
+                       : null,
+
+                    ProductDetails = od.ProductVariant != null ? new ProductDetails
+                    {
+                        ProductVariantId = od.ProductVariant.ProductVariantId.ToString(),
+                        LengthCm = od.ProductVariant.LengthCm,
+                        HeightCm = od.ProductVariant.HeightCm,
+                        WidthCm = od.ProductVariant.WidthCm,
+                        ThicknessMm = od.ProductVariant.ThicknessMm,
+                        SizeInch = od.ProductVariant.SizeInch,
+                        Layer = od.ProductVariant.Layer,
+                        CustomShape = od.ProductVariant.CustomShape,
+                        Sku = od.ProductVariant.Sku
+                    } : null
+                })
+                .AsNoTracking()
+                .ToListAsync();
+
+            return new PaginatedResult<DesignTaskDto>
+            {
+                Items = items,
+                Total = totalCount,
+                Page = page,
+                PageSize = pageSize
+            };
+        }
+        public async Task<IEnumerable<ProductFilterDto>> GetDesignerProductsAsync(string designerId)
+        {
+            var products = await _context.OrderDetails
+                // Chỉ lấy các OrderDetail của designer này
+                .Where(od => od.AssignedDesignerUserId == designerId && od.NeedDesign == true)
+                // Include Product
+                .Include(od => od.ProductVariant.Product)
+                // Chọn thông tin Product
+                .Select(od => od.ProductVariant.Product)
+                // Lọc ra các sản phẩm duy nhất (distinct)
+                .Distinct()
+                // Chỉ lấy ID và Tên
+                .Select(p => new ProductFilterDto
+                {
+                    ProductId = p.ProductId,
+                    ProductName = p.ProductName
+                })
+                .AsNoTracking()
+                .ToListAsync();
+
+            return products;
+        }
+        public async Task<IEnumerable<SellerFilterDto>> GetDesignerSellersAsync(string designerId)
+        {
+            // 1. Lấy ra danh sách các Seller ID duy nhất
+            var sellerIds = await _context.OrderDetails
+                .Where(od => od.AssignedDesignerUserId == designerId && od.NeedDesign == true)
+                .Include(od => od.Order)
+                .Select(od => od.Order.SellerUserId)
+                .Distinct()
+                .ToListAsync();
+
+            // 2. Truy vấn bảng Users (Giả sử là _context.Users) để lấy tên
+            //    (Nếu bảng User của bạn tên khác, hãy thay _context.Users)
+            var sellers = await _context.Users
+                .Where(u => sellerIds.Contains(u.Id))
+                .Select(u => new SellerFilterDto
+                {
+                    SellerId = u.Id,
+                    SellerName = u.FullName ?? u.UserName // Hiển thị FullName, fallback về UserName
+                })
+                .AsNoTracking()
+                .ToListAsync();
+
+            return sellers;
+        }
     }
 }

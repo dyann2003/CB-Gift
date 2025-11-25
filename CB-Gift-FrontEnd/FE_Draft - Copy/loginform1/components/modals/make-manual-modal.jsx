@@ -74,6 +74,15 @@ export default function MakeManualModal({ isOpen, onClose }) {
   const [orderId, setOrderId] = useState("");
   const [isOrderIdSet, setIsOrderIdSet] = useState(false);
   const [activeTTS, setActiveTTS] = useState(false);
+  const [searchProvince, setSearchProvince] = useState("");
+  const [searchDistrict, setSearchDistrict] = useState("");
+  const [searchWard, setSearchWard] = useState("");
+  const [openProvinceDropdown, setOpenProvinceDropdown] = useState(false);
+  const [openDistrictDropdown, setOpenDistrictDropdown] = useState(false);
+  const [openWardDropdown, setOpenWardDropdown] = useState(false);
+  const [hoverProvince, setHoverProvince] = useState(null);
+  const [hoverDistrict, setHoverDistrict] = useState(null);
+  const [hoverWard, setHoverWard] = useState(null);
   const linkThanksCardRef = useRef(null);
   const linkFileDesignRef = useRef(null);
   const linkImgRef = useRef(null);
@@ -84,11 +93,20 @@ export default function MakeManualModal({ isOpen, onClose }) {
     email: "",
     address: "",
     address1: "",
-    zipcode: "",
-    shipState: "",
-    shipCity: "",
-    shipCountry: "",
+    provinceId: "",
+    provinceName: "",
+    districtId: "",
+    districtName: "",
+    wardId: "",
+    wardName: "",
   });
+
+  const [provinces, setProvinces] = useState([]);
+  const [districts, setDistricts] = useState([]);
+  const [wards, setWards] = useState([]);
+  const [loadingProvinces, setLoadingProvinces] = useState(false);
+  const [loadingDistricts, setLoadingDistricts] = useState(false);
+  const [loadingWards, setLoadingWards] = useState(false);
 
   const [cartProducts, setCartProducts] = useState([]);
   const [currentProduct, setCurrentProduct] = useState(null);
@@ -112,10 +130,12 @@ export default function MakeManualModal({ isOpen, onClose }) {
       email: "",
       address: "",
       address1: "",
-      zipcode: "",
-      shipState: "",
-      shipCity: "",
-      shipCountry: "",
+      provinceId: "",
+      provinceName: "",
+      districtId: "",
+      districtName: "",
+      wardId: "",
+      wardName: "",
     });
     setCartProducts([]);
     setCurrentProduct(null);
@@ -131,16 +151,24 @@ export default function MakeManualModal({ isOpen, onClose }) {
       note: "",
       productPrice: 0,
     });
+    setDistricts([]);
+    setWards([]);
   };
 
   // ─── Step 2: load products từ BE ───
   const [products, setProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [productsError, setProductsError] = useState(null);
+  const [productSearchTerm, setProductSearchTerm] = useState("");
+  const [productCurrentPage, setProductCurrentPage] = useState(1);
+  const [productItemsPerPage, setProductItemsPerPage] = useState(5);
 
   useEffect(() => {
     if (!isOpen) return;
     fetchProducts();
+    fetchProvinces();
+    setProductCurrentPage(1);
+    setProductSearchTerm("");
   }, [isOpen]);
 
   const fetchProducts = async () => {
@@ -161,17 +189,95 @@ export default function MakeManualModal({ isOpen, onClose }) {
     }
   };
 
+  const fetchProvinces = async () => {
+    setLoadingProvinces(true);
+    try {
+      const res = await fetch(`https://localhost:7015/api/Location/provinces`, {
+        credentials: "include",
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const data = await res.json();
+
+      // 🔥 Chuẩn hóa data về dạng FE cần
+      const normalized = data.map((p) => ({
+        id: p.ProvinceID,
+        name: p.ProvinceName,
+      }));
+
+      setProvinces(normalized);
+    } catch (err) {
+      console.error("Failed to fetch provinces:", err);
+    } finally {
+      setLoadingProvinces(false);
+    }
+  };
+
+  const fetchDistricts = async (provinceId) => {
+    setLoadingDistricts(true);
+    try {
+      const res = await fetch(
+        `https://localhost:7015/api/Location/districts/${provinceId}`,
+        { credentials: "include" }
+      );
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const data = await res.json();
+
+      const normalized = data.map((d) => ({
+        id: d.DistrictID,
+        name: d.DistrictName,
+      }));
+
+      setDistricts(normalized);
+    } catch (err) {
+      alert(`Failed to load districts: ${err.message}`);
+    } finally {
+      setLoadingDistricts(false);
+    }
+  };
+
+  const fetchWards = async (districtId) => {
+    setLoadingWards(true);
+    try {
+      const res = await fetch(
+        `https://localhost:7015/api/Location/wards/${districtId}`,
+        { credentials: "include" }
+      );
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const data = await res.json();
+
+      const normalized = data.map((w) => ({
+        id: w.WardCode,
+        name: w.WardName,
+      }));
+
+      setWards(normalized);
+    } catch (err) {
+      alert(`Failed to load wards: ${err.message}`);
+    } finally {
+      setLoadingWards(false);
+    }
+  };
+
   // Upload ảnh thật lên server
   const uploadImage = async (file) => {
     const formData = new FormData();
     formData.append("File", file);
 
     try {
-      const res = await fetch(`${apiClient.defaults.baseURL}/api/images/upload`, {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      });
+      const res = await fetch(
+        `${apiClient.defaults.baseURL}/api/images/upload`,
+        {
+          method: "POST",
+          credentials: "include",
+          body: formData,
+        }
+      );
 
       if (!res.ok) {
         const errText = await res.text();
@@ -235,13 +341,14 @@ export default function MakeManualModal({ isOpen, onClose }) {
         "phone",
         "email",
         "address",
-        "zipcode",
-        "shipState",
-        "shipCity",
-        "shipCountry",
+        "provinceId",
+        "districtId",
+        "wardId",
       ];
 
-      const missing = requiredFields.filter((f) => !customerInfo[f]?.trim());
+      const missing = requiredFields.filter(
+        (f) => !customerInfo[f]?.toString().trim()
+      );
       if (missing.length > 0) {
         setErrorMessage(
           `Please fill all required fields: ${missing.join(", ")}`
@@ -329,9 +436,12 @@ export default function MakeManualModal({ isOpen, onClose }) {
     }
 
     try {
-      const res = await fetch(`${apiClient.defaults.baseURL}/api/Product/${id}`, {
-        credentials: "include",
-      });
+      const res = await fetch(
+        `${apiClient.defaults.baseURL}/api/Product/${id}`,
+        {
+          credentials: "include",
+        }
+      );
       if (!res.ok) {
         console.warn("Product detail fetch failed, use base product");
         setCurrentProduct(product);
@@ -430,6 +540,7 @@ export default function MakeManualModal({ isOpen, onClose }) {
       linkDesign: p.config.linkFileDesign || null,
       accessory: p.config.accessory || "",
       note: p.config.note || "",
+      productionStatus: 0,
     }));
 
     const orderPayload = {
@@ -437,13 +548,14 @@ export default function MakeManualModal({ isOpen, onClose }) {
         name: customerInfo.name,
         phone: customerInfo.phone,
         email: customerInfo.email,
-        address: customerInfo.address,
+        address: `${customerInfo.address},${customerInfo.wardName}, ${customerInfo.districtName}, ${customerInfo.provinceName}`,
         address1: customerInfo.address1,
-        zipCode: customerInfo.zipcode,
-        shipState: customerInfo.shipState,
-        shipCity: customerInfo.shipCity,
-        shipCountry: customerInfo.shipCountry,
+        zipCode: "",
+        shipState: "",
+        shipCity: "",
+        shipCountry: "",
       },
+
       orderCreate: {
         orderCode: orderId?.trim() || `ORD-${Date.now()}`,
         endCustomerID: 0,
@@ -455,8 +567,14 @@ export default function MakeManualModal({ isOpen, onClose }) {
         tracking: "",
         productionStatus: "Pending",
         paymentStatus: "Unpaid",
-        orderDetails: orderDetails,
+
+        // 🔥 Quan trọng – đưa đúng vào DB
+        toProvinceId: Number(customerInfo.provinceId),
+        toDistrictId: Number(customerInfo.districtId),
+        toWardCode: customerInfo.wardId,
       },
+
+      // 🔥 Để đúng vị trí API yêu cầu
       orderDetails: orderDetails,
     };
 
@@ -464,12 +582,15 @@ export default function MakeManualModal({ isOpen, onClose }) {
     console.log(JSON.stringify(orderPayload, null, 2));
 
     try {
-      const res = await fetch(`${apiClient.defaults.baseURL}/api/Order/make-order`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(orderPayload),
-      });
+      const res = await fetch(
+        `${apiClient.defaults.baseURL}/api/Order/make-order`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(orderPayload),
+        }
+      );
 
       const text = await res.text();
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${text}`);
@@ -545,6 +666,79 @@ export default function MakeManualModal({ isOpen, onClose }) {
       }));
     };
 
+    const handleProvinceChange = (provinceId) => {
+      const province = provinces.find((p) => {
+        const pid = p.id ?? p.provinceId;
+        return pid?.toString() === provinceId;
+      });
+
+      setCustomerInfo((prev) => ({
+        ...prev,
+        provinceId: provinceId,
+        provinceName: province?.name || province?.provinceName || "",
+        districtId: "",
+        districtName: "",
+        wardId: "",
+        wardName: "",
+      }));
+
+      setDistricts([]);
+      setWards([]);
+      setOpenProvinceDropdown(false);
+      setSearchProvince("");
+      fetchDistricts(provinceId);
+    };
+
+    const handleDistrictChange = (districtId) => {
+      const district = districts.find((d) => {
+        const did = d.id ?? d.districtId;
+        return did?.toString() === districtId;
+      });
+
+      setCustomerInfo((prev) => ({
+        ...prev,
+        districtId: districtId,
+        districtName: district?.name || district?.districtName || "",
+        wardId: "",
+        wardName: "",
+      }));
+      setWards([]);
+      setOpenDistrictDropdown(false);
+      setSearchDistrict("");
+      fetchWards(districtId);
+    };
+
+    const handleWardChange = (wardId) => {
+      const ward = wards.find((w) => {
+        const wid = w.id ?? w.wardId;
+        return wid?.toString() === wardId;
+      });
+
+      setCustomerInfo((prev) => ({
+        ...prev,
+        wardId: wardId,
+        wardName: ward?.name || ward?.wardName || "",
+      }));
+      setOpenWardDropdown(false);
+      setSearchWard("");
+    };
+
+    const filteredProvinces = provinces.filter((p) =>
+      (p.name || p.provinceName)
+        .toLowerCase()
+        .includes(searchProvince.toLowerCase())
+    );
+
+    const filteredDistricts = districts.filter((d) =>
+      (d.name || d.districtName)
+        .toLowerCase()
+        .includes(searchDistrict.toLowerCase())
+    );
+
+    const filteredWards = wards.filter((w) =>
+      (w.name || w.wardName).toLowerCase().includes(searchWard.toLowerCase())
+    );
+
     return (
       <div className="space-y-4">
         <h3 className="text-lg font-semibold">
@@ -610,117 +804,431 @@ export default function MakeManualModal({ isOpen, onClose }) {
             />
           </div>
 
-          {/* Zipcode */}
           <div>
-            <Label htmlFor="zipcode">Zipcode *</Label>
-            <Input
-              id="zipcode"
-              value={customerInfo.zipcode}
-              onChange={(e) => handleTrimmedInput("zipcode", e.target.value)}
-              placeholder="Enter zipcode"
-            />
+            <Label htmlFor="province">Province *</Label>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setOpenProvinceDropdown(!openProvinceDropdown)}
+                disabled={loadingProvinces}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-left flex justify-between items-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                <span>
+                  {customerInfo.provinceName ||
+                    (loadingProvinces ? "Loading..." : "Select Province")}
+                </span>
+                <ChevronDown
+                  size={20}
+                  className={openProvinceDropdown ? "rotate-180" : ""}
+                />
+              </button>
+
+              {openProvinceDropdown && (
+                <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 rounded-md bg-white shadow-lg z-50">
+                  <Input
+                    type="text"
+                    placeholder="Search province..."
+                    value={searchProvince}
+                    onChange={(e) => setSearchProvince(e.target.value)}
+                    className="m-2 border-gray-300"
+                  />
+                  <div className="max-h-60 overflow-y-auto">
+                    {filteredProvinces.length > 0 ? (
+                      filteredProvinces.map((p, idx) => (
+                        <button
+                          key={p.id || p.provinceId || `prov-${idx}`}
+                          type="button"
+                          onClick={() =>
+                            handleProvinceChange(
+                              (p.id || p.provinceId || idx).toString()
+                            )
+                          }
+                          onMouseEnter={() =>
+                            setHoverProvince(p.id || p.provinceId || idx)
+                          }
+                          onMouseLeave={() => setHoverProvince(null)}
+                          className={`w-full px-3 py-2 text-left transition-colors ${
+                            hoverProvince === (p.id || p.provinceId || idx)
+                              ? "bg-blue-100 text-blue-900"
+                              : customerInfo.provinceId?.toString() ===
+                                (p.id || p.provinceId || idx)?.toString()
+                              ? "bg-blue-50 text-blue-700"
+                              : "hover:bg-gray-50"
+                          }`}
+                        >
+                          {p.name || p.provinceName}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-2 text-gray-500">
+                        No province found
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Ship State */}
           <div>
-            <Label htmlFor="shipState">Ship State *</Label>
-            <Input
-              id="shipState"
-              value={customerInfo.shipState}
-              onChange={(e) => handleTrimmedInput("shipState", e.target.value)}
-              placeholder="Enter state"
-            />
+            <Label htmlFor="district">District *</Label>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() =>
+                  customerInfo.provinceId &&
+                  setOpenDistrictDropdown(!openDistrictDropdown)
+                }
+                disabled={loadingDistricts || !customerInfo.provinceId}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-left flex justify-between items-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:bg-gray-100"
+              >
+                <span>
+                  {customerInfo.districtName ||
+                    (loadingDistricts
+                      ? "Loading..."
+                      : customerInfo.provinceId
+                      ? "Select District"
+                      : "Select Province first")}
+                </span>
+                <ChevronDown
+                  size={20}
+                  className={openDistrictDropdown ? "rotate-180" : ""}
+                />
+              </button>
+
+              {openDistrictDropdown && customerInfo.provinceId && (
+                <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 rounded-md bg-white shadow-lg z-50">
+                  <Input
+                    type="text"
+                    placeholder="Search district..."
+                    value={searchDistrict}
+                    onChange={(e) => setSearchDistrict(e.target.value)}
+                    className="m-2 border-gray-300"
+                  />
+                  <div className="max-h-60 overflow-y-auto">
+                    {filteredDistricts.length > 0 ? (
+                      filteredDistricts.map((d) => (
+                        <button
+                          key={d.id || d.districtId}
+                          type="button"
+                          onClick={() =>
+                            handleDistrictChange(
+                              (d.id || d.districtId)?.toString()
+                            )
+                          }
+                          onMouseEnter={() =>
+                            setHoverDistrict(d.id || d.districtId)
+                          }
+                          onMouseLeave={() => setHoverDistrict(null)}
+                          className={`w-full px-3 py-2 text-left transition-colors ${
+                            hoverDistrict === (d.id || d.districtId)
+                              ? "bg-blue-100 text-blue-900"
+                              : customerInfo.districtId?.toString() ===
+                                (d.id || d.districtId)?.toString()
+                              ? "bg-blue-50 text-blue-700"
+                              : "hover:bg-gray-50"
+                          }`}
+                        >
+                          {d.name || d.districtName}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-2 text-gray-500">
+                        No district found
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Ship City */}
           <div>
-            <Label htmlFor="shipCity">Ship City *</Label>
-            <Input
-              id="shipCity"
-              value={customerInfo.shipCity}
-              onChange={(e) => handleTrimmedInput("shipCity", e.target.value)}
-              placeholder="Enter city"
-            />
-          </div>
+            <Label htmlFor="ward">Ward *</Label>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() =>
+                  customerInfo.districtId &&
+                  setOpenWardDropdown(!openWardDropdown)
+                }
+                disabled={loadingWards || !customerInfo.districtId}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-left flex justify-between items-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:bg-gray-100"
+              >
+                <span>
+                  {customerInfo.wardName ||
+                    (loadingWards
+                      ? "Loading..."
+                      : customerInfo.districtId
+                      ? "Select Ward"
+                      : "Select District first")}
+                </span>
+                <ChevronDown
+                  size={20}
+                  className={openWardDropdown ? "rotate-180" : ""}
+                />
+              </button>
 
-          {/* Ship Country */}
-          <div>
-            <Label htmlFor="shipCountry">Ship Country *</Label>
-            <Input
-              id="shipCountry"
-              value={customerInfo.shipCountry}
-              onChange={(e) =>
-                handleTrimmedInput("shipCountry", e.target.value)
-              }
-              placeholder="Enter country"
-            />
+              {openWardDropdown && customerInfo.districtId && (
+                <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 rounded-md bg-white shadow-lg z-50">
+                  <Input
+                    type="text"
+                    placeholder="Search ward..."
+                    value={searchWard}
+                    onChange={(e) => setSearchWard(e.target.value)}
+                    className="m-2 border-gray-300"
+                  />
+                  <div className="max-h-60 overflow-y-auto">
+                    {filteredWards.length > 0 ? (
+                      filteredWards.map((w) => (
+                        <button
+                          key={w.id || w.wardId}
+                          type="button"
+                          onClick={() =>
+                            handleWardChange((w.id || w.wardId)?.toString())
+                          }
+                          onMouseEnter={() => setHoverWard(w.id || w.wardId)}
+                          onMouseLeave={() => setHoverWard(null)}
+                          className={`w-full px-3 py-2 text-left transition-colors ${
+                            hoverWard === (w.id || w.wardId)
+                              ? "bg-blue-100 text-blue-900"
+                              : customerInfo.wardId?.toString() ===
+                                (w.id || w.wardId)?.toString()
+                              ? "bg-blue-50 text-blue-700"
+                              : "hover:bg-gray-50"
+                          }`}
+                        >
+                          {w.name || w.wardName}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-2 text-gray-500">
+                        No ward found
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
     );
   };
 
-  const renderStep2 = () => (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold">Step 2: Select Product</h3>
+  const renderStep2 = () => {
+    const filteredProducts = products.filter(
+      (p) =>
+        p.productName
+          ?.toLowerCase()
+          .includes(productSearchTerm.toLowerCase()) ||
+        p.describe?.toLowerCase().includes(productSearchTerm.toLowerCase())
+    );
 
-      {loadingProducts ? (
-        <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+    const totalProducts = filteredProducts.length;
+    const totalPages = Math.ceil(totalProducts / productItemsPerPage);
+    const startIndex = (productCurrentPage - 1) * productItemsPerPage;
+    const paginatedProducts = filteredProducts.slice(
+      startIndex,
+      startIndex + productItemsPerPage
+    );
+
+    return (
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold">Step 2: Select Product</h3>
+
+        <div className="flex gap-2 items-center">
+          <Input
+            type="text"
+            placeholder="Search products by name or description..."
+            value={productSearchTerm}
+            onChange={(e) => {
+              setProductSearchTerm(e.target.value);
+              setProductCurrentPage(1); // Reset to first page when searching
+            }}
+            className="flex-1"
+          />
         </div>
-      ) : productsError ? (
-        <div className="p-4 bg-red-50 rounded border border-red-200">
-          <p className="text-red-700">
-            Error loading products: {productsError}
-          </p>
-          <Button variant="outline" onClick={fetchProducts}>
-            Retry
-          </Button>
+
+        <div className="flex justify-between items-center">
+          <div className="flex gap-2 items-center">
+            <Label className="text-sm">Items per page:</Label>
+            <Select
+              value={productItemsPerPage.toString()}
+              onValueChange={(val) => {
+                setProductItemsPerPage(Number(val));
+                setProductCurrentPage(1);
+              }}
+            >
+              <SelectTrigger className="w-20">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="5">5</SelectItem>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="20">20</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <span className="text-sm text-gray-600">
+            Page {productCurrentPage} of {totalPages || 1} ({totalProducts}{" "}
+            items)
+          </span>
         </div>
-      ) : products.length === 0 ? (
-        <div className="text-gray-600">No products found</div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {products.map((p) => {
-            const price = p.variants?.length
-              ? Math.min(...p.variants.map((v) => v.totalCost))
-              : 0;
 
-            return (
-              <div
-                key={p.productId}
-                className={`border rounded-lg p-4 cursor-pointer hover:border-blue-500 hover:shadow-md transition-all ${
-                  currentProduct?.productId === p.productId
-                    ? "ring-2 ring-blue-500"
-                    : ""
-                }`}
-                onClick={() => {
-                  setCurrentProduct(p);
-                  setCurrentStep(3);
-                }}
-              >
-                <img
-                  src={p.itemLink || "/placeholder.svg"}
-                  alt={p.productName}
-                  className="w-full h-32 object-cover rounded-md mb-3"
-                />
+        {loadingProducts ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+          </div>
+        ) : productsError ? (
+          <div className="p-4 bg-red-50 rounded border border-red-200">
+            <p className="text-red-700">
+              Error loading products: {productsError}
+            </p>
+            <Button variant="outline" onClick={fetchProducts}>
+              Retry
+            </Button>
+          </div>
+        ) : filteredProducts.length === 0 ? (
+          <div className="text-gray-600">
+            {productSearchTerm
+              ? "No products match your search"
+              : "No products found"}
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {paginatedProducts.map((p) => {
+                const price = p.variants?.length
+                  ? Math.min(...p.variants.map((v) => v.totalCost))
+                  : 0;
 
-                <h4 className="font-semibold text-sm mb-2">{p.productName}</h4>
+                return (
+                  <div
+                    key={p.productId}
+                    onClick={() => handleProductSelect(p)}
+                    className="cursor-pointer border rounded-lg p-4 hover:shadow-lg transition-shadow"
+                  >
+                    <img
+                      src={
+                        p.itemLink ||
+                        "/placeholder.svg?height=128&width=256&query=product"
+                      }
+                      alt={p.productName}
+                      className="w-full h-32 object-cover rounded-md mb-3"
+                    />
 
-                <p className="text-xs text-gray-600 mb-2 line-clamp-2">
-                  {p.describe}
-                </p>
+                    <h4 className="font-semibold text-sm mb-2">
+                      {p.productName}
+                    </h4>
 
-                <p className="text-sm font-bold text-blue-600">
-                  ${price.toFixed(2)}
-                </p>
+                    <p className="text-xs text-gray-600 mb-2 line-clamp-2">
+                      {p.describe}
+                    </p>
+
+                    <p className="text-sm font-bold text-blue-600">
+                      ${price.toFixed(2)}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex justify-center gap-1 mt-4 flex-wrap">
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setProductCurrentPage((p) => Math.max(1, p - 1))
+                  }
+                  disabled={productCurrentPage === 1}
+                >
+                  Previous
+                </Button>
+
+                <div className="flex items-center gap-1">
+                  {/* Show first page */}
+                  <Button
+                    variant={productCurrentPage === 1 ? "default" : "outline"}
+                    onClick={() => setProductCurrentPage(1)}
+                    className="w-10"
+                  >
+                    1
+                  </Button>
+
+                  {/* Show ellipsis if needed before current page */}
+                  {productCurrentPage > 3 && (
+                    <span className="px-2 text-gray-500">...</span>
+                  )}
+
+                  {/* Show pages around current page */}
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((page) => {
+                      // Show current page and 1 page before/after
+                      if (page === productCurrentPage) return true;
+                      if (
+                        page === productCurrentPage - 1 &&
+                        productCurrentPage > 2
+                      )
+                        return true;
+                      if (
+                        page === productCurrentPage + 1 &&
+                        productCurrentPage < totalPages - 1
+                      )
+                        return true;
+                      return false;
+                    })
+                    .map((page) => (
+                      <Button
+                        key={page}
+                        variant={
+                          productCurrentPage === page ? "default" : "outline"
+                        }
+                        onClick={() => setProductCurrentPage(page)}
+                        className="w-10"
+                      >
+                        {page}
+                      </Button>
+                    ))}
+
+                  {/* Show ellipsis if needed after current page */}
+                  {productCurrentPage < totalPages - 2 && (
+                    <span className="px-2 text-gray-500">...</span>
+                  )}
+
+                  {/* Show last page if more than 1 page */}
+                  {totalPages > 1 && (
+                    <Button
+                      variant={
+                        productCurrentPage === totalPages
+                          ? "default"
+                          : "outline"
+                      }
+                      onClick={() => setProductCurrentPage(totalPages)}
+                      className="w-10"
+                    >
+                      {totalPages}
+                    </Button>
+                  )}
+                </div>
+
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setProductCurrentPage((p) => Math.min(totalPages, p + 1))
+                  }
+                  disabled={productCurrentPage === totalPages}
+                >
+                  Next
+                </Button>
               </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
 
   const renderStep3 = () => (
     <div className="space-y-4">
@@ -1137,7 +1645,7 @@ export default function MakeManualModal({ isOpen, onClose }) {
                               {item.config.linkImg}
                             </a>
                             <img
-                              src={item.config.linkImg}
+                              src={item.config.linkImg || "/placeholder.svg"}
                               alt="Link Image"
                               className="w-24 h-24 object-cover rounded border"
                             />
@@ -1163,7 +1671,9 @@ export default function MakeManualModal({ isOpen, onClose }) {
                               {item.config.linkThanksCard}
                             </a>
                             <img
-                              src={item.config.linkThanksCard}
+                              src={
+                                item.config.linkThanksCard || "/placeholder.svg"
+                              }
                               alt="Thanks Card"
                               className="w-24 h-24 object-cover rounded border"
                             />
@@ -1192,7 +1702,11 @@ export default function MakeManualModal({ isOpen, onClose }) {
                               item.config.linkFileDesign.endsWith(".png") ||
                               item.config.linkFileDesign.endsWith(".jpeg")) && (
                               <img
-                                src={item.config.linkFileDesign}
+                                src={
+                                  item.config.linkFileDesign ||
+                                  "/placeholder.svg" ||
+                                  "/placeholder.svg"
+                                }
                                 alt="File Design"
                                 className="w-24 h-24 object-cover rounded border"
                               />

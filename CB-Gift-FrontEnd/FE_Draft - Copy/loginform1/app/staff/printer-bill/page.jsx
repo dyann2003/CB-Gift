@@ -43,9 +43,9 @@ import {
   Printer,
   Badge,
   Label,
-  List, // <--- THÊM DÒNG NÀY
-  ChevronDown, // <--- THÊM DÒNG NÀY
-  ChevronUp, // <--- THÊM DÒNG NÀY
+  List,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
@@ -68,10 +68,13 @@ export default function PrinterBillPage() {
   const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
   const [selectedSeller, setSelectedSeller] = useState("all");
   const [sellers, setSellers] = useState([]);
+  
+  // State cho phần Invoice
   const [invoices, setInvoices] = useState([]);
   const [invoicesLoading, setInvoicesLoading] = useState(false);
   const [invoicesError, setInvoicesError] = useState(null);
-  const [showInvoices, setShowInvoices] = useState(false); // State để bật/tắt bảng hóa đơn
+  const [showInvoices, setShowInvoices] = useState(false);
+  
   const [isInvoiceDetailsOpen, setIsInvoiceDetailsOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [isPrinterBillDialogOpen, setIsPrinterBillDialogOpen] = useState(false);
@@ -83,13 +86,18 @@ export default function PrinterBillPage() {
   });
   const [pendingPrintAction, setPendingPrintAction] = useState(null);
 
-  // [MỚI] useEffect 1: Fetch danh sách Sellers (chạy 1 lần)
+  // 1. Fetch Sellers
   useEffect(() => {
     const fetchSellers = async () => {
       try {
-        // Gọi API GetUniqueSellers bạn vừa tạo
         const response = await fetch(
-          `${apiClient.defaults.baseURL}/api/Order/GetUniqueSellers?status=SHIPPED`
+          `${apiClient.defaults.baseURL}/api/Order/GetUniqueSellers?status=SHIPPED`,
+          {
+            credentials: "include", 
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
         );
         if (!response.ok) {
           throw new Error("Failed to fetch sellers");
@@ -98,13 +106,13 @@ export default function PrinterBillPage() {
         setSellers(sellerData);
       } catch (e) {
         console.error("[v1] Failed to fetch sellers:", e);
-        setSellers([]); // Nếu lỗi thì trả về mảng rỗng
+        setSellers([]);
       }
     };
     fetchSellers();
-  }, []); // dependency rỗng, chỉ chạy 1 lần khi component mount
+  }, []);
 
-  // [MỚI] useEffect 2: Fetch Orders dựa trên TẤT CẢ state (filter, sort, pagination)
+  // 2. Fetch Orders
   useEffect(() => {
     const fetchOrders = async () => {
       setLoading(true);
@@ -112,11 +120,8 @@ export default function PrinterBillPage() {
       
       try {
         const params = new URLSearchParams();
-
-        // 1. Thêm Status (luôn là "Đã Ship" theo logic cũ của bạn [cite: 19])
         params.append("status", "SHIPPED");
 
-        // 2. Thêm Filters (Search, Date)
         if (searchTerm) {
           params.append("searchTerm", searchTerm);
         }
@@ -124,61 +129,58 @@ export default function PrinterBillPage() {
           params.append("fromDate", dateRange.from.toISOString());
         }
         if (dateRange.to) {
-          // Gửi lên là NGÀY TIẾP THEO lúc 00:00
-          // để logic BE (OrderDate < toDate) hoạt động đúng
           let toDateEnd = new Date(dateRange.to);
           toDateEnd.setDate(toDateEnd.getDate() + 1);
-          params.append("toDate", toDateEnd.toISOString().split('T')[0]); // Gửi dạng YYYY-MM-DD
+          params.append("toDate", toDateEnd.toISOString().split('T')[0]);
         }
 
-        // 3. Thêm Filter Seller (MỚI)
         if (selectedSeller !== "all") {
           params.append("seller", selectedSeller);
         }
 
-        // 4. Thêm Sắp xếp (Sort)
         if (sortColumn) {
           params.append("sortColumn", sortColumn);
           params.append("sortDirection", sortDirection);
         }
 
-        // 5. Thêm Phân trang (Pagination)
         params.append("page", page);
         params.append("pageSize", itemsPerPage);
 
-        // 6. Gọi API với tất cả tham số
         const response = await fetch(
-          `${apiClient.defaults.baseURL}/api/Order/GetAllOrdersForInvoice?${params.toString()}`
+          `${apiClient.defaults.baseURL}/api/Order/GetAllOrdersForInvoice?${params.toString()}`,
+          {
+            method: "GET",
+            credentials: "include", // <--- DÒNG NÀY SẼ SỬA LỖI 401
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
         );
-
+        
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`); 
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
 
         const data = await response.json();
-
-        // 7. Cập nhật state với dữ liệu API trả về
+        // BE trả về { orders: [...], total: ... }
         setOrders(data.orders || []);
-        setTotalOrders(data.total || 0); // <-- Cập nhật state mới
+        setTotalOrders(data.total || 0);
 
       } catch (e) {
-        console.error("[v1] Failed to fetch orders:", e); 
+        console.error("[v1] Failed to fetch orders:", e);
         setError("Could not load orders. Please try again later."); 
       } finally {
-        setLoading(false); 
+        setLoading(false);
       }
     };
 
     fetchOrders();
-    
-    // Dependency array: Bất cứ khi nào 1 trong các giá trị này thay đổi,
-    // useEffect sẽ chạy lại và gọi API
   }, [page, itemsPerPage, searchTerm, dateRange, sortColumn, sortDirection, selectedSeller]);
-  
 
   const totalPages = Math.ceil(totalOrders / itemsPerPage); 
   const paginatedOrders = orders; 
-
+  
+  // Logic tính index để hiển thị text (nếu cần)
   const startIndex = (page - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
 
@@ -208,9 +210,10 @@ export default function PrinterBillPage() {
   };
 
   const handleExport = async () => {
-    // 1. Tạo params giống hệt như fetchOrders, nhưng KHÔNG CÓ phân trang
     const params = new URLSearchParams();
-    params.append("status", "Đã Ship");
+    // [FIX] Phải dùng "SHIPPED" code thay vì "Đã Ship" để khớp với BE
+    params.append("status", "SHIPPED"); 
+    
     if (searchTerm) params.append("searchTerm", searchTerm);
     if (dateRange.from) params.append("fromDate", dateRange.from.toISOString());
     if (dateRange.to) {
@@ -226,10 +229,8 @@ export default function PrinterBillPage() {
       params.append("sortDirection", sortDirection);
     }
     
-    // Yêu cầu tất cả dữ liệu (đặt pageSize rất lớn)
     params.append("page", "1");
-    // Lấy số lượng totalOrders (nếu > 0) hoặc 1 giá trị lớn
-    params.append("pageSize", totalOrders > 0 ? totalOrders : 10000); 
+    params.append("pageSize", totalOrders > 0 ? totalOrders : 10000);
 
     try {
       const response = await fetch(
@@ -240,7 +241,6 @@ export default function PrinterBillPage() {
       const data = await response.json();
       const allOrdersForExport = data.orders || [];
 
-      // 2. Tiếp tục logic export cũ với dữ liệu vừa fetch
       const exportData = allOrdersForExport.map((order) => ({
         "Order ID": order.orderCode,
         "Customer Name": order.customerName,
@@ -253,11 +253,11 @@ export default function PrinterBillPage() {
       const worksheet = XLSX.utils.json_to_sheet(exportData); 
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Printer Bills");
+      
       saveAs(
         new Blob([XLSX.write(workbook, { bookType: "xlsx", type: "array" })]),
         `printer-bills-${format(new Date(), "yyyy-MM-dd")}.xlsx`
-      ); 
-
+      );
     } catch (e) {
       console.error("Export failed", e);
       alert("Could not export data. Please try again.");
@@ -287,18 +287,15 @@ export default function PrinterBillPage() {
     setSelectedOrderDetails(order);
     setIsDetailsOpen(true);
   };
+
   const handlePageSizeChange = (e) => {
-    // Cập nhật state itemsPerPage với giá trị mới (chuyển sang Number)
     setItemsPerPage(Number(e.target.value));
-    // Quan trọng: Reset về trang 1
     setPage(1);
   };
 
   const handlePrintBill = (order) => {
     if (order.paymentStatus === "Paid") {
-      alert(
-        "⚠️ This order has already been paid. Cannot print bill for paid orders."
-      );
+      alert("⚠️ This order has already been paid. Cannot print bill for paid orders.");
       return;
     }
     setPendingPrintAction({ type: "single", order });
@@ -315,11 +312,8 @@ export default function PrinterBillPage() {
       (order) =>
         selectedOrders.has(order.orderId) && order.paymentStatus === "Paid"
     );
-
     if (paidOrders.length > 0) {
-      alert(
-        `⚠️ Cannot print bills for ${paidOrders.length} paid order(s). Only unpaid orders can be printed.`
-      );
+      alert(`⚠️ Cannot print bills for ${paidOrders.length} paid order(s). Only unpaid orders can be printed.`);
       return;
     }
 
@@ -340,9 +334,9 @@ export default function PrinterBillPage() {
       const sellerId =
         pendingPrintAction.type === "single"
           ? pendingPrintAction.order.sellerId
-          : orders.find((o) => o.orderId === pendingPrintAction.orderIds[0])
-              ?.sellerId;
+          : orders.find((o) => o.orderId === pendingPrintAction.orderIds[0])?.sellerId;
 
+      // Chuẩn bị payload khớp với CreateInvoiceRequest DTO
       const payload = {
         sellerId: sellerId,
         orderIds:
@@ -350,6 +344,7 @@ export default function PrinterBillPage() {
             ? [pendingPrintAction.order.orderId]
             : pendingPrintAction.orderIds,
         notes: printerBillForm.notes || "Generated from Printer Bill page",
+        // startDate và endDate không bắt buộc nếu dùng orderIds (theo Logic BE Scenario 1)
       };
 
       const response = await fetch(`${apiClient.defaults.baseURL}/api/invoices`, {
@@ -359,10 +354,8 @@ export default function PrinterBillPage() {
         body: JSON.stringify(payload),
       });
 
-      // ❌ Nếu BE trả lỗi
       if (!response.ok) {
         const errorText = await response.text();
-
         let shortMessage = "Tạo hóa đơn thất bại.";
         if (
           errorText.includes("Order already had invoice") ||
@@ -399,19 +392,36 @@ export default function PrinterBillPage() {
     if (pendingPrintAction?.type === "multiple") {
       setSelectedOrders(new Set());
     }
+    // Reload danh sách hóa đơn nếu đang mở
+    if (showInvoices) {
+      fetchInvoices();
+    }
   };
+
+  // 3. Fetch Invoices (ĐÃ SỬA LỖI ĐỌC API MỚI)
   const fetchInvoices = async () => {
     setInvoicesLoading(true);
     setInvoicesError(null);
     try {
-      const response = await fetch(`${apiClient.defaults.baseURL}/api/invoices/all`, {
-        credentials: "include", // Quan trọng để xác thực
-      });
+      // [FIX] Thêm tham số page & pageSize vì BE mới trả về PaginatedResult
+      const response = await fetch(
+        `${apiClient.defaults.baseURL}/api/invoices/all?page=1&pageSize=100`, 
+        {
+          credentials: "include",
+        }
+      );
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
-      setInvoices(data);
+      
+      // [FIX] BE trả về object { items: [], total: ... } chứ không phải mảng trực tiếp
+      if (data && data.items) {
+        setInvoices(data.items);
+      } else {
+        setInvoices([]);
+      }
+      
     } catch (e) {
       console.error("Failed to fetch invoices:", e);
       setInvoicesError("Could not load invoice data.");
@@ -423,18 +433,16 @@ export default function PrinterBillPage() {
   const handleToggleInvoices = () => {
     const nextShowState = !showInvoices;
     setShowInvoices(nextShowState);
-    // Chỉ gọi API lần đầu tiên khi người dùng nhấn nút
-    if (nextShowState && invoices.length === 0) {
-      fetchInvoices();
+    if (nextShowState) {
+      fetchInvoices(); // Luôn gọi lại để lấy dữ liệu mới nhất
     }
   };
+
   const handleViewInvoiceDetails = async (invoiceId) => {
-    // Hiển thị modal với dữ liệu cơ bản trước
     const basicInvoice = invoices.find((inv) => inv.invoiceId === invoiceId);
     setSelectedInvoice(basicInvoice);
     setIsInvoiceDetailsOpen(true);
 
-    // Gọi API để lấy dữ liệu chi tiết đầy đủ
     try {
       const response = await fetch(
         `${apiClient.defaults.baseURL}/api/invoices/${invoiceId}`,
@@ -444,15 +452,9 @@ export default function PrinterBillPage() {
       );
       if (!response.ok) throw new Error("Failed to fetch details");
       const detailedInvoice = await response.json();
-      setSelectedInvoice(detailedInvoice); // Cập nhật state với dữ liệu chi tiết
+      setSelectedInvoice(detailedInvoice);
     } catch (error) {
       console.error("Error fetching invoice details:", error);
-      // Có thể hiển thị thông báo lỗi ở đây
-    }
-  };
-  const handleDownload = (file) => {
-    if (file.url && file.url !== "#") {
-      window.open(file.url, "_blank");
     }
   };
 
@@ -505,7 +507,7 @@ export default function PrinterBillPage() {
               </div>
             </div>
 
-            {/* Bảng Hóa đơn (hiển thị có điều kiện) */}
+            {/* Bảng Hóa đơn */}
             {showInvoices && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200">
                 <h2 className="p-4 text-lg font-semibold text-gray-800 border-b">
@@ -520,6 +522,7 @@ export default function PrinterBillPage() {
                     {invoicesError}
                   </div>
                 ) : (
+                  <div className="max-h-[400px] overflow-y-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -534,7 +537,12 @@ export default function PrinterBillPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {invoices.map((invoice) => (
+                      {invoices.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={8} className="text-center py-4 text-gray-500">No invoices found</TableCell>
+                        </TableRow>
+                      ) : (
+                        invoices.map((invoice) => (
                         <TableRow key={invoice.invoiceId}>
                           <TableCell className="font-medium">
                             {invoice.invoiceNumber}
@@ -542,10 +550,7 @@ export default function PrinterBillPage() {
                           <TableCell>
                             <div>
                               <div className="font-medium text-gray-800">
-                                {invoice.sellerUser?.fullName || "N/A"}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {invoice.sellerUser?.email || "No email"}
+                                {invoice.sellerName || "N/A"}
                               </div>
                             </div>
                           </TableCell>
@@ -557,17 +562,15 @@ export default function PrinterBillPage() {
                           </TableCell>
                           <TableCell>
                             {invoice.status ? (
-                              <span // <-- Thay thế <Badge> bằng <span>
-                                className={`
-              inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full
-              ${
-                invoice.status.trim().toLowerCase() === "paid"
-                  ? "bg-green-100 text-green-800"
-                  : invoice.status.trim().toLowerCase() === "issued"
-                  ? "bg-yellow-100 text-yellow-800"
-                  : "bg-gray-100 text-gray-800"
-              }
-            `}
+                              <span
+                                className={`inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full
+                                ${
+                                  invoice.status.trim().toLowerCase() === "paid"
+                                    ? "bg-green-100 text-green-800"
+                                    : invoice.status.trim().toLowerCase() === "issued"
+                                    ? "bg-yellow-100 text-yellow-800"
+                                    : "bg-gray-100 text-gray-800"
+                                }`}
                               >
                                 {invoice.status}
                               </span>
@@ -577,10 +580,7 @@ export default function PrinterBillPage() {
                               </span>
                             )}
                           </TableCell>
-                          <TableCell
-                            className="max-w-xs truncate"
-                            title={invoice.notes}
-                          >
+                          <TableCell className="max-w-xs truncate" title={invoice.notes}>
                             {invoice.notes || "N/A"}
                           </TableCell>
                           <TableCell className="font-semibold">
@@ -590,17 +590,16 @@ export default function PrinterBillPage() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() =>
-                                handleViewInvoiceDetails(invoice.invoiceId)
-                              }
+                              onClick={() => handleViewInvoiceDetails(invoice.invoiceId)}
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
                           </TableCell>
                         </TableRow>
-                      ))}
+                      )))}
                     </TableBody>
                   </Table>
+                  </div>
                 )}
               </div>
             )}
@@ -934,16 +933,10 @@ export default function PrinterBillPage() {
                   {totalPages >= 1 && (
                     <div className="flex items-center justify-between p-4 border-t border-gray-200">
                       
-                    
                       <div className="flex items-center gap-4">
-                        
-                        {/* Text hiển thị trang */}
                         <div className="text-sm text-gray-600">
-                          Page {page} of {totalPages} ({totalOrders} total
-                          orders)
+                          Page {page} of {totalPages} ({totalOrders} total orders)
                         </div>
-
-                        {/* [THÊM] Dropdown chọn Page Size */}
                         <div className="flex items-center gap-2">
                           <label
                             htmlFor="itemsPerPage"
@@ -954,7 +947,7 @@ export default function PrinterBillPage() {
                           <select
                             id="itemsPerPage"
                             value={itemsPerPage}
-                            onChange={handlePageSizeChange} // <-- Dùng hàm handler mới
+                            onChange={handlePageSizeChange}
                             className="px-2 py-1 border border-gray-300 rounded-md bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
                             <option value={10}>10</option>
@@ -963,10 +956,8 @@ export default function PrinterBillPage() {
                             <option value={100}>100</option>
                           </select>
                         </div>
-
                       </div>
 
-                      {/* Các nút Previous/Next (giữ nguyên) */}
                       <div className="flex gap-2">
                         <Button
                           variant="outline"
@@ -979,9 +970,7 @@ export default function PrinterBillPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() =>
-                            setPage(Math.min(totalPages, page + 1))
-                          }
+                          onClick={() => setPage(Math.min(totalPages, page + 1))}
                           disabled={page === totalPages}
                         >
                           Next
@@ -1013,38 +1002,6 @@ export default function PrinterBillPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            {/* <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Start Date <span className="text-red-500">*</span>
-              </label>
-              <Input
-                type="date"
-                value={printerBillForm.startDate}
-                onChange={(e) =>
-                  setPrinterBillForm({
-                    ...printerBillForm,
-                    startDate: e.target.value,
-                  })
-                }
-                className="w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                End Date <span className="text-red-500">*</span>
-              </label>
-              <Input
-                type="date"
-                value={printerBillForm.endDate}
-                onChange={(e) =>
-                  setPrinterBillForm({
-                    ...printerBillForm,
-                    endDate: e.target.value,
-                  })
-                }
-                className="w-full"
-              />
-            </div> */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Notes

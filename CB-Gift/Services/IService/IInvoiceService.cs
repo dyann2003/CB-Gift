@@ -8,7 +8,7 @@ namespace CB_Gift.Services.IService
         Task<Invoice> CreateInvoiceAsync(CreateInvoiceRequest request, string staffId);
         Task<string> CreatePaymentLinkAsync(CreatePaymentLinkRequest request, string sellerId);
         Task<int> LogWebhookAsync(string gateway, string payload, string signature);
-        Task ProcessPayOSWebhookAsync(int webhookLogId);
+        Task ProcessWebhookPaymentAsync(int webhookLogId, string gatewayName);
         Task<Invoice> GetInvoiceDetailsAsync(int invoiceId);
         Task<IEnumerable<Invoice>> GetInvoicesForSellerAsync(string sellerId);
         Task<PaginatedResult<InvoiceSummaryDto>> GetInvoicesForSellerPageAsync(
