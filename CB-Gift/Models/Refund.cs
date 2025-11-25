@@ -11,8 +11,9 @@ namespace CB_Gift.Models
         [Key]
         public int RefundId { get; set; }
 
-        [Required]
-        public int OrderId { get; set; }
+       
+        public int? OrderId { get; set; }
+        public int? OrderDetailId { get; set; }
 
         [Required]
         [Column(TypeName = "decimal(18, 2)")]
@@ -43,12 +44,15 @@ namespace CB_Gift.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow; 
 
         [StringLength(100)]
-        public string? GatewayRefundId { get; set; } 
+        public string? GatewayRefundId { get; set; }
 
         // --- Thuộc tính điều hướng (Navigation Properties) ---
 
         [ForeignKey("OrderId")]
-        public virtual Order Order { get; set; }
+        public virtual Order? Order { get; set; }
+
+        [ForeignKey("OrderDetailId")] // Đảm bảo khớp với tên thuộc tính: OrderDetailId
+        public virtual OrderDetail? OrderDetail { get; set; }
 
         [ForeignKey("RequestedBySellerId")]
         public virtual AppUser RequestedBySeller { get; set; } 

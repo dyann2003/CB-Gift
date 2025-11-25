@@ -27,6 +27,7 @@
 
         // Khác
         HOLD,  //13
-        CANCELLED //14
+        CANCELLED, //14
+        REFUND // 15
     }
 }
