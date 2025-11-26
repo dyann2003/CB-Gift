@@ -37,7 +37,8 @@ namespace CB_Gift.Mapper
                     .ForMember(dest => dest.Size, opt => opt.MapFrom(src => src.ProductVariant.SizeInch))
                     .ForMember(dest => dest.Layer, opt => opt.MapFrom(src => src.ProductVariant.Layer))
                     .ForMember(dest => dest.ProductName, opt => opt.MapFrom(src => src.ProductVariant.Product.ProductName))
-                    .ForMember(dest => dest.Price, opt => opt.MapFrom(src => src.ProductVariant.TotalCost))
+                    //.ForMember(dest => dest.Price, opt => opt.MapFrom(src => src.ProductVariant.TotalCost))
+                    .ForMember(dest => dest.Price, opt => opt.MapFrom(src => src.Price))
                     .ForMember(dest => dest.Quantity, opt => opt.MapFrom(src => src.Quantity))
                      .ForMember(dest => dest.AssignedAt, opt => opt.MapFrom(src => src.AssignedAt))
                      .ForMember(dest => dest.AssignedDesignerUserId, opt => opt.MapFrom(src => src.AssignedDesignerUserId))
@@ -65,7 +66,8 @@ namespace CB_Gift.Mapper
                 .ForMember(dest => dest.Note, opt => opt.MapFrom(src => src.Note))
                 .ForMember(dest => dest.Quantity, opt => opt.MapFrom(src => src.Quantity))
                 .ForMember(dest => dest.NeedDesign, opt => opt.MapFrom(src => src.NeedDesign))
-                .ForMember(dest => dest.Price, opt => opt.MapFrom(src => src.Price ?? 0))
+                //.ForMember(dest => dest.Price, opt => opt.MapFrom(src => src.Price ?? 0))
+                .ForMember(dest => dest.Price, opt => opt.Ignore())
                 .ForMember(dest => dest.CreatedDate, opt => opt.MapFrom(_ => DateTime.UtcNow));
             // test MakeOrder
             CreateMap<EndCustomerCreateRequest, EndCustomer>();

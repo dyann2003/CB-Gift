@@ -156,10 +156,16 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:3000") // FE URL
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();// SignalR
+        // THÊM CÁC DOMAIN CỦA VERCEL VÀO ĐÂY
+        policy.WithOrigins(
+            "http://localhost:3000",
+            "https://cb-gift-fe-sby6-mazut4syf-bachquangles-projects.vercel.app", // Domain Preview 
+            "https://cb-gift-fe-sby6.vercel.app", // Domain Production 
+            "https://*.vercel.app" // TÙY CHỌN: Cho phép tất cả các bản Preview trên Vercel
+        )
+             .AllowAnyHeader()
+             .AllowAnyMethod()
+             .AllowCredentials(); // SignalR
     });
 });
 
