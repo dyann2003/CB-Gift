@@ -18,9 +18,9 @@ namespace CB_Gift.Hubs
         public override async Task OnConnectedAsync()
         {
             // Lấy UserId từ token xác thực của người dùng đang kết nối
-            var userId = Context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-            if (!string.IsNullOrEmpty(userId))
+            if (!string.IsNullOrEmpty(userId) && Context.ConnectionId != null)
             {
                 // Thêm kết nối này vào group của riêng user đó
                 // Ví dụ group name: "user_xxxx-yyyy-zzzz"
@@ -33,18 +33,23 @@ namespace CB_Gift.Hubs
         // Phương thức để tham gia vào một nhóm cụ thể (ví dụ: theo dõi đơn hàng)
         public async Task JoinGroup(string groupName)
         {
-            await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
-            // Gửi thông báo cho client trong nhóm đó
-            await Clients.Group(groupName).SendAsync("ReceiveMessage", "Hệ thống", $"Bạn đã tham gia vào nhóm {groupName}.");
+            if (Context.ConnectionId != null)
+            {
+                await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
+                await Clients.Caller.SendAsync("ReceiveMessage", "Hệ thống", $"Bạn đã tham gia vào nhóm {groupName}.");
+            }
         }
+
         public async Task JoinOrderGroup(string orderId)
         {
-            await Groups.AddToGroupAsync(Context.ConnectionId, $"order_{orderId}");
+            if (Context.ConnectionId != null)
+                await Groups.AddToGroupAsync(Context.ConnectionId, $"order_{orderId}");
         }
 
         public async Task LeaveOrderGroup(string orderId)
         {
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"order_{orderId}");
+            if (Context.ConnectionId != null)
+                await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"order_{orderId}");
         }
     }
 }
