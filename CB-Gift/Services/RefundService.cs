@@ -306,102 +306,132 @@ namespace CB_Gift.Services
                 throw;
             }
         }
-        // --- HÀM DUYỆT YÊU CẦU HOÀN TIỀN (Review Refund) ---
+        // --- HÀM DUYỆT YÊU CẦU HOÀN TIỀN (Review Refund) --- hàm logic mới
         public async Task ReviewRefundAsync(int refundId, ReviewRefundDto request, string staffId)
         {
-            var refund = await _context.Refunds
-               .Include(r => r.Order)
-               .Include(r => r.OrderDetail)
-               .FirstOrDefaultAsync(r => r.RefundId == refundId);
+            // 1. TÌM BẢN GHI ĐẠI DIỆN VÀ XÁC ĐỊNH ORDER GỐC
+            var primaryRefund = await _context.Refunds
+                .Include(r => r.Order)
+                .Include(r => r.OrderDetail)
+                .FirstOrDefaultAsync(r => r.RefundId == refundId);
 
-            if (refund == null)
-                throw new KeyNotFoundException("Không tìm thấy yêu cầu hoàn tiền.");
+            if (primaryRefund == null)
+                throw new KeyNotFoundException("Không tìm thấy yêu cầu hoàn tiền (Refund ID đại diện).");
 
-            if (refund.Status != "Pending")
-                throw new InvalidOperationException("Yêu cầu này đã được xử lý trước đó.");
+            if (primaryRefund.Status != "Pending")
+                throw new InvalidOperationException("Yêu cầu này đã được xử lý trước đó hoặc không ở trạng thái Pending.");
 
-            // Do Refund có thể là Order-level hoặc OrderDetail-level, ta cần lấy Order gốc
-            var order = refund.Order ?? throw new InvalidOperationException("Refund record missing parent Order.");
+            var order = primaryRefund.Order ?? throw new InvalidOperationException("Refund record missing parent Order.");
+            var sellerId = primaryRefund.RequestedBySellerId;
 
-            // Xác định mục tiêu và thông báo
-            var targetId = refund.OrderDetailId.HasValue ? refund.OrderDetailId.Value : refund.OrderId.Value;
-            var targetName = refund.OrderDetailId.HasValue ? $"chi tiết sản phẩm #{targetId}" : $"đơn hàng #{targetId}";
-            var sellerId = refund.RequestedBySellerId;
+            // 2. LẤY TẤT CẢ CÁC BẢN GHI REFUND PENDING THUỘC ORDER NÀY
+            // Chỉ sử dụng OrderId để nhóm
+            var refundsInGroup = await _context.Refunds
+                .Include(r => r.OrderDetail)
+                .Where(r =>
+                    r.OrderId == primaryRefund.OrderId && // <-- CHỈ LỌC THEO ORDER ID
+                    r.Status == "Pending") // Chỉ duyệt những bản ghi đang Pending trong Order
+                .ToListAsync();
+
+            if (!refundsInGroup.Any())
+            {
+                throw new InvalidOperationException("Không tìm thấy bản ghi Pending nào trong đơn hàng để xử lý.");
+            }
+
+            int countAffected = refundsInGroup.Count;
+
+            // Xác định tên mục tiêu cho thông báo
+            var targetName = $"tất cả các yêu cầu Refund Pending ({countAffected} mục) thuộc đơn hàng #{order.OrderId}";
+
 
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                refund.ReviewedByStaffId = staffId;
-                refund.ReviewedAt = DateTime.UtcNow;
-
-                if (request.Approved)
+                // 3. DUYỆT TỪNG BẢN GHI TRONG NHÓM
+                foreach (var refund in refundsInGroup)
                 {
-                    // === CHẤP NHẬN HOÀN TIỀN ===
-                    refund.Status = "Approved";
-                    refund.GatewayRefundId = "MANUAL_REFUND_APPROVED";
+                    refund.ReviewedByStaffId = staffId;
+                    refund.ReviewedAt = DateTime.UtcNow;
 
-                    // Cập nhật trạng thái OrderDetail tương ứng nếu có
-                    if (refund.OrderDetail != null)
+                    if (request.Approved)
                     {
-                        refund.OrderDetail.ProductionStatus = Models.Enums.ProductionStatus.REFUND; // Cần chuyển từ enum/string phù hợp
+                        // === CHẤP NHẬN HOÀN TIỀN ===
+                        refund.Status = "Approved";
+                        refund.GatewayRefundId = "MANUAL_REFUND_APPROVED";
+
+                        if (refund.OrderDetail != null)
+                        {
+                            // Cập nhật trạng thái sản phẩm chi tiết thành REFUND
+                            refund.OrderDetail.ProductionStatus = Models.Enums.ProductionStatus.REFUND;
+                        }
+
+                        // Cập nhật Order gốc
+                        order.StatusOrder = 18;
                     }
+                    else
+                    {
+                        // === TỪ CHỐI HOÀN TIỀN ===
+                        if (string.IsNullOrWhiteSpace(request.RejectionReason))
+                            throw new ArgumentException("Lý do từ chối là bắt buộc.");
 
-                    // Cập nhật Order gốc (Nếu không còn Refund PENDING nào khác, hoặc nếu là Refund cuối cùng)
-                    // Logic này phức tạp, ta chỉ cần đảm bảo Order không còn ở HOLD (16) nữa.
-                    order.StatusOrder = 14; // Giả định 14 = SHIPPED/CONFIRMED sau khi xử lý
+                        refund.Status = "Rejected";
+                        refund.StaffRejectionReason = request.RejectionReason;
+                        if (refund.OrderDetail != null)
+                        {
+                            // Cập nhật trạng thái sản phẩm chi tiết thành REFUND
+                            refund.OrderDetail.ProductionStatus = Models.Enums.ProductionStatus.QC_DONE;
+                        }
 
-                    // ✅ Chuẩn bị thông báo
-                    string notificationMessage = $"Yêu cầu hoàn tiền cho {targetName} đã được CHẤP NHẬN.";
-                }
-                else
-                {
-                    // === TỪ CHỐI HOÀN TIỀN ===
-                    if (string.IsNullOrWhiteSpace(request.RejectionReason))
-                        throw new ArgumentException("Lý do từ chối là bắt buộc.");
-
-                    refund.Status = "Rejected";
-                    refund.StaffRejectionReason = request.RejectionReason;
-
-                    // Chuyển Order gốc trở lại trạng thái hoạt động trước đó
-                    order.StatusOrder = 14;
-
-                    // ✅ Chuẩn bị thông báo
-                    string notificationMessage = $"Yêu cầu hoàn tiền cho {targetName} đã bị TỪ CHỐI. Lý do: {request.RejectionReason}";
+                        // Chuyển Order gốc trở lại trạng thái hoạt động trước đó
+                        order.StatusOrder = 14;
+                    }
                 }
 
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                // 2. GỬI THÔNG BÁO (Logic SignalR/Notification)
-                // ... (Logic SignalR/Notification) ...
+                // 4. GỬI THÔNG BÁO (Áp dụng cho toàn bộ các Refund Pending trong đơn hàng)
                 try
                 {
                     string outcome = request.Approved ? "CHẤP NHẬN" : "TỪ CHỐI";
-                    string notificationMessage = $"Yêu cầu hoàn tiền cho {targetName} đã được {outcome}.";
+                    string notificationMessage = $"Hành động {outcome} đã được áp dụng cho {targetName}.";
 
-                    // 1. Gửi thông báo (chuông) cho Seller
+                    if (!request.Approved && !string.IsNullOrEmpty(request.RejectionReason))
+                    {
+                        notificationMessage += $" Lý do: {request.RejectionReason}";
+                    }
+
+                    // Gửi thông báo (chuông) cho Seller
                     await _notificationService.CreateAndSendNotificationAsync(
                         sellerId,
                         notificationMessage,
                         $"/seller/orders/{order.OrderId}"
                     );
 
-                    // 2. Gửi cập nhật trạng thái real-time
+                    // Gửi cập nhật trạng thái real-time
                     var orderGroupName = $"order_{order.OrderId}";
                     await _hubContext.Clients.Group(orderGroupName).SendAsync(
                         "RefundStatusChanged",
-                        new { refundId = refundId, newStatus = refund.Status, orderId = order.OrderId, rejectionReason = refund.StaffRejectionReason }
+                        new
+                        {
+                            primaryRefundId = primaryRefund.RefundId,
+                            newStatus = request.Approved ? "Approved" : "Rejected",
+                            orderId = order.OrderId,
+                            rejectionReason = request.Approved ? null : request.RejectionReason,
+                            affectedCount = countAffected
+                        }
                     );
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho ReviewRefundAsync (RefundID: {RefundId})", refundId);
+                    // Log lỗi thông báo
+                    _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho ReviewRefundAsync (Order ID: {OrderId})", order.OrderId);
                 }
             }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                _logger.LogError(ex, "Lỗi khi duyệt yêu cầu hoàn tiền RefundID: {RefundId}", refundId);
+                _logger.LogError(ex, "Lỗi khi duyệt nhóm yêu cầu hoàn tiền dựa trên Order ID: {OrderId}", order.OrderId);
                 throw;
             }
         }
@@ -460,94 +490,106 @@ namespace CB_Gift.Services
                 .AnyAsync(r => r.RefundId == refundId && r.RequestedBySellerId == userId);
         }
         public async Task<PaginatedResult<RefundRequestListDto>> GetReviewRequestsPaginatedAsync(
-        string? staffId, // Dùng để xác thực (nếu cần)
-        string? searchTerm,
-        string? filterType,
-        string? sellerIdFilter,
-        int page,
-        int pageSize)
+       string? staffId,
+       string? searchTerm,
+       string? filterType,
+       string? sellerIdFilter,
+       string? statusFilter, // <-- THAM SỐ MỚI
+       int page,
+       int pageSize)
         {
             // 1. TÌM KIẾM DỮ LIỆU GỐC VÀ ÁP DỤNG CÁC BỘ LỌC
             var query = _context.Refunds
                 .Include(r => r.Order)
                 .Include(r => r.OrderDetail)
                     .ThenInclude(od => od.ProductVariant.Product)
-                .Where(r => r.Status == "Pending" || r.Status == "Approved" || r.Status == "Rejected");
+                .AsQueryable();
 
-            // 1.1. Lọc theo Loại (Type Filter)
-            if (!string.IsNullOrEmpty(filterType) && filterType.ToLower() != "all")
+            // 1.0. Lọc theo Trạng thái (Status Filter)
+            if (!string.IsNullOrEmpty(statusFilter) && statusFilter.ToLower() != "all")
             {
-                // Giả định bạn có thể phân biệt Refund/Reprint qua Type field (chưa có trong Refund Model)
-                // Hiện tại, ta chỉ lọc qua Status cho đơn giản, hoặc cần DTO chung cho cả Refund/Reprint.
-                // Tạm thời bỏ qua lọc Type cho đơn giản.
+                var status = statusFilter.Trim().ToLower();
+
+                // Chỉ lọc các trạng thái hợp lệ
+                if (status == "pending" || status == "approved" || status == "rejected")
+                {
+                    query = query.Where(r => r.Status.ToLower() == status);
+                }
+                // Nếu statusFilter không hợp lệ, query sẽ không bị lọc thêm và chỉ áp dụng default.
+            }
+            else // Mặc định hiển thị tất cả các trạng thái có thể Review
+            {
+                query = query.Where(r => r.Status == "Pending" || r.Status == "Approved" || r.Status == "Rejected");
             }
 
             // 1.2. Tìm kiếm (Search Term)
             if (!string.IsNullOrEmpty(searchTerm))
-            {
-                var term = searchTerm.ToLower();
-                query = query.Where(r =>
-                    r.Order.OrderCode.ToLower().Contains(term) ||
-                    r.Reason.ToLower().Contains(term));
-            }
-            if (!string.IsNullOrEmpty(sellerIdFilter))
-            {
-                query = query.Where(r => r.RequestedBySellerId == sellerIdFilter);
-            }
-            // 2. TÍNH TỔNG SỐ LƯỢNG (trước khi phân trang)
-            // NOTE: Cần thực hiện grouping trước khi Count nếu bạn muốn đếm số lượng nhóm.
-            // Để đơn giản, ta sẽ đếm tổng số bản ghi Refund:
-            var totalCount = await query.CountAsync();
+             {
+                 var term = searchTerm.ToLower();
+                 query = query.Where(r =>
+                     r.Order.OrderCode.ToLower().Contains(term) ||
+                     r.Reason.ToLower().Contains(term));
+             }
+             if (!string.IsNullOrEmpty(sellerIdFilter))
+             {
+                 query = query.Where(r => r.RequestedBySellerId == sellerIdFilter);
+             }
+             // 2. TÍNH TỔNG SỐ LƯỢNG (trước khi phân trang)
+             // NOTE: Cần thực hiện grouping trước khi Count nếu bạn muốn đếm số lượng nhóm.
+             // Để đơn giản, ta sẽ đếm tổng số bản ghi Refund:
+             var totalCount = await query.CountAsync();
 
 
-            // 3. THỰC HIỆN PHÂN TRANG (SKIP & TAKE)
-            var paginatedQuery = query
-                .OrderByDescending(r => r.CreatedAt) // Sắp xếp để lấy dữ liệu mới nhất
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize);
+             // 3. THỰC HIỆN PHÂN TRANG (SKIP & TAKE)
+             var paginatedQuery = query
+                 .OrderByDescending(r => r.CreatedAt) // Sắp xếp để lấy dữ liệu mới nhất
+                 .Skip((page - 1) * pageSize)
+                 .Take(pageSize);
 
-            // 4. MAPPING (Thực hiện Grouping và Mapping DTO)
-            // Lấy dữ liệu đã phân trang
-            var paginatedRefunds = await paginatedQuery.ToListAsync();
+             // 4. MAPPING (Thực hiện Grouping và Mapping DTO)
+             // Lấy dữ liệu đã phân trang
+             var paginatedRefunds = await paginatedQuery.ToListAsync();
 
-            // Do logic grouping là phức tạp và thường được áp dụng cho toàn bộ tập dữ liệu,
-            // Việc grouping trên tập dữ liệu đã phân trang (Take) có thể dẫn đến kết quả không chính xác
-            // (ví dụ: nhóm bị chia thành nhiều trang). 
-            // Tuy nhiên, nếu bạn muốn hiển thị 1 bản ghi/RefundId, ta chỉ cần map:
+             // Do logic grouping là phức tạp và thường được áp dụng cho toàn bộ tập dữ liệu,
+             // Việc grouping trên tập dữ liệu đã phân trang (Take) có thể dẫn đến kết quả không chính xác
+             // (ví dụ: nhóm bị chia thành nhiều trang). 
+             // Tuy nhiên, nếu bạn muốn hiển thị 1 bản ghi/RefundId, ta chỉ cần map:
 
-            // Khối code dưới đây MOCK logic Grouping lên dữ liệu đã được phân trang (Không lý tưởng, nhưng hoạt động)
-            var groupedRequests = paginatedRefunds
-                .GroupBy(r => new { r.OrderId, r.Reason, r.ProofUrl })
-                .Select((group, index) =>
-                {
-                    var primaryItem = group.OrderByDescending(r => r.CreatedAt).First();
-                    bool isOrderLevel = group.Count() > 1 || primaryItem.OrderDetailId == null;
+             // Khối code dưới đây MOCK logic Grouping lên dữ liệu đã được phân trang (Không lý tưởng, nhưng hoạt động)
+             var groupedRequests = paginatedRefunds
+                 .GroupBy(r => new { r.OrderId, r.Reason, r.ProofUrl })
+                 .Select((group, index) =>
+                 {
+                     var primaryItem = group.OrderByDescending(r => r.CreatedAt).First();
+                     bool isOrderLevel = group.Count() > 1 || primaryItem.OrderDetailId == null;
 
-                    return new RefundRequestListDto
-                    {
-                        // ... (Logic mapping chi tiết DTO giữ nguyên) ...
-                        GroupId = (page - 1) * pageSize + index + 1, // ID duy nhất cho frontend
-                        OrderCode = primaryItem.Order?.OrderCode ?? "N/A",
-                        Type = "REFUND",
-                        TargetLevel = isOrderLevel ? "ORDER-WIDE" : "DETAIL",
-                        Status = primaryItem.Status,
-                        TotalRequestedAmount = group.Sum(r => r.Amount),
-                        CountOfItems = group.Count(),
-                        PrimaryRefundId = primaryItem.RefundId,
-                        CreatedAt = primaryItem.CreatedAt
-                    };
-                })
-                .ToList();
+                     return new RefundRequestListDto
+                     {
+                         // ... (Logic mapping chi tiết DTO giữ nguyên) ...
+                         GroupId = (page - 1) * pageSize + index + 1, // ID duy nhất cho frontend
+                         OrderCode = primaryItem.Order?.OrderCode ?? "N/A",
+                         Type = "REFUND",
+                         TargetLevel = isOrderLevel ? "ORDER-WIDE" : "DETAIL",
+                         Status = primaryItem.Status,
+                         TotalRequestedAmount = group.Sum(r => r.Amount),
+                         CountOfItems = group.Count(),
+                         PrimaryRefundId = primaryItem.RefundId,
+                         CreatedAt = primaryItem.CreatedAt
+                     };
+                 })
+                 .ToList();
 
 
-            // 5. TRẢ VỀ PAGINATED RESULT
-            return new PaginatedResult<RefundRequestListDto>
-            {
-                Items = groupedRequests,
-                Total = totalCount,
-                Page = page,
-                PageSize = pageSize
-            };
-        }
+             // 5. TRẢ VỀ PAGINATED RESULT
+             return new PaginatedResult<RefundRequestListDto>
+             {
+                 Items = groupedRequests,
+                 Total = totalCount,
+                 Page = page,
+                 PageSize = pageSize
+             };
+         }
+
+        
     }
 }

@@ -66,12 +66,12 @@ public class InvoiceService : IInvoiceService
                     throw new InvalidOperationException("Một hoặc nhiều đơn hàng không thuộc về Seller đã chọn.");
                 }
                 // Kiểm tra xem có đơn hàng nào chưa được thanh toán không
-                var unpaidOrders = requestedOrders.Where(o => o.PaymentStatus != "Paid").ToList();
+              /*  var unpaidOrders = requestedOrders.Where(o => o.PaymentStatus != "Paid").ToList();
                 if (unpaidOrders.Any())
                 {
                     var unpaidOrderCodes = string.Join(", ", unpaidOrders.Select(o => o.OrderCode));
                     throw new InvalidOperationException($"Không thể tạo hóa đơn. Các đơn hàng sau chưa được thanh toán: {unpaidOrderCodes}");
-                }
+                }*/
 
                 // Kiểm tra xem có đơn hàng nào đã được xuất hóa đơn trước đó chưa
                 
