@@ -66,7 +66,7 @@ namespace CB_Gift.Services
                     .ThenInclude(od => od.ProductVariant)
                 .Where(o => o.SellerUserId == sellerUserId)
                 .AsQueryable();
-
+                
             // 1. Lọc theo Status
             if (!string.IsNullOrEmpty(status))
                 // ✅ Logic MỚI: Cho phép lọc theo NameVi HOẶC Code
@@ -375,40 +375,189 @@ namespace CB_Gift.Services
             }
         }
 
+        //public async Task<MakeOrderResponse> MakeOrder(MakeOrderDto request, string sellerUserId)
+        //{ // Step1: Tạo Endcustomer
+        //    int customerId;
+        //    var newEndCustomer = _mapper.Map<EndCustomer>(request.CustomerInfo);
+        //    _context.EndCustomers.Add(newEndCustomer);
+        //    await _context.SaveChangesAsync();
+        //    customerId = newEndCustomer.CustId;
+        //    //Step2: tạo order
+        //    var order = _mapper.Map<Order>(request.OrderCreate);
+        //    order.SellerUserId = sellerUserId;
+        //    order.EndCustomerId = customerId;
+        //    //order.OrderDate = DateTime.Now; // ẩn đi vì khi tạo chỉ là draft thi lưu vào creation date rồi
+        //    order.ProductionStatus = "Created";
+        //    order.StatusOrder = 1;
+        //    // Nếu ActiveTTS = true thì cộng thêm CostScan vào tổng
+        //    decimal totalCost = 0;
+        //    if (order.ActiveTts == true)
+        //    {
+        //        totalCost += 1;
+        //    }
+        //    _context.Orders.Add(order);
+        //    await _context.SaveChangesAsync();
+        //    // Step 3: Thêm các OrderDetail
+        //    var details = new List<OrderDetail>();
+
+        //    foreach (var item in request.OrderDetails)
+        //    {
+        //        var variant = await _context.ProductVariants
+        //            .FirstOrDefaultAsync(v => v.ProductVariantId == item.ProductVariantID);
+
+        //        if (variant == null) throw new Exception("ProductVariant not found.");
+
+        //        decimal price = item.Price ?? 0;     // Dùng đúng giá FE gửi
+        //        totalCost += price * item.Quantity;  // FE đã tính unitPrice chuẩn
+
+
+        //        var detail = new OrderDetail
+        //        {
+        //            OrderId = order.OrderId,
+        //            ProductVariantId = item.ProductVariantID,
+        //            Quantity = item.Quantity,
+        //            LinkImg = item.LinkImg,
+        //            NeedDesign = item.NeedDesign,
+        //            LinkThanksCard = item.LinkThanksCard,
+        //            LinkFileDesign = item.LinkDesign,
+        //            Accessory = item.Accessory,
+        //            Note = item.Note,
+        //            Price = price,
+        //            CreatedDate = DateTime.UtcNow,
+        //            ProductionStatus = ProductionStatus.DRAFT
+        //        };
+        //        details.Add(detail);
+        //    }
+
+        //    _context.OrderDetails.AddRange(details);
+        //    order.TotalCost = totalCost;
+        //    await _context.SaveChangesAsync();
+
+        //    // Step 4: Chuẩn bị dữ liệu trả về
+        //    var response = new MakeOrderResponse
+        //    {
+        //        OrderId = order.OrderId,
+        //        OrderCode = order.OrderCode ?? null,
+        //        TotalCost = totalCost,
+        //        CustomerName = request.CustomerInfo.Name,
+        //        Details = details.Select(d => new MakeOrderDetailResponse
+        //        {
+        //            ProductVariantID = d.ProductVariantId,
+        //            Quantity = d.Quantity,
+        //            Price = d.Price ?? 0
+        //        }).ToList()
+        //    };
+
+        //    return response;
+        //}
+
+        //public async Task<MakeOrderResponse> MakeOrder(MakeOrderDto request, string sellerUserId)
+        //{
+        //    // Step 1: Tạo Endcustomer
+        //    var newEndCustomer = _mapper.Map<EndCustomer>(request.CustomerInfo);
+        //    _context.EndCustomers.Add(newEndCustomer);
+        //    await _context.SaveChangesAsync();
+        //    int customerId = newEndCustomer.CustId;
+
+        //    // Step 2: Tạo Order
+        //    var order = _mapper.Map<Order>(request.OrderCreate);
+        //    order.SellerUserId = sellerUserId;
+        //    order.EndCustomerId = customerId;
+        //    order.ProductionStatus = "Created";
+        //    order.StatusOrder = 1;
+
+        //    // 💥 Lấy đúng totalCost từ FE (FE đã tính chuẩn)
+        //    decimal totalCost = request.OrderCreate.TotalCost ?? 0;
+
+        //    _context.Orders.Add(order);
+        //    await _context.SaveChangesAsync();
+
+        //    // Step 3: Thêm OrderDetail
+        //    var details = new List<OrderDetail>();
+
+        //    foreach (var item in request.OrderDetails)
+        //    {
+        //        // Không cần lấy variant, không cần tính baseCost/shipCost
+        //        // FE đã gửi chính xác price rồi
+
+        //        var detail = new OrderDetail
+        //        {
+        //            OrderId = order.OrderId,
+        //            ProductVariantId = item.ProductVariantID,
+        //            Quantity = item.Quantity,
+        //            LinkImg = item.LinkImg,
+        //            NeedDesign = item.NeedDesign,
+        //            LinkThanksCard = item.LinkThanksCard,
+        //            LinkFileDesign = item.LinkDesign,
+        //            Accessory = item.Accessory,
+        //            Note = item.Note,
+        //            Price = item.Price, // 💥 đúng giá FE gửi
+        //            CreatedDate = DateTime.UtcNow,
+        //            ProductionStatus = ProductionStatus.DRAFT
+        //        };
+
+        //        details.Add(detail);
+        //    }
+
+        //    _context.OrderDetails.AddRange(details);
+
+        //    // Lưu totalCost từ FE
+        //    order.TotalCost = totalCost;
+
+        //    await _context.SaveChangesAsync();
+
+        //    // Step 4: Response
+        //    var response = new MakeOrderResponse
+        //    {
+        //        OrderId = order.OrderId,
+        //        OrderCode = order.OrderCode,
+        //        TotalCost = totalCost,
+        //        CustomerName = request.CustomerInfo.Name,
+        //        Details = details.Select(d => new MakeOrderDetailResponse
+        //        {
+        //            ProductVariantID = d.ProductVariantId,
+        //            Quantity = d.Quantity,
+        //            Price = d.Price ?? 0
+        //        }).ToList()
+        //    };
+
+        //    return response;
+        //}
+
         public async Task<MakeOrderResponse> MakeOrder(MakeOrderDto request, string sellerUserId)
-        { // Step1: Tạo Endcustomer
-            int customerId;
+        {
+            // Step 1: Tạo Endcustomer
             var newEndCustomer = _mapper.Map<EndCustomer>(request.CustomerInfo);
             _context.EndCustomers.Add(newEndCustomer);
             await _context.SaveChangesAsync();
-            customerId = newEndCustomer.CustId;
-            //Step2: tạo order
+            int customerId = newEndCustomer.CustId;
+
+            // Step 2: Tạo Order
             var order = _mapper.Map<Order>(request.OrderCreate);
             order.SellerUserId = sellerUserId;
             order.EndCustomerId = customerId;
-            //order.OrderDate = DateTime.Now; // ẩn đi vì khi tạo chỉ là draft thi lưu vào creation date rồi
             order.ProductionStatus = "Created";
             order.StatusOrder = 1;
-            // Nếu ActiveTTS = true thì cộng thêm CostScan vào tổng
-            decimal totalCost = 0;
-            if (order.ActiveTts == true)
-            {
-                totalCost += 1;
-            }
+
+            // FE gửi totalCost đã tính đúng → GIỮ NGUYÊN
+            decimal totalCost = request.OrderCreate.TotalCost ?? 0;
+
             _context.Orders.Add(order);
             await _context.SaveChangesAsync();
-            // Step 3: Thêm các OrderDetail
+
+            // Step 3: Thêm OrderDetail
             var details = new List<OrderDetail>();
 
             foreach (var item in request.OrderDetails)
             {
+                // 💥 Lấy baseCost của variant từ DB
                 var variant = await _context.ProductVariants
                     .FirstOrDefaultAsync(v => v.ProductVariantId == item.ProductVariantID);
 
-                if (variant == null) throw new Exception("ProductVariant not found.");
+                if (variant == null)
+                    throw new Exception("ProductVariant not found.");
 
-                decimal price = (variant.BaseCost ?? 0) + (variant.ShipCost ?? 0);
-                totalCost += price * item.Quantity;
+                decimal baseCost = variant.BaseCost ?? 0; // ✔ BaseCost chuẩn
 
                 var detail = new OrderDetail
                 {
@@ -421,34 +570,44 @@ namespace CB_Gift.Services
                     LinkFileDesign = item.LinkDesign,
                     Accessory = item.Accessory,
                     Note = item.Note,
-                    Price = price,
+
+                    // 💥 Insert PRICE = BASE COST (không dùng FE gửi)
+                    Price = baseCost,
+
                     CreatedDate = DateTime.UtcNow,
                     ProductionStatus = ProductionStatus.DRAFT
                 };
+
                 details.Add(detail);
             }
 
             _context.OrderDetails.AddRange(details);
+
+            // Lưu totalCost từ FE
             order.TotalCost = totalCost;
             await _context.SaveChangesAsync();
 
-            // Step 4: Chuẩn bị dữ liệu trả về
+            // Step 4: Response
             var response = new MakeOrderResponse
             {
                 OrderId = order.OrderId,
-                OrderCode = order.OrderCode ?? null,
+                OrderCode = order.OrderCode,
                 TotalCost = totalCost,
                 CustomerName = request.CustomerInfo.Name,
                 Details = details.Select(d => new MakeOrderDetailResponse
                 {
                     ProductVariantID = d.ProductVariantId,
                     Quantity = d.Quantity,
+
+                    // 💥 Response trả đúng BASE COST
                     Price = d.Price ?? 0
                 }).ToList()
             };
 
             return response;
         }
+
+
         public async Task<MakeOrderResponse> UpdateOrderAsync(int orderId, OrderUpdateDto request, string sellerUserId)
         {
             // Step 1: Tìm đơn hàng và kiểm tra điều kiện
@@ -1082,6 +1241,7 @@ namespace CB_Gift.Services
                 .Include(o => o.StatusOrderNavigation)
                 .Include(o => o.OrderDetails)
                     .ThenInclude(od => od.ProductVariant)
+                    .ThenInclude(pv => pv.Product)
                 .AsQueryable();
 
             if (!string.IsNullOrEmpty(status))
