@@ -28,7 +28,7 @@ namespace CB_Gift.Services
             if (detail == null) return null;
 
             // Chuỗi data cần encode
-            string frontendUrl = $"http://localhost:3000/qc/order-detail/{orderDetailId}";
+            string frontendUrl = $"https://cb-gift-fe-sby6.vercel.app/qc/order-detail/{orderDetailId}";
 
             string qrUrl = $"https://api.qrserver.com/v1/create-qr-code/?size=400x400&data={System.Net.WebUtility.UrlEncode(frontendUrl)}";
 
