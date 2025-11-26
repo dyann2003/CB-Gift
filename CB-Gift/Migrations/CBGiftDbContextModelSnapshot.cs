@@ -979,7 +979,10 @@ namespace CB_Gift.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("varchar(100)");
 
-                    b.Property<int>("OrderId")
+                    b.Property<int?>("OrderDetailId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("OrderId")
                         .HasColumnType("int");
 
                     b.Property<string>("ProofUrl")
@@ -1009,6 +1012,8 @@ namespace CB_Gift.Migrations
                         .HasColumnType("varchar(20)");
 
                     b.HasKey("RefundId");
+
+                    b.HasIndex("OrderDetailId");
 
                     b.HasIndex("OrderId");
 
@@ -1581,11 +1586,13 @@ namespace CB_Gift.Migrations
 
             modelBuilder.Entity("CB_Gift.Models.Refund", b =>
                 {
+                    b.HasOne("CB_Gift.Models.OrderDetail", "OrderDetail")
+                        .WithMany()
+                        .HasForeignKey("OrderDetailId");
+
                     b.HasOne("CB_Gift.Models.Order", "Order")
                         .WithMany()
-                        .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("OrderId");
 
                     b.HasOne("CB_Gift.Data.AppUser", "RequestedBySeller")
                         .WithMany()
@@ -1598,6 +1605,8 @@ namespace CB_Gift.Migrations
                         .HasForeignKey("ReviewedByStaffId");
 
                     b.Navigation("Order");
+
+                    b.Navigation("OrderDetail");
 
                     b.Navigation("RequestedBySeller");
 

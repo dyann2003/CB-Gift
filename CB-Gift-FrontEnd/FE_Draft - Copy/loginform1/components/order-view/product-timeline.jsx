@@ -6,14 +6,32 @@ import { CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 export default function ProductTimeline({ productDetails }) {
   const getStatusIcon = (status) => {
     switch (status) {
-      case "Created":
+      // TRẠNG THÁI HOÀN THÀNH/CHÍNH XÁC
+      case "CREATED":
+      case "READY_PROD":
+      case "FINISHED":
+      case "QC_DONE":
         return <CheckCircle2 className="h-5 w-5 text-green-600" />;
-      case "On hold":
-        return <Clock className="h-5 w-5 text-yellow-600" />;
-      case "Shipping":
+      
+      // TRẠNG THÁI ĐANG XỬ LÝ
+      case "NEED_DESIGN":
+      case "DESIGNING":
+      case "CHECK_DESIGN":
+        return <Brush className="h-5 w-5 text-blue-600" />;
+      case "IN_PROD":
+      case "PROD_REWORK":
         return <Clock className="h-5 w-5 text-blue-600" />;
-      case "Delivered":
-        return <CheckCircle2 className="h-5 w-5 text-green-600" />;
+      case "PACKING":
+        return <Package className="h-5 w-5 text-indigo-600" />;
+      
+      // TRẠNG THÁI VẤN ĐỀ/TẠM DỪNG
+      case "QC_FAIL":
+      case "DESIGN_REDO":
+        return <XCircle className="h-5 w-5 text-red-600" />;
+      case "HOLD":
+      case "CANCELLED":
+        return <AlertCircle className="h-5 w-5 text-yellow-600" />;
+        
       default:
         return <AlertCircle className="h-5 w-5 text-gray-600" />;
     }
@@ -21,14 +39,32 @@ export default function ProductTimeline({ productDetails }) {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case "Created":
+      // MÀU XANH LÁ (THÀNH CÔNG/HOÀN THÀNH)
+      case "CREATED":
+      case "READY_PROD":
+      case "FINISHED":
+      case "QC_DONE":
         return "bg-green-100 text-green-800";
-      case "On hold":
-        return "bg-yellow-100 text-yellow-800";
-      case "Shipping":
+        
+      // MÀU XANH DƯƠNG/INDIGO (ĐANG TIẾN HÀNH/XỬ LÝ)
+      case "NEED_DESIGN":
+      case "DESIGNING":
+      case "CHECK_DESIGN":
+      case "IN_PROD":
         return "bg-blue-100 text-blue-800";
-      case "Delivered":
-        return "bg-green-100 text-green-800";
+      case "PACKING":
+        return "bg-indigo-100 text-indigo-800";
+        
+      // MÀU ĐỎ/VÀNG (LỖI/TẠM DỪNG/HỦY)
+      case "QC_FAIL":
+      case "DESIGN_REDO":
+      case "PROD_REWORK":
+        return "bg-red-100 text-red-800";
+      case "HOLD":
+        return "bg-yellow-100 text-yellow-800";
+      case "CANCELLED":
+        return "bg-red-100 text-red-800";
+        
       default:
         return "bg-gray-100 text-gray-800";
     }
@@ -55,14 +91,7 @@ export default function ProductTimeline({ productDetails }) {
             </div>
           ))}
         </div>
-        <div className="flex gap-8">
-          {/* SỬA 5: Đổi 'statuses' thành 'timeline' */}
-          {productDetails.timeline && productDetails.timeline.map((status, idx) => (
-            <div key={idx} className="text-xs text-gray-500">
-              {status.date}
-            </div>
-          ))}
-        </div>
+       
       </div>
     </div>
   );

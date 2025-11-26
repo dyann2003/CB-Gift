@@ -11,19 +11,19 @@ export default function BillingSummary({ billing }) {
             {billing.productionCosts}
           </span>
         </div>
-        <div className="flex justify-between text-sm">
+        {/* <div className="flex justify-between text-sm">
           <span className="text-gray-600">Shipping (standard):</span>
           <span className="font-medium text-gray-900">
             {billing.shippingStandard}
           </span>
-        </div>
+        </div> */}
         <div className="flex justify-between text-sm">
           <span className="text-gray-600">Shipping cost:</span>
           <span className="font-medium text-gray-900">
             {billing.shippingCost}
           </span>
         </div>
-        <div className="flex justify-between text-sm">
+        {/* <div className="flex justify-between text-sm">
           <span className="text-gray-600">Surcharge fee:</span>
           <span className="font-medium text-gray-900">
             {billing.surchargeFee}
@@ -32,7 +32,7 @@ export default function BillingSummary({ billing }) {
         <div className="flex justify-between text-sm">
           <span className="text-gray-600">Tax cost:</span>
           <span className="font-medium text-gray-900">{billing.taxCost}</span>
-        </div>
+        </div> */}
         <div className="flex justify-between text-base border-t border-gray-200 pt-3 mt-3">
           <span className="font-semibold text-gray-900">Total costs:</span>
           <span className="font-bold text-gray-900">{billing.totalCosts}</span>

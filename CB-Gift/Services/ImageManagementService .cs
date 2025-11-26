@@ -52,5 +52,61 @@ namespace CB_Gift.Services
                 .AsNoTracking()
                 .ToListAsync();
         }
+        public async Task<UploadedImage> UploadMediaForUserAsync(Stream stream, string fileName, string userId, string contentType)
+        {
+            string publicId = null;
+            string secureUrl = null;
+            bool isVideo = contentType.StartsWith("video/"); // Dùng biến này để rollback
+
+            try
+            {
+                if (isVideo)
+                {
+                    var uploadResult = await _cloudinaryService.UploadVideoFromStreamAsync(stream, fileName, userId);
+                    publicId = uploadResult.PublicId;
+                    secureUrl = uploadResult.SecureUrl.ToString();
+                }
+                else if (contentType.StartsWith("image/"))
+                {
+                    var uploadResult = await _cloudinaryService.UploadImageFromStreamAsync(stream, fileName, userId);
+                    publicId = uploadResult.PublicId;
+                    secureUrl = uploadResult.SecureUrl.ToString();
+                }
+                else
+                {
+                    throw new Exception("Loại file không được hỗ trợ.");
+                }
+
+                // Tạo entity (Không có ResourceType)
+                var newMedia = new UploadedImage
+                {
+                    CloudinaryPublicId = publicId,
+                    SecureUrl = secureUrl,
+                    OriginalFileName = fileName,
+                    UserId = userId,
+                    UploadedAt = DateTime.UtcNow
+                };
+
+                _context.UploadedImages.Add(newMedia);
+                await _context.SaveChangesAsync();
+                return newMedia;
+            }
+            catch (Exception dbEx)
+            {
+                // Rollback nếu lưu DB thất bại
+                if (publicId != null)
+                {
+                    if (isVideo)
+                    {
+                        await _cloudinaryService.DeleteVideoAsync(publicId);
+                    }
+                    else
+                    {
+                        await _cloudinaryService.DeleteImageAsync(publicId);
+                    }
+                }
+                throw new Exception("Lỗi khi lưu thông tin media vào database.", dbEx);
+            }
+        }
     }
 }
