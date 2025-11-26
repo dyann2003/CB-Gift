@@ -1,5 +1,6 @@
 ﻿using CB_Gift.Data;
 using CB_Gift.DTOs;
+using CB_Gift.Hubs;
 using CB_Gift.Jobs;
 using CB_Gift.Orders.Import;
 using CB_Gift.Services;
@@ -99,8 +100,23 @@ builder.Services
         {
             OnMessageReceived = ctx =>
             {
-                if (ctx.Request.Cookies.TryGetValue("access_token", out var token))
-                    ctx.Token = token;
+                // Lấy token từ query cho SignalR
+                var accessToken = ctx.Request.Query["access_token"];
+
+                var path = ctx.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    path.StartsWithSegments("/notificationHub"))
+                {
+                    ctx.Token = accessToken;
+                }
+
+                // Hoặc lấy từ cookie
+                if (ctx.Token == null &&
+                    ctx.Request.Cookies.TryGetValue("access_token", out var cookieToken))
+                {
+                    ctx.Token = cookieToken;
+                }
+
                 return Task.CompletedTask;
             }
         };
@@ -177,7 +193,6 @@ builder.Services.Configure<CloudinarySettings>(
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
-builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IQrCodeService, QrCodeService>();
 builder.Services.AddScoped<IOrderDetailService, OrderDetailService>();
 builder.Services.AddScoped<IPlanService, PlanService>();
@@ -203,6 +218,7 @@ builder.Services.AddScoped<ILocationService, GhnLocationService>();
 builder.Services.AddScoped<IShippingService, GhnShippingService>();
 builder.Services.AddScoped<IGhnPrintService, GhnPrintService>();
 builder.Services.AddScoped<IManagementAccountService, ManagementAccountService>();
+builder.Services.AddSingleton<NotificationHub>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<OrderFactory>();
 builder.Services.AddScoped<ReferenceDataCache>();
