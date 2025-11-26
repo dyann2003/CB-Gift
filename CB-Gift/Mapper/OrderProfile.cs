@@ -28,7 +28,7 @@ namespace CB_Gift.Mapper
             .ForMember(dest => dest.SellerId, opt => opt.MapFrom(src => src.SellerUserId))
             .ForMember(dest => dest.SellerName, opt => opt.MapFrom(src => src.SellerUser.FullName))
             .ForMember(dest => dest.StatusOderName, opt => opt.MapFrom(src => src.StatusOrderNavigation.NameVi))
-            .ForMember(dest => dest.Details, opt => opt.MapFrom(src => src.OrderDetails));
+            .ForMember(dest => dest.Details, opt => opt.MapFrom(src => src.OrderDetails))
                 .ForMember(dest => dest.SellerName, opt => opt.MapFrom(src => src.SellerUser.FullName))
                 .ForMember(dest => dest.StatusOderName, opt => opt.MapFrom(src => src.StatusOrderNavigation.Code))
                 .ForMember(dest => dest.Details, opt => opt.MapFrom(src => src.OrderDetails));

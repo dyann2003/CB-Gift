@@ -26,6 +26,7 @@ namespace CB_Gift.Services.IService
         string? searchTerm,
         string? filterType,
         string? sellerIdFilter,
+        string? statusFilter,
         int page,
         int pageSize);
     }

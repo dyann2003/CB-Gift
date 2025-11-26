@@ -100,5 +100,19 @@ namespace CB_Gift.DTOs
         public int PrimaryRefundId { get; set; } // ID của bản ghi đại diện (dùng để gọi Review Modal)
         public DateTime CreatedAt { get; set; }
     }
+    /*public class RefundRequestListDto
+    {
+        // Dữ liệu chung sau khi Grouping
+        public int PrimaryRefundId { get; set; } // ID của bản ghi đại diện (Refund/Reprint ID)
+        public string Type { get; set; } // "REFUND" hoặc "REPRINT"
+        public int OrderId { get; set; }
+        public string OrderCode { get; set; }
+        public string TargetLevel { get; set; } // "ORDER-WIDE" hoặc "DETAIL"
+        public string Status { get; set; }
+        public decimal TotalRequestedAmount { get; set; } // Tổng tiền Refund (Reprint sẽ là 0)
+        public string ReasonSummary { get; set; } // Lý do tóm tắt
+        public int CountOfItems { get; set; } // Số lượng OrderDetail bị ảnh hưởng
+        public DateTime CreatedAt { get; set; }
+    }*/
 
 }

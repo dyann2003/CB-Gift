@@ -68,7 +68,7 @@ namespace CB_Gift.Controllers
         // ----------------------------------------------------------------------
         [HttpPost("{refundId}/review")]
         [Authorize(Roles = "Staff,Manager")] // Chỉ Staff/Manager mới được duyệt
-        public async Task<IActionResult> ReviewRefund(int refundId, [FromBody] StaffReviewRefundDto request)
+        public async Task<IActionResult> ReviewRefund(int refundId, [FromBody] ReviewRefundDto request)
         {
             var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(staffId))
@@ -158,7 +158,8 @@ namespace CB_Gift.Controllers
         public async Task<IActionResult> GetPendingRequestsPaginated(
         [FromQuery] string? searchTerm,
         [FromQuery] string? filterType,
-        [FromQuery] string? sellerIdFilter, 
+        [FromQuery] string? sellerIdFilter,
+        [FromQuery] string? statusFilter,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10)
         {
@@ -175,7 +176,8 @@ namespace CB_Gift.Controllers
                     staffId,
                     searchTerm,
                     filterType,
-                    sellerIdFilter, 
+                    sellerIdFilter,
+                    statusFilter,
                     page,
                     pageSize);
 
