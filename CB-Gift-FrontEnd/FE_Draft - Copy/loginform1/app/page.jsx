@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { jwtDecode } from "jwt-decode";
+import apiClient from "../lib/apiClient";
 import {
   Dialog,
   DialogContent,
@@ -41,7 +42,6 @@ export default function LoginPage() {
   const [isOtpExpired, setIsOtpExpired] = useState(false);
   const [isOtpVerified, setIsOtpVerified] = useState(false);
   const router = useRouter();
-
   useEffect(() => {
     let interval;
     if (forgotPasswordStep === "otp" && otpCountdown > 0) {
@@ -67,7 +67,7 @@ export default function LoginPage() {
     }
 
     try {
-      const res = await fetch("https://localhost:7015/api/auth/login", {
+      const res = await fetch(`${apiClient.defaults.baseURL}/api/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -149,8 +149,17 @@ export default function LoginPage() {
   };
 
   const handleSendResetEmail = async () => {
+    // 1.  Kiểm tra email rỗng
     if (!forgotPasswordEmail) {
-      setError("Please enter your email");
+      setError("Please enter your email"); 
+      setOpen(true);
+      return;
+    }
+
+    // 2. Thêm validation định dạng email bằng Regex
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(forgotPasswordEmail)) {
+      setError("Please enter a valid email address"); // Thêm validate
       setOpen(true);
       return;
     }
@@ -159,7 +168,7 @@ export default function LoginPage() {
 
     try {
       const res = await fetch(
-        "https://localhost:7015/api/auth/forgot-password",
+        `${apiClient.defaults.baseURL}/api/auth/forgot-password`,
         {
           method: "POST",
           headers: {
@@ -173,12 +182,13 @@ export default function LoginPage() {
 
       if (!res.ok) {
         const err = await res.json();
-        setError(err.message || "Failed to send reset link");
+        setError(err.message || "Sending request failed. Please try again.");
         setOpen(true);
         setIsLoading(false);
         return;
       }
 
+      // Xử lý khi thành công...
       setForgotPasswordStep("otp");
       setOtp("");
       setOtpError("");
@@ -186,7 +196,7 @@ export default function LoginPage() {
       setIsOtpExpired(false);
       setIsOtpVerified(false);
     } catch (error) {
-      setError("Something went wrong!");
+      setError("An error has occurred! Please try again.");
       setOpen(true);
     } finally {
       setIsLoading(false);
@@ -208,7 +218,7 @@ export default function LoginPage() {
     setOtpError("");
 
     try {
-      const res = await fetch("https://localhost:7015/api/auth/verify-otp", {
+      const res = await fetch(`${apiClient.defaults.baseURL}/api/auth/verify-otp`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -259,7 +269,7 @@ export default function LoginPage() {
 
     try {
       const res = await fetch(
-        "https://localhost:7015/api/auth/reset-password-with-otp",
+        `${apiClient.defaults.baseURL}/api/auth/reset-password-with-otp`,
         {
           method: "POST",
           headers: {

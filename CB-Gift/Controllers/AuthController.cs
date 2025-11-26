@@ -47,8 +47,11 @@ public class AuthController : ControllerBase
         var user = await _users.FindByNameAsync(dto.UserNameOrEmail)
                    ?? await _users.FindByEmailAsync(dto.UserNameOrEmail);
 
-        if (user is null || !user.IsActive)
-            return Unauthorized(new { message = "Invalid credentials." });
+        if (user is null)
+            return Unauthorized(new { message = "Email not found." });
+
+        if (!user.IsActive)
+            return Unauthorized(new { message = "Your account has been deactivated." });
 
         var ok = await _signIn.CheckPasswordSignInAsync(user, dto.Password, lockoutOnFailure: false);
         if (!ok.Succeeded)
@@ -126,18 +129,27 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
     {
-        // Tất cả logic đã được chuyển vào service
-        var result = await _accountService.SendPasswordResetOtpAsync(dto);
+        if (string.IsNullOrWhiteSpace(dto.Email))
+        {
+            return BadRequest(new { message = "Please enter your email address." });
+        }
+        var user = await _users.FindByNameAsync(dto.Email)
+                   ?? await _users.FindByEmailAsync(dto.Email);
 
+        if (user is null)
+            return Unauthorized(new { message = "Email not found." });
+
+        if (!user.IsActive)
+            return Unauthorized(new { message = "Your account has been deactivated." });
+        var result = await _accountService.SendPasswordResetOtpAsync(dto);
         if (!result.Success)
         {
-            // Trả về BadRequest nếu có lỗi cụ thể (ví dụ: user bị khóa)
             return BadRequest(new { message = result.Message });
         }
-
-        // Luôn trả về OK để bảo mật, ngay cả khi email không tồn tại
-        return Ok(new { message = "If your email is registered, you will receive an OTP." });
+        // Success
+        return Ok(new { message = result.Message });
     }
+
 
     // POST: /api/auth/reset-password
     //[HttpPost("reset-password")]
@@ -216,7 +228,7 @@ public class AuthController : ControllerBase
     /// <summary>
     /// Lấy danh sách tất cả các Seller trong hệ thống.
     /// </summary> api/auth/all-sellers
-    [Authorize(Roles = "Staff,Manager")]
+    [Authorize(Roles = "Staff,Manager,QC")]
     [HttpGet("all-sellers")]
     public async Task<IActionResult> GetAllSellers()
     {

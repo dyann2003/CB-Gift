@@ -33,6 +33,7 @@ namespace CB_Gift.DTOs
         public string ReturnUrl { get; set; }
         [Required]
         public string CancelUrl { get; set; }
+        public string? GatewayName { get; set; } 
     }
     // DTO chứa payload từ webhook của PayOS
     public class PayOSWebhookPayload
@@ -99,6 +100,54 @@ namespace CB_Gift.DTOs
 
         // ID của hóa đơn quá hạn (để frontend có thể gọi chi tiết)
         public int? OverdueInvoiceId { get; set; }
+    }
+    // DTO cho tab "Sales History" (danh sách các tháng)
+    public class SellerMonthlySalesDto
+    {
+        public int Year { get; set; }
+        public int Month { get; set; }
+        public string MonthName { get; set; } // "November 2024"
+        public decimal TotalAmount { get; set; }
+        // Trạng thái của tháng: "Invoiced", "PartiallyInvoiced", "Uninvoiced"
+        public string Status { get; set; }
+    }
+    //huy
+    // DTO cho tab "Sales History" (khi mở rộng 1 tháng) 
+    public class SellerOrderDto
+    {
+        public int OrderId { get; set; }
+        public string OrderCode { get; set; }
+        public DateTime OrderDate { get; set; }
+        public string CustomerName { get; set; }
+        public decimal TotalCost { get; set; }
+        public string OrderStatus { get; set; } // Tên trạng thái (vd: "Đã Ship")
+    }
+
+    // DTO cho tab "Payment History" (Cập nhật DTO từ lần trước)
+    public class PaymentSummaryDto
+    {
+        public int PaymentId { get; set; }
+        public int InvoiceId { get; set; }
+        public string InvoiceNumber { get; set; }
+        public DateTime PaymentDate { get; set; }
+        public decimal Amount { get; set; }
+        public string PaymentMethod { get; set; }
+        public string Status { get; set; } // "Completed", "Pending", "Failed"
+        public string TransactionId { get; set; }
+
+        // [THÊM MỚI] - Thông tin từ Invoice gốc
+        public decimal InvoiceTotal { get; set; }
+        public decimal InvoiceRemaining { get; set; }
+        public string InvoiceStatus { get; set; }
+    }
+
+    // DTO cho request tạo hóa đơn theo tháng
+    public class CreateMonthlyInvoiceRequest
+    {
+        public string SellerId { get; set; }
+        public int Year { get; set; }
+        public int Month { get; set; }
+        public string Notes { get; set; }
     }
 
 }

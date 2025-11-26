@@ -1,9 +1,13 @@
 ﻿using CB_Gift.Data;
 using CB_Gift.DTOs;
 using CB_Gift.Jobs;
+using CB_Gift.Orders.Import;
 using CB_Gift.Services;
 using CB_Gift.Services.Email;
 using CB_Gift.Services.IService;
+using FluentValidation;
+using CB_Gift.Services.Payments;
+using CB_Gift.Utils;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +15,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Quartz;
 using System.Text;
+using CB_Gift.Services.Reports;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -101,18 +106,66 @@ builder.Services
         };
     });
 
+// ========= Cấu hình GHN =========
+// Lấy cấu hình GhnSettings
+var ghnSettings = builder.Configuration.GetSection("GhnSettings");
+
+// Lấy Token và BaseAddress
+var ghnToken = ghnSettings["Token"];
+var ghnProdBaseUrl = ghnSettings["ProdBaseAddress"];
+
+var ghnTokenDev = ghnSettings["TokenDev"];
+var ghnDevBaseUrl = ghnSettings["DevBaseAddress"];
+var ghnShopId = ghnSettings["ShopId"];
+
+// Kiểm tra null
+if (string.IsNullOrEmpty(ghnToken) || string.IsNullOrEmpty(ghnProdBaseUrl))
+{
+    throw new InvalidOperationException("Lỗi cấu hình: GhnSettings:Token hoặc ProdBaseAddress chưa được đặt.");
+}
+if (string.IsNullOrEmpty(ghnTokenDev) || string.IsNullOrEmpty(ghnDevBaseUrl))
+{
+    throw new InvalidOperationException("Lỗi cấu hình: GhnSettings:TokenDev hoặc DevBaseAddress chưa được đặt.");
+}
+// -------------------------
+
+
 builder.Services.AddAuthorization();
-builder.Services.AddHttpClient();
+
+// 1. Client cho môi trường PROD (Lấy Tỉnh/Huyện/Xã)
+builder.Services.AddHttpClient("GhnProdClient", client =>
+{
+    client.BaseAddress = new Uri(ghnProdBaseUrl);
+    client.DefaultRequestHeaders.Add("Token", ghnToken);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
+
+// 2. Client cho môi trường DEV (Tạo đơn, Leadtime...)
+builder.Services.AddHttpClient("GhnDevClient", client =>
+{
+    client.BaseAddress = new Uri(ghnDevBaseUrl);
+    client.DefaultRequestHeaders.Add("Token", ghnTokenDev);
+    client.DefaultRequestHeaders.Add("ShopId", ghnShopId);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
+
+// ------------------------------------
 
 // ================== CORS (cho Next.js FE) ==================
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:3000") // FE URL
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();// SignalR
+        // THÊM CÁC DOMAIN CỦA VERCEL VÀO ĐÂY
+        policy.WithOrigins(
+            "http://localhost:3000",
+            "https://cb-gift-fe-sby6-mazut4syf-bachquangles-projects.vercel.app", // Domain Preview 
+            "https://cb-gift-fe-sby6.vercel.app", // Domain Production 
+            "https://*.vercel.app" // TÙY CHỌN: Cho phép tất cả các bản Preview trên Vercel
+        )
+             .AllowAnyHeader()
+             .AllowAnyMethod()
+             .AllowCredentials(); // SignalR
     });
 });
 
@@ -140,8 +193,22 @@ builder.Services.AddScoped<IAiStudioService, AiStudioService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ICancellationService, CancellationService>();
 builder.Services.AddScoped<IRefundService, RefundService>();
-
+builder.Services.AddScoped<IReprintService, ReprintService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<PayOSService>();
+builder.Services.AddScoped<VNPayService>();
+builder.Services.AddScoped<PaymentGatewayFactory>();
+builder.Services.AddScoped<VnPayHelper>();
+builder.Services.AddScoped<ILocationService, GhnLocationService>();
+builder.Services.AddScoped<IShippingService, GhnShippingService>();
+builder.Services.AddScoped<IGhnPrintService, GhnPrintService>();
 builder.Services.AddScoped<IManagementAccountService, ManagementAccountService>();
+builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<OrderFactory>();
+builder.Services.AddScoped<ReferenceDataCache>();
+builder.Services.AddScoped<IValidator<OrderImportRowDto>, OrderImportRowValidator>();
+builder.Services.AddScoped<IReportService, ReportService>();
+
 // --- Quartz ---
 builder.Services.AddQuartz(q =>
 {
@@ -196,7 +263,8 @@ using (var scope = app.Services.CreateScope())
     var services = scope.ServiceProvider;
     await SeedRolesAsync(services);
     await SeedAllDataAsync(services);
-   
+    var cache = scope.ServiceProvider.GetRequiredService<ReferenceDataCache>();
+    await cache.LoadAsync();
 }
 
 app.Run();

@@ -21,6 +21,7 @@ namespace CB_Gift.Services
             return await _context.OrderDetails
                 .Include(od => od.ProductVariant)
                     .ThenInclude(pv => pv.Product)
+                .Include(od => od.Order)
                 .FirstOrDefaultAsync(od => od.OrderDetailId == orderDetailId);
         }
 
@@ -32,7 +33,7 @@ namespace CB_Gift.Services
         // ⭐ THAY ĐỔI: Triển khai hàm Reject mới
         public async Task<OrderDetail?> RejectOrderDetailAsync(int orderDetailId, QcRejectRequestDto request, string qcUserId)
         {
-            return await UpdateProductionStatusAsync(orderDetailId, 11, qcUserId, request.Reason);
+            return await UpdateProductionStatusAsync(orderDetailId, 10, qcUserId, request.Reason);
         }
 
         // ⭐ THAY ĐỔI: Nâng cấp hàm private này
@@ -58,7 +59,7 @@ namespace CB_Gift.Services
                 // ⭐ 1. LOGIC MỚI: GHI LOG NẾU CÓ
                 if (!string.IsNullOrEmpty(actorUserId) && !string.IsNullOrEmpty(reason))
                 {
-                    string eventType = (newProductionStatus == ProductionStatus.PROD_REWORK)
+                    string eventType = (newProductionStatus == ProductionStatus.QC_FAIL)
                         ? "QC_REJECTED"
                         : "STATUS_UPDATED";
 
@@ -88,12 +89,24 @@ namespace CB_Gift.Services
                 var allOrderDetails = order.OrderDetails.ToList();
                 if (allOrderDetails.Any())
                 {
-                    var minProductionStatusValue = allOrderDetails
-                        .Min(od => (int)od.ProductionStatus.GetValueOrDefault((ProductionStatus)1));
+                    bool hasError = allOrderDetails.Any(od =>
+                        od.ProductionStatus == ProductionStatus.QC_FAIL ||
+                        od.ProductionStatus == ProductionStatus.PROD_REWORK
+                    );
+                    if (hasError)
+                    {
+                        order.StatusOrder = MapProductionStatusToOrderStatus(ProductionStatus.QC_FAIL);
+                    }
+                    else
+                    {
+                        var minProductionStatusValue = allOrderDetails
+                            .Min(od => (int)od.ProductionStatus.GetValueOrDefault((ProductionStatus)1));
 
-                    var minProductionStatus = (ProductionStatus)minProductionStatusValue;
-                    var newOrderStatus = MapProductionStatusToOrderStatus(minProductionStatus);
-                    order.StatusOrder = newOrderStatus;
+                        var minProductionStatus = (ProductionStatus)minProductionStatusValue;
+                        var newOrderStatus = MapProductionStatusToOrderStatus(minProductionStatus);
+                        order.StatusOrder = newOrderStatus;
+                    }
+
                 }
 
                 // 4. Lưu thay đổi và Commit

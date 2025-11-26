@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react"
 import { Upload, Download, Sparkles, AlertCircle, Image as ImageIcon, Wand2, CircleCheck } from "lucide-react"
-import { apiClient } from "../../lib/apiClient"
+import { apiClient } from "../../lib/apiClient";
 
 import {
   STYLE_OPTIONS,
@@ -128,7 +128,7 @@ export default function Home() {
         Quality: selectedQuality
       })
 
-      const response = await fetch("${apiClient}/api/AiStudio/generate", {
+      const response = await fetch(`${apiClient.defaults.baseURL}/api/AiStudio/generate`, {
         method: "POST",
         body: formData,
       })

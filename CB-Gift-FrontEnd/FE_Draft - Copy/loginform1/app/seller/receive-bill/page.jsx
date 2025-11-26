@@ -5,6 +5,7 @@ import SellerSidebar from "@/components/layout/seller/sidebar";
 import SellerHeader from "@/components/layout/seller/header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {apiClient} from "../../../lib/apiClient";
 import {
   Table,
   TableBody,
@@ -33,7 +34,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 
-const API_BASE_URL = "https://localhost:7015";
+const API_BASE_URL = "${apiClient}";
 
 export default function ReceiveBillPage() {
   const [currentPage, setCurrentPage] = useState("receive-bill");

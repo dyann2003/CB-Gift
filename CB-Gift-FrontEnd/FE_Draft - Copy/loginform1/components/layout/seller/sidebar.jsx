@@ -9,10 +9,15 @@ export default function SellerSidebar({ currentPage }) {
   const menuItems = [
     { id: "dashboard", label: "Dashboard", path: "/seller/dashboard" },
     { id: "manage-order", label: "Manage Order", path: "/seller/manage-order" },
+    // {
+    //   id: "order-overview",
+    //   label: "Order Overview",
+    //   path: "/seller/order-overview",
+    // },
     {
-      id: "order-overview",
-      label: "Order Overview",
-      path: "/seller/order-overview",
+      id: "product-catalog",
+      label: "Product Catalog",
+      path: "/seller/product-catalog",
     },
     {
       id: "manage-invoice",

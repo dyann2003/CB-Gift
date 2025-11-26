@@ -1,8 +1,9 @@
-import axios from 'axios';
+import axios from "axios";
 
 // 1. Đọc biến môi trường (từ .env.local hoặc DigitalOcean)
-const apiURL = process.env.NEXT_PUBLIC_API_URL;
-
+//const apiURL = process.env.NEXT_PUBLIC_API_URL;
+// const apiURL = "https://cb-gift-app-xsgw5.ondigitalocean.app";
+const apiURL = "https://localhost:7015";
 // 2. Tạo một instance (thể hiện) axios đã được cấu hình sẵn
 const apiClient = axios.create({
   // baseURL chính là "biến chung" mà bạn muốn
@@ -25,8 +26,11 @@ apiClient.interceptors.response.use(
   },
   (error) => {
     // Nếu request thất bại (status 4xx, 5xx)
-    console.error("Lỗi API từ interceptor:", error.response?.data || error.message);
-    
+    console.error(
+      "Lỗi API từ interceptor:",
+      error.response?.data || error.message
+    );
+
     // Ném (throw) lỗi để component có thể bắt (catch)
     return Promise.reject(error);
   }

@@ -5,8 +5,11 @@ using CB_Gift.DTOs;
 using CB_Gift.Hubs;
 using CB_Gift.Models;
 using CB_Gift.Models.Enums;
+using CB_Gift.Orders.Import;
 using CB_Gift.Services.IService;
+using ClosedXML.Excel;
 using CloudinaryDotNet.Core;
+using FluentValidation;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using System.Linq;
@@ -21,14 +24,23 @@ namespace CB_Gift.Services
         private readonly IMapper _mapper;
         private readonly INotificationService _notificationService;
         private readonly IHubContext<NotificationHub> _hubContext;
+        private readonly IShippingService _shippingService;
+        private readonly OrderFactory _orderFactory;
+        private readonly IValidator<OrderImportRowDto> _validator;
+        private readonly ReferenceDataCache _cache;
         public OrderService(CBGiftDbContext context, IMapper mapper, ILogger<OrderService> logger,
-            INotificationService notificationService, IHubContext<NotificationHub> hubContext)
+            INotificationService notificationService, IHubContext<NotificationHub> hubContext, OrderFactory orderFactory,
+            IValidator<OrderImportRowDto> validator, ReferenceDataCache cache, IShippingService shippingService)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
             _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _notificationService = notificationService;
             _hubContext = hubContext;
+            _shippingService = shippingService;
+            _orderFactory = orderFactory;
+            _validator = validator;
+            _cache = cache;
         }
 
 
@@ -54,11 +66,14 @@ namespace CB_Gift.Services
                     .ThenInclude(od => od.ProductVariant)
                 .Where(o => o.SellerUserId == sellerUserId)
                 .AsQueryable();
-
+                
             // 1. Lọc theo Status
             if (!string.IsNullOrEmpty(status))
-                // Đã sửa lỗi NameEn, chỉ dùng NameVi (tên trạng thái của bạn)
-                query = query.Where(o => o.StatusOrderNavigation.NameVi == status);
+                // ✅ Logic MỚI: Cho phép lọc theo NameVi HOẶC Code
+                query = query.Where(o =>
+                    o.StatusOrderNavigation.NameVi == status ||
+                    o.StatusOrderNavigation.Code == status
+                );
 
             // 2. Xử lý Tìm kiếm
             if (!string.IsNullOrEmpty(searchTerm))
@@ -78,7 +93,7 @@ namespace CB_Gift.Services
                 query = query.Where(o => o.OrderDate >= fromDate.Value);
 
             if (toDate.HasValue)
-                query = query.Where(o => o.OrderDate <= toDate.Value);
+                query = query.Where(o => o.OrderDate < toDate.Value);
 
 
             // 3. Đếm tổng số lượng (sau khi lọc, trước khi phân trang)
@@ -183,7 +198,32 @@ namespace CB_Gift.Services
             var dto = await query
             .ProjectTo<OrderWithDetailsDto>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync();
+            // Nếu không tìm thấy đơn (hoặc không thuộc về seller này), trả về null luôn
+            if (dto == null) return null;
 
+            // 3. 👇 BỔ SUNG: Truy vấn thủ công bảng Refunds và CancellationRequests
+            // (Copy logic từ GetManagerOrderDetailAsync sang)
+
+            var latestRefund = await _context.Refunds
+                .Where(r => r.OrderId == orderId)
+                .OrderByDescending(r => r.CreatedAt)
+                .FirstOrDefaultAsync();
+
+
+            // 4. 👇 BỔ SUNG: Điền dữ liệu vào DTO
+
+            // --- Ưu tiên 1: Xử lý Hoàn tiền (Refund) ---
+            if (latestRefund != null)
+            {
+                dto.LatestRefundId = latestRefund.RefundId;
+                dto.IsRefundPending = (latestRefund.Status == "Pending");
+                dto.RefundAmount = latestRefund.Amount;
+
+                // Lấy lý do và bằng chứng
+                dto.Reason = latestRefund.Reason; // Lý do Seller gửi
+                dto.RejectionReason = latestRefund.StaffRejectionReason; // Lý do Staff từ chối
+                dto.ProofUrl = latestRefund.ProofUrl; // Link bằng chứng
+            }
             return dto;
         }
 
@@ -335,40 +375,189 @@ namespace CB_Gift.Services
             }
         }
 
+        //public async Task<MakeOrderResponse> MakeOrder(MakeOrderDto request, string sellerUserId)
+        //{ // Step1: Tạo Endcustomer
+        //    int customerId;
+        //    var newEndCustomer = _mapper.Map<EndCustomer>(request.CustomerInfo);
+        //    _context.EndCustomers.Add(newEndCustomer);
+        //    await _context.SaveChangesAsync();
+        //    customerId = newEndCustomer.CustId;
+        //    //Step2: tạo order
+        //    var order = _mapper.Map<Order>(request.OrderCreate);
+        //    order.SellerUserId = sellerUserId;
+        //    order.EndCustomerId = customerId;
+        //    //order.OrderDate = DateTime.Now; // ẩn đi vì khi tạo chỉ là draft thi lưu vào creation date rồi
+        //    order.ProductionStatus = "Created";
+        //    order.StatusOrder = 1;
+        //    // Nếu ActiveTTS = true thì cộng thêm CostScan vào tổng
+        //    decimal totalCost = 0;
+        //    if (order.ActiveTts == true)
+        //    {
+        //        totalCost += 1;
+        //    }
+        //    _context.Orders.Add(order);
+        //    await _context.SaveChangesAsync();
+        //    // Step 3: Thêm các OrderDetail
+        //    var details = new List<OrderDetail>();
+
+        //    foreach (var item in request.OrderDetails)
+        //    {
+        //        var variant = await _context.ProductVariants
+        //            .FirstOrDefaultAsync(v => v.ProductVariantId == item.ProductVariantID);
+
+        //        if (variant == null) throw new Exception("ProductVariant not found.");
+
+        //        decimal price = item.Price ?? 0;     // Dùng đúng giá FE gửi
+        //        totalCost += price * item.Quantity;  // FE đã tính unitPrice chuẩn
+
+
+        //        var detail = new OrderDetail
+        //        {
+        //            OrderId = order.OrderId,
+        //            ProductVariantId = item.ProductVariantID,
+        //            Quantity = item.Quantity,
+        //            LinkImg = item.LinkImg,
+        //            NeedDesign = item.NeedDesign,
+        //            LinkThanksCard = item.LinkThanksCard,
+        //            LinkFileDesign = item.LinkDesign,
+        //            Accessory = item.Accessory,
+        //            Note = item.Note,
+        //            Price = price,
+        //            CreatedDate = DateTime.UtcNow,
+        //            ProductionStatus = ProductionStatus.DRAFT
+        //        };
+        //        details.Add(detail);
+        //    }
+
+        //    _context.OrderDetails.AddRange(details);
+        //    order.TotalCost = totalCost;
+        //    await _context.SaveChangesAsync();
+
+        //    // Step 4: Chuẩn bị dữ liệu trả về
+        //    var response = new MakeOrderResponse
+        //    {
+        //        OrderId = order.OrderId,
+        //        OrderCode = order.OrderCode ?? null,
+        //        TotalCost = totalCost,
+        //        CustomerName = request.CustomerInfo.Name,
+        //        Details = details.Select(d => new MakeOrderDetailResponse
+        //        {
+        //            ProductVariantID = d.ProductVariantId,
+        //            Quantity = d.Quantity,
+        //            Price = d.Price ?? 0
+        //        }).ToList()
+        //    };
+
+        //    return response;
+        //}
+
+        //public async Task<MakeOrderResponse> MakeOrder(MakeOrderDto request, string sellerUserId)
+        //{
+        //    // Step 1: Tạo Endcustomer
+        //    var newEndCustomer = _mapper.Map<EndCustomer>(request.CustomerInfo);
+        //    _context.EndCustomers.Add(newEndCustomer);
+        //    await _context.SaveChangesAsync();
+        //    int customerId = newEndCustomer.CustId;
+
+        //    // Step 2: Tạo Order
+        //    var order = _mapper.Map<Order>(request.OrderCreate);
+        //    order.SellerUserId = sellerUserId;
+        //    order.EndCustomerId = customerId;
+        //    order.ProductionStatus = "Created";
+        //    order.StatusOrder = 1;
+
+        //    // 💥 Lấy đúng totalCost từ FE (FE đã tính chuẩn)
+        //    decimal totalCost = request.OrderCreate.TotalCost ?? 0;
+
+        //    _context.Orders.Add(order);
+        //    await _context.SaveChangesAsync();
+
+        //    // Step 3: Thêm OrderDetail
+        //    var details = new List<OrderDetail>();
+
+        //    foreach (var item in request.OrderDetails)
+        //    {
+        //        // Không cần lấy variant, không cần tính baseCost/shipCost
+        //        // FE đã gửi chính xác price rồi
+
+        //        var detail = new OrderDetail
+        //        {
+        //            OrderId = order.OrderId,
+        //            ProductVariantId = item.ProductVariantID,
+        //            Quantity = item.Quantity,
+        //            LinkImg = item.LinkImg,
+        //            NeedDesign = item.NeedDesign,
+        //            LinkThanksCard = item.LinkThanksCard,
+        //            LinkFileDesign = item.LinkDesign,
+        //            Accessory = item.Accessory,
+        //            Note = item.Note,
+        //            Price = item.Price, // 💥 đúng giá FE gửi
+        //            CreatedDate = DateTime.UtcNow,
+        //            ProductionStatus = ProductionStatus.DRAFT
+        //        };
+
+        //        details.Add(detail);
+        //    }
+
+        //    _context.OrderDetails.AddRange(details);
+
+        //    // Lưu totalCost từ FE
+        //    order.TotalCost = totalCost;
+
+        //    await _context.SaveChangesAsync();
+
+        //    // Step 4: Response
+        //    var response = new MakeOrderResponse
+        //    {
+        //        OrderId = order.OrderId,
+        //        OrderCode = order.OrderCode,
+        //        TotalCost = totalCost,
+        //        CustomerName = request.CustomerInfo.Name,
+        //        Details = details.Select(d => new MakeOrderDetailResponse
+        //        {
+        //            ProductVariantID = d.ProductVariantId,
+        //            Quantity = d.Quantity,
+        //            Price = d.Price ?? 0
+        //        }).ToList()
+        //    };
+
+        //    return response;
+        //}
+
         public async Task<MakeOrderResponse> MakeOrder(MakeOrderDto request, string sellerUserId)
-        { // Step1: Tạo Endcustomer
-            int customerId;
+        {
+            // Step 1: Tạo Endcustomer
             var newEndCustomer = _mapper.Map<EndCustomer>(request.CustomerInfo);
             _context.EndCustomers.Add(newEndCustomer);
             await _context.SaveChangesAsync();
-            customerId = newEndCustomer.CustId;
-            //Step2: tạo order
+            int customerId = newEndCustomer.CustId;
+
+            // Step 2: Tạo Order
             var order = _mapper.Map<Order>(request.OrderCreate);
             order.SellerUserId = sellerUserId;
             order.EndCustomerId = customerId;
-            order.OrderDate = DateTime.Now;
             order.ProductionStatus = "Created";
             order.StatusOrder = 1;
-            // Nếu ActiveTTS = true thì cộng thêm CostScan vào tổng
-            decimal totalCost = 0;
-            if (order.ActiveTts == true)
-            {
-                totalCost += 1;
-            }
+
+            // FE gửi totalCost đã tính đúng → GIỮ NGUYÊN
+            decimal totalCost = request.OrderCreate.TotalCost ?? 0;
+
             _context.Orders.Add(order);
             await _context.SaveChangesAsync();
-            // Step 3: Thêm các OrderDetail
+
+            // Step 3: Thêm OrderDetail
             var details = new List<OrderDetail>();
 
             foreach (var item in request.OrderDetails)
             {
+                // 💥 Lấy baseCost của variant từ DB
                 var variant = await _context.ProductVariants
                     .FirstOrDefaultAsync(v => v.ProductVariantId == item.ProductVariantID);
 
-                if (variant == null) throw new Exception("ProductVariant not found.");
+                if (variant == null)
+                    throw new Exception("ProductVariant not found.");
 
-                decimal price = (variant.BaseCost ?? 0) + (variant.ShipCost ?? 0);
-                totalCost += price * item.Quantity;
+                decimal baseCost = variant.BaseCost ?? 0; // ✔ BaseCost chuẩn
 
                 var detail = new OrderDetail
                 {
@@ -381,33 +570,44 @@ namespace CB_Gift.Services
                     LinkFileDesign = item.LinkDesign,
                     Accessory = item.Accessory,
                     Note = item.Note,
-                    Price = price,
-                    CreatedDate = DateTime.UtcNow
+
+                    // 💥 Insert PRICE = BASE COST (không dùng FE gửi)
+                    Price = baseCost,
+
+                    CreatedDate = DateTime.UtcNow,
+                    ProductionStatus = ProductionStatus.DRAFT
                 };
+
                 details.Add(detail);
             }
 
             _context.OrderDetails.AddRange(details);
+
+            // Lưu totalCost từ FE
             order.TotalCost = totalCost;
             await _context.SaveChangesAsync();
 
-            // Step 4: Chuẩn bị dữ liệu trả về
+            // Step 4: Response
             var response = new MakeOrderResponse
             {
                 OrderId = order.OrderId,
-                OrderCode = order.OrderCode ?? null,
+                OrderCode = order.OrderCode,
                 TotalCost = totalCost,
                 CustomerName = request.CustomerInfo.Name,
                 Details = details.Select(d => new MakeOrderDetailResponse
                 {
                     ProductVariantID = d.ProductVariantId,
                     Quantity = d.Quantity,
+
+                    // 💥 Response trả đúng BASE COST
                     Price = d.Price ?? 0
                 }).ToList()
             };
 
             return response;
         }
+
+
         public async Task<MakeOrderResponse> UpdateOrderAsync(int orderId, OrderUpdateDto request, string sellerUserId)
         {
             // Step 1: Tìm đơn hàng và kiểm tra điều kiện
@@ -622,7 +822,7 @@ namespace CB_Gift.Services
             ProductionStatus action,
             string sellerId,
             string? reason)
-            {
+        {
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
@@ -780,6 +980,8 @@ namespace CB_Gift.Services
                 // Giả định 7 là Order Status cho CONFIRMED/READY_PROD
                 const int READY_PROD_ORDER_STATUS = 7;
                 order.StatusOrder = READY_PROD_ORDER_STATUS;
+                // cập nhật trạng thái order được confirm
+                order.OrderDate = DateTime.Now;
 
                 // 4. Cập nhật HÀNG LOẠT ProductionStatus của các OrderDetail
                 foreach (var detail in order.OrderDetails)
@@ -822,6 +1024,9 @@ namespace CB_Gift.Services
         {
             var order = await _context.Orders
                                       .Include(o => o.OrderDetails)
+                                        .ThenInclude(od => od.ProductVariant)
+                                        .ThenInclude(pv => pv.Product)
+                                      .Include(o => o.EndCustomer)
                                       .FirstOrDefaultAsync(o => o.OrderId == orderId);
 
             if (order == null)
@@ -839,6 +1044,16 @@ namespace CB_Gift.Services
                 };
             }
 
+            if (order.EndCustomer == null)
+            {
+                return new ApproveOrderResult { IsSuccess = false, ErrorMessage = "Customer information is missing." };
+            }
+
+            // Validate District/Ward
+            if (order.ToDistrictId == null || string.IsNullOrEmpty(order.ToWardCode))
+            {
+                return new ApproveOrderResult { IsSuccess = false, ErrorMessage = "Missing District ID or Ward Code for shipping." };
+            }
 
             bool allDetailsQcDone = order.OrderDetails.All(d => d.ProductionStatus == ProductionStatus.QC_DONE);
 
@@ -851,11 +1066,40 @@ namespace CB_Gift.Services
                     ErrorMessage = "Not all products have passed QC (Status QC_DONE)."
                 };
             }
-            //order.StatusOrder = (int)ProductionStatus.PACKING;
-            order.StatusOrder = 14; // chuyển trạng thái là đã ship
+
+            var orderShippingRequest = new CreateOrderRequest
+            {
+                ToName = order.EndCustomer.Name,
+                ToPhone = order.EndCustomer.Phone,
+                ToAddress = order.EndCustomer.Address,
+                ToDistrictId = order.ToDistrictId.Value,
+                ToWardCode = order.ToWardCode,
+                WeightInGrams = (int)Math.Ceiling(order.OrderDetails.Sum(od => (od.ProductVariant.WeightGram ?? 0m) * od.Quantity)),
+                Length = (int)Math.Ceiling(order.OrderDetails.Max(od => od.ProductVariant.LengthCm ?? 0m)),
+                Width = (int)Math.Ceiling(order.OrderDetails.Max(od => od.ProductVariant.WidthCm ?? 0m)),
+                Height = (int)Math.Ceiling(order.OrderDetails.Sum(od => (od.ProductVariant.HeightCm ?? 0m) * od.Quantity)),
+                Items = order.OrderDetails.Select(od => new OrderItemRequest
+                {
+                    Name = od.ProductVariant.Product.ProductName,
+                    Quantity = od.Quantity,
+                    Weight = (int)Math.Ceiling((od.ProductVariant.WeightGram ?? 0m) * od.Quantity)
+                }).ToList()
+            };
+
 
             try
             {
+                var shippingResult = await _shippingService.CreateOrderAsync(orderShippingRequest);
+                if (shippingResult == null || string.IsNullOrEmpty(shippingResult.OrderCode))
+                {
+                    return new ApproveOrderResult
+                    {
+                        IsSuccess = false,
+                        ErrorMessage = "Lỗi tạo đơn vận chuyển: Không nhận được Mã Vận Đơn từ hệ thống."
+                    };
+                }
+                order.Tracking = shippingResult.OrderCode;
+                order.StatusOrder = 13; // OrderStatus.Shipping;
                 _context.Orders.Update(order);
                 await _context.SaveChangesAsync();
                 // ✅ BẮT ĐẦU GỬI THÔNG BÁO
@@ -864,7 +1108,7 @@ namespace CB_Gift.Services
                     // 1. Gửi thông báo (chuông) cho Seller
                     await _notificationService.CreateAndSendNotificationAsync(
                         order.SellerUserId,
-                        $"Đơn hàng #{orderId} của bạn đã được giao.",
+                        $"Đơn hàng #{orderId} của bạn đang tiến hành giao. Mã vận đơn: {order.Tracking}",
                         $"/seller/orders/{orderId}"
                     );
 
@@ -872,7 +1116,7 @@ namespace CB_Gift.Services
                     var orderGroupName = $"order_{orderId}";
                     await _hubContext.Clients.Group(orderGroupName).SendAsync(
                         "OrderStatusChanged",
-                        new { orderId = orderId, newStatus = "SHIPPED" } // Giả sử 14 là Shipped
+                        new { orderId = orderId, newStatus = "SHIPPING", trackingCode = order.Tracking } // Giả sử 13 là Shipping
                     );
                 }
                 catch (Exception ex)
@@ -897,7 +1141,7 @@ namespace CB_Gift.Services
             var statusCounts = await _context.Orders
                 .AsNoTracking()
                 .Where(o => o.SellerUserId == sellerUserId)
-                .GroupBy(o => o.StatusOrderNavigation.NameVi)
+                .GroupBy(o => o.StatusOrderNavigation.Code)   // Dùng status CODE
                 .Select(g => new { Status = g.Key, Count = g.Count() })
                 .ToListAsync();
 
@@ -907,61 +1151,89 @@ namespace CB_Gift.Services
 
             int total = dict.Values.Sum();
 
-            // --- Gom nhóm cho 4 cục lớn ---
-            var needActionStatuses = new[] { "Cần Design", "Cần Check Design" };
-            var urgentStatuses = new[] { "Thiết kế Lại (Design Lỗi)", "Sản xuất Lại", "Cancel", "Hoàn Hàng" };
-            var completedStatuses = new[] { "Sản xuất Xong", "Đã Kiểm tra Chất lượng", "Đã Ship" };
 
-            int needActionCount = needActionStatuses.Sum(s => dict.ContainsKey(s) ? dict[s] : 0);
-            int urgentCount = urgentStatuses.Sum(s => dict.ContainsKey(s) ? dict[s] : 0);
-            int completedCount = completedStatuses.Sum(s => dict.ContainsKey(s) ? dict[s] : 0);
-
-            // --- Gom theo từng giai đoạn dropdown ---
-            var designStage = new[] { "Cần Design", "Cần Check Design", "Thiết kế Lại (Design Lỗi)" };
-            var productionStage = new[] { "Sẵn sàng Sản xuất", "Đang Sản xuất", "Sản xuất Xong", "Sản xuất Lại", "Lỗi Sản xuất (Cần Rework)" };
-            var shippingStage = new[] { "Đang Đóng gói", "Đã Kiểm tra Chất lượng", "Đã Ship", "Hoàn Hàng" };
-            var otherStage = new[] { "Tạm Dừng/Chờ", "Cancel", "Draft (Nháp)" };
-
-            var stageGroups = new Dictionary<string, List<OrderStatsDto.StatusCountItem>>
+            // ================== PHASES ==================
+            var designPhase = new[]
             {
-                ["Design Phase"] = designStage
-                    .Where(s => dict.ContainsKey(s))
-                    .Select(s => new OrderStatsDto.StatusCountItem { Status = s, Count = dict[s] })
-                    .ToList(),
-                ["Manufacture Phase"] = productionStage
-                    .Where(s => dict.ContainsKey(s))
-                    .Select(s => new OrderStatsDto.StatusCountItem { Status = s, Count = dict[s] })
-                    .ToList(),
-                ["Delivery Phase"] = shippingStage
-                    .Where(s => dict.ContainsKey(s))
-                    .Select(s => new OrderStatsDto.StatusCountItem { Status = s, Count = dict[s] })
-                    .ToList(),
-                ["Ohters"] = otherStage
-                    .Where(s => dict.ContainsKey(s))
-                    .Select(s => new OrderStatsDto.StatusCountItem { Status = s, Count = dict[s] })
-                    .ToList(),
+                "DRAFT", "NEEDDESIGN", "DESIGNING",
+                "CHECKDESIGN", "DESIGN_REDO", "CONFIRMED"
             };
 
+            var manufacturePhase = new[]
+            {
+                "READY_PROD", "INPROD", "FINISHED",
+                "PROD_REWORK", "QC_DONE", "QC_FAIL"
+            };
+
+            var deliveryPhase = new[]
+            {
+                "SHIPPING", "SHIPPED"
+            };
+
+            var refundPhase = new[]
+            {
+                "HOLD_RF", "HOLD_RP", "REFUND"
+            };
+
+            // ================== GROUP OBJECT ==================
+            var stageGroups = new Dictionary<string, List<OrderStatsDto.StatusCountItem>>
+            {
+                ["Design Phase"] = designPhase
+          .Select(s => new OrderStatsDto.StatusCountItem
+          {
+              Status = s,
+              Count = dict.ContainsKey(s) ? dict[s] : 0
+          })
+          .ToList(),
+
+                ["Manufacture Phase"] = manufacturePhase
+          .Select(s => new OrderStatsDto.StatusCountItem
+          {
+              Status = s,
+              Count = dict.ContainsKey(s) ? dict[s] : 0
+          })
+          .ToList(),
+
+                ["Delivery Phase"] = deliveryPhase
+          .Select(s => new OrderStatsDto.StatusCountItem
+          {
+              Status = s,
+              Count = dict.ContainsKey(s) ? dict[s] : 0
+          })
+          .ToList(),
+
+                ["Refund / Reprint Phase"] = refundPhase
+          .Select(s => new OrderStatsDto.StatusCountItem
+          {
+              Status = s,
+              Count = dict.ContainsKey(s) ? dict[s] : 0
+          })
+          .ToList()
+            };
+
+
+            // ================== RETURN DTO ==================
             return new OrderStatsDto
             {
                 Total = total,
                 StatusCounts = dict,
-                NeedActionCount = needActionCount,
-                UrgentCount = urgentCount,
-                CompletedCount = completedCount,
+                NeedActionCount = 0,
+                UrgentCount = 0,
+                CompletedCount = 0,
                 StageGroups = stageGroups
             };
         }
 
         public async Task<(IEnumerable<OrderWithDetailsDto> Orders, int Total)> GetFilteredAndPagedOrdersAsync(
-    string? status,
-    string? searchTerm,
-    string? sortColumn,
-    string? sortDirection,
-    DateTime? fromDate,
-    DateTime? toDate,
-    int page,
-    int pageSize)
+            string? status,
+            string? searchTerm,
+            string? sortColumn,
+            string? sellerId,
+            string? sortDirection,
+            DateTime? fromDate,
+            DateTime? toDate,
+            int page,
+            int pageSize)
         {
             // ví dụ code
             var query = _context.Orders
@@ -969,6 +1241,7 @@ namespace CB_Gift.Services
                 .Include(o => o.StatusOrderNavigation)
                 .Include(o => o.OrderDetails)
                     .ThenInclude(od => od.ProductVariant)
+                    .ThenInclude(pv => pv.Product)
                 .AsQueryable();
 
             if (!string.IsNullOrEmpty(status))
@@ -981,22 +1254,117 @@ namespace CB_Gift.Services
 
             if (fromDate.HasValue && toDate.HasValue)
                 query = query.Where(o => o.OrderDate >= fromDate && o.OrderDate <= toDate);
-
+            if (!string.IsNullOrEmpty(sellerId))
+            {
+                // Hàm này sẽ lọc theo SellerUserId trên bảng Order
+                query = query.Where(o => o.SellerUserId == sellerId);
+            }
             int total = await query.CountAsync();
+            // --- 3. SẮP XẾP (SORTING) ---
+            // Kiểm tra hướng sắp xếp
+            bool isAscending = string.Equals(sortDirection, "asc", StringComparison.OrdinalIgnoreCase);
 
+            // Ánh xạ 'sortColumn' string sang biểu thức OrderBy
+            // Chúng ta gán lại biến 'query' với phiên bản đã được sắp xếp
+            switch (sortColumn?.ToLower())
+            {
+                case "ordercode":
+                    query = isAscending
+                        ? query.OrderBy(o => o.OrderCode)
+                        : query.OrderByDescending(o => o.OrderCode);
+                    break;
+
+                case "customername": // Sắp xếp theo bảng quan hệ
+                    query = isAscending
+                        ? query.OrderBy(o => o.EndCustomer.Name)
+                        : query.OrderByDescending(o => o.EndCustomer.Name);
+                    break;
+
+                case "totalcost":
+                    query = isAscending
+                        ? query.OrderBy(o => o.TotalCost)
+                        : query.OrderByDescending(o => o.TotalCost);
+                    break;
+
+                case "orderdate":
+                default: // Mặc định sắp xếp theo OrderDate (ngày đặt hàng)
+                    query = isAscending
+                        ? query.OrderBy(o => o.OrderDate)
+                        : query.OrderByDescending(o => o.OrderDate);
+                    break;
+            }
             var orders = await query
-                .OrderByDescending(o => o.CreationDate)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ProjectTo<OrderWithDetailsDto>(_mapper.ConfigurationProvider)
-                .ToListAsync();
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(o => new OrderWithDetailsDto
+            {
+                OrderId = o.OrderId,
+                OrderCode = o.OrderCode,
+                OrderDate = o.OrderDate,
+                CustomerId = o.EndCustomerId,
+                CustomerName = o.EndCustomer.Name,
+                Phone = o.EndCustomer.Phone,
+                Email = o.EndCustomer.Email,
+                Address = o.EndCustomer.Address,
+                SellerId = o.SellerUserId,
+                SellerName = o.SellerUser.FullName,
+                CreationDate = o.CreationDate ?? o.OrderDate,
+                TotalCost = o.TotalCost,
+                PaymentStatus = o.PaymentStatus,
+                ProductionStatus = o.ProductionStatus,
+                ActiveTTS = o.ActiveTts,
+                Tracking = o.Tracking,
+                StatusOrder = o.StatusOrder,
+                StatusOderName = o.StatusOrderNavigation.Code,
 
+                // --- ⭐ THÊM LOGIC TÍNH TOÁN CÁC TRƯỜNG MỚI ---
+
+                // Lấy lý do YÊU CẦU (của Seller)
+                Reason = (o.StatusOrder == 16) // 16 = HOLD
+                    ? (from cr in _context.CancellationRequests
+                       where cr.OrderId == o.OrderId
+                       orderby cr.CreatedAt descending
+                       select cr.RequestReason).FirstOrDefault()
+                : (o.StatusOrder == 18) // 18 = REFUNDED
+                    ? (from rf in _context.Refunds
+                       where rf.OrderId == o.OrderId
+                       orderby rf.CreatedAt descending
+                       select rf.Reason).FirstOrDefault()
+                : null,
+
+                // Lấy lý do TỪ CHỐI (của Staff)
+                RejectionReason = (
+                    (from cr in _context.CancellationRequests
+                     where cr.OrderId == o.OrderId && cr.Status == "Rejected"
+                     orderby cr.ReviewedAt descending
+                     select cr.RejectionReason).FirstOrDefault()
+                ) ?? (
+                    (from rf in _context.Refunds
+                     where rf.OrderId == o.OrderId && rf.Status == "Rejected"
+                     orderby rf.ReviewedAt descending
+                     select rf.StaffRejectionReason).FirstOrDefault()
+                ),
+
+                // Lấy thông tin Refund mới nhất (nếu có)
+                LatestRefundId = (from rf in _context.Refunds
+                                  where rf.OrderId == o.OrderId
+                                  orderby rf.CreatedAt descending
+                                  select (int?)rf.RefundId).FirstOrDefault(), // (int?) để cho phép null
+
+                RefundAmount = (from rf in _context.Refunds
+                                where rf.OrderId == o.OrderId
+                                orderby rf.CreatedAt descending
+                                select (decimal?)rf.Amount).FirstOrDefault(), // (decimal?) để cho phép null
+
+                // ⭐ ĐÁNH DẤU TRUE NẾU CÓ 1 YÊU CẦU ĐANG "PENDING"
+                IsRefundPending = _context.Refunds.Any(r => r.OrderId == o.OrderId && r.Status == "Pending")
+            }).ToListAsync();
             return (orders, total);
         }
         public async Task<(IEnumerable<OrderWithDetailsDto> Orders, int Total)> GetFilteredAndPagedOrdersForInvoiceAsync(
             string? status, // status theo CODE
             string? searchTerm,
-            string? seller, 
+            string? seller,
             string? sortColumn,
             string? sortDirection,
             DateTime? fromDate,
@@ -1008,9 +1376,14 @@ namespace CB_Gift.Services
             var query = _context.Orders
                 .Include(o => o.EndCustomer)
                 .Include(o => o.StatusOrderNavigation)
-                .Include(o=>o.SellerUser)
+                .Include(o => o.SellerUser)
                 .Include(o => o.OrderDetails)
                     .ThenInclude(od => od.ProductVariant)
+                .Where(o =>
+                    o.StatusOrder >= 10 &&
+                    o.StatusOrder <= 15 &&
+                    !o.OrderDetails.Any(od => od.ProductionStatus == null || od.ProductionStatus < ProductionStatus.FINISHED)
+                )
                 .AsQueryable();
 
             // 1. Lọc theo Status
@@ -1043,7 +1416,8 @@ namespace CB_Gift.Services
 
             if (!string.IsNullOrEmpty(seller))
             {
-                projectedQuery = projectedQuery.Where(dto => dto.SellerName == seller);
+                projectedQuery = projectedQuery.Where(dto => dto.SellerId == seller ||
+                                                     dto.SellerName == seller);
             }
 
             // 5. Lấy tổng số (sau khi đã lọc)
@@ -1107,11 +1481,237 @@ namespace CB_Gift.Services
 
             return sellerNames;
         }
+        public async Task<OrderWithDetailsDto?> GetManagerOrderDetailAsync(int orderId)
+        {
+            // BƯỚC 1: Lấy thông tin Order gốc (Giữ nguyên các Include cũ, KHÔNG Include Refund/Cancel)
+            var orderEntity = await _context.Orders
+                .Include(o => o.EndCustomer)
+                .Include(o => o.StatusOrderNavigation)
+                .Include(o => o.OrderDetails)
+                    .ThenInclude(od => od.ProductVariant)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(o => o.OrderId == orderId);
 
+            if (orderEntity == null) return null;
 
+            // BƯỚC 2: Map sang DTO (Sử dụng AutoMapper như bình thường)
+            var dto = _mapper.Map<OrderWithDetailsDto>(orderEntity);
 
+            // BƯỚC 3: Truy vấn thủ công bảng Refunds (Tìm theo OrderId)
+            // Vì không có Navigation Property nên ta query trực tiếp từ DbSet _context.Refunds
+            var latestRefund = await _context.Refunds
+                .Where(r => r.OrderId == orderId)
+                .OrderByDescending(r => r.CreatedAt)
+                .FirstOrDefaultAsync();
 
+            // BƯỚC 5: Logic điền dữ liệu vào DTO (Mapping thủ công các trường manager cần)
 
+            // --- Xử lý logic Hoàn tiền (Refund) ---
+            if (latestRefund != null)
+            {
+                dto.LatestRefundId = latestRefund.RefundId;
+                dto.IsRefundPending = (latestRefund.Status == "Pending"); // Hoặc check null tùy logic của bạn
+                dto.RefundAmount = latestRefund.Amount;
+
+                // Reason: Lý do Seller/Khách yêu cầu
+                dto.Reason = latestRefund.Reason;
+                dto.ProofUrl = latestRefund.ProofUrl;
+                // RejectionReason: Lý do Staff từ chối
+                dto.RejectionReason = latestRefund.StaffRejectionReason;
+
+                // Nếu trạng thái Order đang là Refunded hoặc Refund Pending, ưu tiên hiển thị lý do Refund
+
+            }
+            return dto;
+        }
+
+        private DateTime? GetDateTimeSafe(IXLCell cell)
+        {
+            if (cell == null || cell.IsEmpty())
+                return null;
+
+            // Nếu là DateTime / Number chuẩn của Excel
+            if (cell.DataType == XLDataType.DateTime || cell.DataType == XLDataType.Number)
+            {
+                try
+                {
+                    return cell.GetDateTime();
+                }
+                catch
+                {
+                    // bỏ qua, thử parse string bên dưới
+                }
+            }
+
+            var text = cell.GetString().Trim();
+            if (string.IsNullOrWhiteSpace(text))
+                return null;
+
+            // Thử parse tự do
+            if (DateTime.TryParse(text, out var dt))
+                return dt;
+
+            return null;
+        }
+
+        private bool? GetBoolSafe(IXLCell cell)
+        {
+            if (cell == null || cell.IsEmpty())
+                return null;
+
+            if (cell.DataType == XLDataType.Boolean)
+                return cell.GetBoolean();
+
+            var text = cell.GetString().Trim().ToLower();
+            if (text == "true" || text == "1" || text == "yes" || text == "y")
+                return true;
+            if (text == "false" || text == "0" || text == "no" || text == "n")
+                return false;
+
+            return null;
+        }
+
+        private decimal? GetDecimalSafe(IXLCell cell)
+        {
+            if (cell == null || cell.IsEmpty())
+                return null;
+
+            if (cell.DataType == XLDataType.Number)
+                return (decimal)cell.GetDouble();
+
+            var text = cell.GetString().Trim();
+            if (decimal.TryParse(text, out var value))
+                return value;
+
+            return null;
+        }
+
+        private int GetIntSafe(IXLCell cell, int defaultValue = 0)
+        {
+            if (cell == null || cell.IsEmpty())
+                return defaultValue;
+
+            if (cell.DataType == XLDataType.Number)
+                return (int)cell.GetDouble();
+
+            var text = cell.GetString().Trim();
+            if (int.TryParse(text, out var value))
+                return value;
+
+            return defaultValue;
+        }
+        private static string? Clean(string? s)
+        {
+            if (string.IsNullOrWhiteSpace(s))
+                return null;
+
+            // Loại mọi whitespace unicode
+            var cleaned = System.Text.RegularExpressions.Regex.Replace(s, @"\s+", "");
+
+            return string.IsNullOrWhiteSpace(cleaned) ? null : cleaned.Trim();
+        }
+        public async Task<OrderImportResult> ImportFromExcelAsync(IFormFile file, string sellerUserId)
+        {
+            if (file == null || file.Length == 0)
+                throw new ArgumentException("File rỗng hoặc không tồn tại.", nameof(file));
+
+            // Đảm bảo cache đã load Product / ProductVariant
+            await _cache.LoadAsync();
+
+            var result = new OrderImportResult();
+
+            using var stream = file.OpenReadStream();
+            using var workbook = new XLWorkbook(stream);
+
+            // Ưu tiên sheet "Payments", nếu không có thì lấy sheet đầu tiên
+            IXLWorksheet worksheet;
+            if (!workbook.TryGetWorksheet("Payments", out worksheet))
+            {
+                worksheet = workbook.Worksheet(1);
+            }
+
+            var rows = worksheet.RangeUsed().RowsUsed().Skip(1); // bỏ header
+            result.TotalRows = rows.Count();
+
+            foreach (var row in rows)
+            {
+                var dto = new OrderImportRowDto
+                {
+                    RowNumber = row.RowNumber(),
+
+                    OrderID = row.Cell(1).GetString(),
+                    OrderCode = row.Cell(2).GetString(),
+
+                    OrderDate = DateTime.TryParse(row.Cell(3).GetString(), out var date)
+            ? date
+            : DateTime.UtcNow,
+                    CustomerName = row.Cell(4).GetString(),
+                    Phone = row.Cell(5).GetString(),
+                    Email = Clean(row.Cell(6).GetString()),
+                    Address = row.Cell(7).GetString(),
+                    Zipcode = row.Cell(24).GetString(),
+
+                    ShipState = row.Cell(23).GetString(),
+                    ShipCity = row.Cell(22).GetString(),
+                    ShipCountry = row.Cell(21).GetString(),
+
+                    PaymentStatus = row.Cell(12).GetString(),
+                    ActiveTTS = GetBoolSafe(row.Cell(25)),
+
+                    TotalCost = GetDecimalSafe(row.Cell(11)),
+                    StatusOrder = GetIntSafe(row.Cell(17), 0),
+                    Note = row.Cell(13).GetString(),
+                    ProductName = row.Cell(9).GetString(),
+                    SizeInch = row.Cell(8).GetString(),
+                    Accessory = row.Cell(17).GetString(),
+                    Quantity = GetIntSafe(row.Cell(10), 1),
+                    LinkImg = row.Cell(14).GetString(),
+                    LinkThanksCard = row.Cell(15).GetString(),
+                    LinkFileDesign = row.Cell(16).GetString(),
+
+                    TotalAmount = GetDecimalSafe(row.Cell(18)),
+                    OrderNotes = row.Cell(19).GetString(),
+                    TimeCreated = GetDateTimeSafe(row.Cell(20))
+                };
+
+                // Validate
+                var validation = await _validator.ValidateAsync(dto);
+
+                if (!validation.IsValid)
+                {
+                    result.Errors.Add(new OrderImportRowError
+                    {
+                        RowNumber = dto.RowNumber,
+                        Messages = validation.Errors
+                                              .Select(e => e.ErrorMessage)
+                                              .ToList()
+                    });
+                    continue; // bỏ qua dòng này
+                }
+
+                try
+                {
+                    var order = _orderFactory.CreateOrderEntityAsync(dto, sellerUserId);
+                    _context.Orders.Add(await order);
+                    result.SuccessCount++;
+                }
+                catch (Exception ex)
+                {
+                    result.Errors.Add(new OrderImportRowError
+                    {
+                        RowNumber = dto.RowNumber,
+                        Messages = new List<string> { $"Lỗi tạo Order: {ex.Message}" }
+                    });
+                }
+            }
+
+            if (result.SuccessCount > 0)
+            {
+                await _context.SaveChangesAsync();
+            }
+
+            return result;
+        }
 
     }
 }

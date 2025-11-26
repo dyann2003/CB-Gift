@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import apiClient from "../../lib/apiClient";
 import {
   Dialog,
   DialogContent,
@@ -75,7 +76,7 @@ export default function PasswordModal({ open, onOpenChange }) {
 
     try {
       const res = await fetch(
-        "https://localhost:7015/api/auth/change-password",
+        `${apiClient.defaults.baseURL}/api/auth/change-password`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

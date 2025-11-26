@@ -259,6 +259,147 @@ namespace CB_Gift.Services
 
             return (products.Count, updated);
         }
+
+        public async Task<(IEnumerable<ProductDto> products, int total)>
+   GetFilteredAndPagedProductsAsync(
+       string? searchTerm,
+       int? status,
+       string? sortColumn,
+       string? sortDirection,
+       int page,
+       int pageSize)
+        {
+            var query = _context.Products
+                .Include(p => p.Category)
+                .Include(p => p.ProductVariants)
+                .Include(p => p.Tags)
+                .AsNoTracking()
+                .AsQueryable();
+
+            // 🔍 Filter Status
+            if (status.HasValue)
+            {
+                query = query.Where(p => p.Status == status.Value);
+            }
+
+            // 🔍 Search
+            if (!string.IsNullOrEmpty(searchTerm))
+            {
+                searchTerm = searchTerm.ToLower();
+
+                query = query.Where(p =>
+                    p.ProductName.ToLower().Contains(searchTerm) ||
+                    (p.Category != null && p.Category.CategoryName.ToLower().Contains(searchTerm)) ||
+                    p.Tags.Any(t => t.TagName.ToLower().Contains(searchTerm) ||
+                                    t.TagCode.ToLower().Contains(searchTerm))
+                );
+            }
+
+            // 🔍 Sort
+            query = sortColumn?.ToLower() switch
+            {
+                "name" => sortDirection == "asc"
+                    ? query.OrderBy(p => p.ProductName)
+                    : query.OrderByDescending(p => p.ProductName),
+
+                "price" => sortDirection == "asc"
+                    ? query.OrderBy(p => p.ProductVariants.Min(v => (decimal?)v.TotalCost))
+                    : query.OrderByDescending(p => p.ProductVariants.Min(v => (decimal?)v.TotalCost)),
+
+                "category" => sortDirection == "asc"
+                    ? query.OrderBy(p => p.Category.CategoryName)
+                    : query.OrderByDescending(p => p.Category.CategoryName),
+
+                _ => query.OrderByDescending(p => p.ProductId)
+            };
+
+            // 📌 Total for pagination
+            var total = await query.CountAsync();
+
+            // 📌 Pagination
+            var result = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            // Mapping to ProductDto
+            var mapped = _mapper.Map<IEnumerable<ProductDto>>(result);
+
+            return (mapped, total);
+        }
+
+        public async Task<(int total, List<ProductDto> products)> FilterProductsAsync(
+    string? searchTerm,
+    string? category,
+    int? status,
+    int page,
+    int pageSize)
+        {
+            var query = _context.Products
+                .Include(p => p.Category)
+                .Include(p => p.ProductVariants)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                query = query.Where(p =>
+                    p.ProductName.Contains(searchTerm) ||
+                    (p.ProductCode != null && p.ProductCode.Contains(searchTerm)) ||
+                    (p.Describe != null && p.Describe.Contains(searchTerm))
+                );
+            }
+
+            if (!string.IsNullOrWhiteSpace(category))
+            {
+                query = query.Where(p => p.Category.CategoryName == category);
+            }
+
+            if (status.HasValue)
+            {
+                query = query.Where(p => p.Status == status);
+            }
+
+            var total = await query.CountAsync();
+
+            var list = await query
+                .OrderByDescending(p => p.ProductId)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(p => new ProductDto
+                {
+                    ProductId = p.ProductId,
+                    ProductName = p.ProductName,
+                    ProductCode = p.ProductCode,
+                    CategoryId = p.CategoryId,
+                    CategoryName = p.Category.CategoryName,
+                    Describe = p.Describe,
+                    ItemLink = p.ItemLink,
+                    Template = p.Template,
+                    Status = p.Status,
+                    Variants = p.ProductVariants.Select(v => new ProductVariantDto
+                    {
+                        ProductVariantId = v.ProductVariantId,
+                        LengthCm = v.LengthCm,
+                        HeightCm = v.HeightCm,
+                        WidthCm = v.WidthCm,
+                        WeightGram = v.WeightGram,
+                        ShipCost = v.ShipCost,
+                        BaseCost = v.BaseCost,
+                        ThicknessMm = v.ThicknessMm,
+                        SizeInch = v.SizeInch,
+                        Layer = v.Layer,
+                        CustomShape = v.CustomShape,
+                        Sku = v.Sku,
+                        ExtraShipping = v.ExtraShipping,
+                        TotalCost = v.TotalCost
+                    }).ToList()
+                })
+                .ToListAsync();
+
+            return (total, list);
+        }
+
+
     }
    
 }

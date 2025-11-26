@@ -511,6 +511,15 @@ namespace CB_Gift.Migrations
                         .HasColumnType("int")
                         .HasDefaultValue(1);
 
+                    b.Property<int?>("ToDistrictId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ToProvinceId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ToWardCode")
+                        .HasColumnType("longtext");
+
                     b.Property<decimal?>("TotalCost")
                         .HasColumnType("decimal(18, 2)");
 
@@ -970,7 +979,10 @@ namespace CB_Gift.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("varchar(100)");
 
-                    b.Property<int>("OrderId")
+                    b.Property<int?>("OrderDetailId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("OrderId")
                         .HasColumnType("int");
 
                     b.Property<string>("ProofUrl")
@@ -1001,6 +1013,8 @@ namespace CB_Gift.Migrations
 
                     b.HasKey("RefundId");
 
+                    b.HasIndex("OrderDetailId");
+
                     b.HasIndex("OrderId");
 
                     b.HasIndex("RequestedBySellerId");
@@ -1008,6 +1022,58 @@ namespace CB_Gift.Migrations
                     b.HasIndex("ReviewedByStaffId");
 
                     b.ToTable("Refunds");
+                });
+
+            modelBuilder.Entity("CB_Gift.Models.Reprint", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ManagerAcceptedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("varchar(450)");
+
+                    b.Property<int>("OriginalOrderDetailId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("Processed")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("ProofUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<DateTime>("RequestDate")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("RequestedBy")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("varchar(450)");
+
+                    b.Property<string>("StaffRejectionReason")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OriginalOrderDetailId");
+
+                    b.HasIndex("RequestedBy");
+
+                    b.ToTable("Reprints");
                 });
 
             modelBuilder.Entity("CB_Gift.Models.Tag", b =>
@@ -1520,11 +1586,13 @@ namespace CB_Gift.Migrations
 
             modelBuilder.Entity("CB_Gift.Models.Refund", b =>
                 {
+                    b.HasOne("CB_Gift.Models.OrderDetail", "OrderDetail")
+                        .WithMany()
+                        .HasForeignKey("OrderDetailId");
+
                     b.HasOne("CB_Gift.Models.Order", "Order")
                         .WithMany()
-                        .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("OrderId");
 
                     b.HasOne("CB_Gift.Data.AppUser", "RequestedBySeller")
                         .WithMany()
@@ -1538,9 +1606,30 @@ namespace CB_Gift.Migrations
 
                     b.Navigation("Order");
 
+                    b.Navigation("OrderDetail");
+
                     b.Navigation("RequestedBySeller");
 
                     b.Navigation("ReviewedByStaff");
+                });
+
+            modelBuilder.Entity("CB_Gift.Models.Reprint", b =>
+                {
+                    b.HasOne("CB_Gift.Models.OrderDetail", "OriginalOrderDetail")
+                        .WithMany()
+                        .HasForeignKey("OriginalOrderDetailId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CB_Gift.Data.AppUser", "RequestedByUser")
+                        .WithMany()
+                        .HasForeignKey("RequestedBy")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("OriginalOrderDetail");
+
+                    b.Navigation("RequestedByUser");
                 });
 
             modelBuilder.Entity("CB_Gift.Models.UploadedImage", b =>

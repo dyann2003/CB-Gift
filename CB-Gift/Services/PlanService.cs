@@ -11,9 +11,11 @@ namespace CB_Gift.Services
     public class PlanService : IPlanService
     {
         private readonly CBGiftDbContext _context;
+        private readonly ILogger<PlanService> _logger;
 
-        public PlanService(CBGiftDbContext context)
+        public PlanService(ILogger<PlanService> logger, CBGiftDbContext context)
         {
+            _logger = logger;
             _context = context ?? throw new ArgumentNullException(nameof(context));
         }
 
@@ -32,68 +34,79 @@ namespace CB_Gift.Services
         /// Gom đơn theo ProductVariantId (mỗi variant sẽ tạo 1 Plan riêng)
         public async Task GroupSubmittedOrdersAsync(string createdUserId)
         {
-            var orderDetailsToGroup = await GetSubmittedOrderDetailsAsync();
+            // 1. Ghi log thời gian bắt đầu chạy
+            var startTime = DateTime.UtcNow;
+            _logger.LogInformation("Job GroupSubmittedOrdersAsync STARTED at: {Time}", startTime);
 
-            if (!orderDetailsToGroup.Any())
+            try
             {
-                return;
-            }
+                var orderDetailsToGroup = await GetSubmittedOrderDetailsAsync();
 
-            // Gom đơn theo category 
-            var groupedByCategory = orderDetailsToGroup.GroupBy(od => od.ProductVariant.Product.CategoryId);
-
-            // Dùng một HashSet để lưu các Order cần cập nhật, tránh việc cập nhật trùng lặp
-            var ordersToUpdate = new HashSet<Order>();
-
-            foreach (var group in groupedByCategory)
-            {
-                // Tạo một Plan mới cho mỗi nhóm sản phẩm
-                var newPlan = new Plan
+                if (!orderDetailsToGroup.Any())
                 {
-                    CreateDate = DateTime.UtcNow,
-                    CreateByUserId = createdUserId,
-                    StartDatePlan = DateTime.UtcNow // Giả sử bắt đầu ngay khi tạo
-                };
-                _context.Plans.Add(newPlan);
+                    _logger.LogInformation("Job GroupSubmittedOrdersAsync SKIPPED. No orders to group.");
+                    return;
+                }
+                
+                var groupedByCategory = orderDetailsToGroup.GroupBy(od => od.ProductVariant.Product.CategoryId);
+                var ordersToUpdate = new HashSet<Order>();
 
-                // Với mỗi OrderDetail trong nhóm, tạo một PlanDetail tương ứng
-                foreach (var orderDetail in group)
+                int plansCreated = 0;
+
+                foreach (var group in groupedByCategory)
                 {
-                    var newPlanDetail = new PlanDetail
+                    var newPlan = new Plan
                     {
-                        Plan = newPlan,
-                        OrderDetailId = orderDetail.OrderDetailId,
-                        StatusOrder = 0, // Trạng thái ban đầu: pending
-                        NumberOfFinishedProducts = 0
+                        CreateDate = DateTime.UtcNow,
+                        CreateByUserId = createdUserId,
+                        StartDatePlan = DateTime.UtcNow
                     };
-                    _context.PlanDetails.Add(newPlanDetail);
+                    _context.Plans.Add(newPlan);
+                    plansCreated++;
 
-                    // Thêm Order cha của OrderDetail này vào danh sách cần cập nhật
-                    if (orderDetail.Order != null)
+                    foreach (var orderDetail in group)
                     {
-                        ordersToUpdate.Add(orderDetail.Order);
+                        var newPlanDetail = new PlanDetail
+                        {
+                            Plan = newPlan,
+                            OrderDetailId = orderDetail.OrderDetailId,
+                            StatusOrder = 0,
+                            NumberOfFinishedProducts = 0
+                        };
+                        _context.PlanDetails.Add(newPlanDetail);
+
+                        if (orderDetail.Order != null)
+                        {
+                            ordersToUpdate.Add(orderDetail.Order);
+                        }
                     }
                 }
-            }
 
-            // Cập nhật trạng thái cho tất cả các Order đã được gom
-            foreach (var order in ordersToUpdate)
-            {
-                order.StatusOrder = 8; // Chuyển trạng thái sang "Đã gom đơn"
-
-                // lấy danh sách của OrderDetails để cập nhật ProductionStatus
-                var orderDetails = await _context.OrderDetails
-                    .Where(od => od.OrderId == order.OrderId)
-                    .ToListAsync();
-
-                //cật nhật ProductionStatus của các OrderDetail thành READY_PROD
-                foreach (var detail in orderDetails)
+                foreach (var order in ordersToUpdate)
                 {
-                    detail.ProductionStatus = ProductionStatus.READY_PROD;
-                }
-            }
+                    order.StatusOrder = 8;
+                    var orderDetails = await _context.OrderDetails
+                        .Where(od => od.OrderId == order.OrderId)
+                        .ToListAsync();
 
-            await _context.SaveChangesAsync();
+                    foreach (var detail in orderDetails)
+                    {
+                        detail.ProductionStatus = ProductionStatus.READY_PROD;
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+
+                // 2. Ghi log khi hoàn thành thành công
+                var duration = DateTime.UtcNow - startTime;
+                _logger.LogInformation("Job GroupSubmittedOrdersAsync COMPLETED successfully. Created {PlanCount} plans. Processed {OrderCount} orders. Duration: {Duration}ms",
+                    plansCreated, ordersToUpdate.Count, duration.TotalMilliseconds);
+            }
+            catch (Exception ex)
+            {
+                // 3. Ghi log khi có lỗi (Quan trọng nhất)
+                _logger.LogError(ex, "Job GroupSubmittedOrdersAsync FAILED at: {Time}", DateTime.UtcNow);
+            }
         }
 
         public async Task<IEnumerable<StaffCategoryPlanViewDto>> GetPlansForStaffViewAsync(int? categoryId, DateTime? selectedDate, string status)
@@ -126,7 +139,8 @@ namespace CB_Gift.Services
                     //query = query.Where(pd => pd.StatusOrder == 0 || pd.StatusOrder == 1);
                     query = query.Where(pd => pd.OrderDetail.ProductionStatus == ProductionStatus.READY_PROD 
                     || pd.OrderDetail.ProductionStatus == ProductionStatus.IN_PROD 
-                    || pd.OrderDetail.ProductionStatus == ProductionStatus.PROD_REWORK);
+                    || pd.OrderDetail.ProductionStatus == ProductionStatus.PROD_REWORK
+                    || pd.OrderDetail.ProductionStatus == ProductionStatus.QC_FAIL);
                 }
                 else
                 {

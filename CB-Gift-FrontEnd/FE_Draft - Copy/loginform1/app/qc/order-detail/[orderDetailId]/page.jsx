@@ -5,54 +5,40 @@ import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label"; // ⭐ ĐẢM BẢO BẠN ĐÃ IMPORT LABEL
-import { Loader2 } from "lucide-react"; // ⭐ ĐẢM BẢO BẠN ĐÃ IMPORT LOADER
-import {apiClient} from "../../../lib/apiClient";
+import { Loader2, Printer } from "lucide-react";
+import apiClient from "../../../../lib/apiClient";
 
-// --- Giữ nguyên hàm map status cũ của bạn ---
-const mapProductionStatusToString = (statusId) => {
-  switch (statusId) {
-    case 0: return "DRAFT";
-    case 1: return "CREATED";
-    case 2: return "NEED_DESIGN";
-    case 3: return "DESIGNING";
-    case 4: return "CHECK_DESIGN";
-    case 5: return "DESIGN_REDO";
-    case 6: return "READY_PROD";
-    case 7: return "IN_PROD";
-    case 8: return "FINISHED"; // 8 = Chờ QC (theo code cũ của bạn)
-    case 9: return "QC_DONE"; // 9 = Accept (theo code cũ của bạn)
-    case 10: return "QC_FAIL";
-    case 11: return "PROD_REWORK"; // 11 = Reject (theo code cũ của bạn)
-    case 12: return "PACKING";
-    case 13: return "HOLD";
-    case 14: return "CANCELLED";
-    default: return "UNKNOWN";
-  }
+// --- MAPPING STATUS ---
+const STATUS_MAP = {
+  0: "DRAFT",
+  1: "CREATED",
+  2: "NEED_DESIGN",
+  3: "DESIGNING",
+  4: "CHECK_DESIGN",
+  5: "DESIGN_REDO",
+  6: "READY_PROD",
+  7: "IN_PROD",
+  8: "FINISHED",
+  9: "QC_DONE",
+  10: "QC_FAIL",
+  11: "PROD_REWORK",
+  12: "SHIPPING",
+  13: "HOLD",
+  14: "REFUND",
 };
 
-// --- Giữ nguyên hàm màu badge cũ của bạn ---
-const getStatusBadgeVariant = (statusString) => {
-  switch (statusString) {
-    case "QC_FAIL":
-    case "DESIGN_REDO":
-    case "PROD_REWORK":
-    case "CANCELLED":
-    case "HOLD":
-      return "destructive";
-    case "QC_DONE":
-    case "FINISHED":
-    case "PACKING":
-      return "success"; 
-    case "CHECK_DESIGN":
-    case "IN_PROD":
-    case "DESIGNING":
-      return "secondary";
-    case "READY_PROD":
-      return "default";
-    default:
-      return "outline";
+const STATUS_BADGE = {
+  destructive: ["QC_FAIL", "DESIGN_REDO", "PROD_REWORK", "REFUND", "HOLD"],
+  success: ["QC_DONE", "FINISHED", "SHIPPING"],
+  secondary: ["CHECK_DESIGN", "IN_PROD", "DESIGNING"],
+  default: ["READY_PROD"],
+};
+
+const getBadgeVariant = (status) => {
+  for (const key in STATUS_BADGE) {
+    if (STATUS_BADGE[key].includes(status)) return key;
   }
+  return "outline";
 };
 
 export default function OrderDetailPage() {
@@ -63,307 +49,279 @@ export default function OrderDetailPage() {
   const [orderDetail, setOrderDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false); // Thêm state loading
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
+
+  // --- FETCH ORDER DETAIL ---
+  const fetchOrderDetail = async () => {
+    try {
+      const res = await fetch(`${apiClient.defaults.baseURL}/api/OrderDetail/${orderDetailId}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setOrderDetail(data);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch order detail");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (!orderDetailId) return;
-
-    const fetchOrderDetail = async () => {
-      try {
-        const response = await fetch(`${apiClient}/api/OrderDetail/${orderDetailId}`);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        setOrderDetail(data);
-        setError(null);
-      } catch (err) {
-        console.error("Error fetching order detail:", err);
-        setError(err instanceof Error ? err.message : "Failed to fetch order detail");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchOrderDetail();
+    if (orderDetailId) fetchOrderDetail();
   }, [orderDetailId]);
 
   const fetchLatestData = async () => {
     try {
-        const updatedResponse = await fetch(`${apiClient}/api/OrderDetail/${orderDetailId}`);
-        if (updatedResponse.ok) {
-            const updatedData = await updatedResponse.json();
-            setOrderDetail(updatedData);
-        }
+      const res = await fetch(`${apiClient.defaults.baseURL}/api/OrderDetail/${orderDetailId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setOrderDetail(data);
+      }
     } catch (err) {
-        console.error("Error re-fetching order detail:", err);
+      console.error("Error refetching order detail:", err);
     }
-  }
+  };
 
-  // ⭐ HÀM ACCEPT ĐÃ CẬP NHẬT
+  // --- PRINT LABEL (SILENT PRINT VIA HTML) ---
+  const handlePrintA5 = async () => {
+    const trackingCode = orderDetail?.order?.tracking || orderDetail?.trackingCode;
+    if (!trackingCode) return alert("Đơn hàng này chưa có mã vận đơn (Tracking Code).");
+
+    setIsPrinting(true);
+
+    try {
+      const res = await fetch(`${apiClient.defaults.baseURL}/api/ShippingPrint/get-print-html`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ OrderCodes: [trackingCode], Size: "A5" }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Không thể lấy nội dung in");
+      
+      let htmlContent = data.htmlContent;
+      if (!htmlContent) throw new Error("Backend không trả về dữ liệu HTML.");
+
+      htmlContent = htmlContent.replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gm, "");
+
+      const oldIframe = document.getElementById("hidden-print-frame");
+      if (oldIframe) document.body.removeChild(oldIframe);
+
+      const iframe = document.createElement("iframe");
+      iframe.id = "hidden-print-frame";
+      iframe.style.position = "fixed";
+      iframe.style.opacity = "0"; 
+      iframe.style.pointerEvents = "none";
+      iframe.style.zIndex = "-1";
+      document.body.appendChild(iframe);
+
+      const doc = iframe.contentWindow.document;
+
+      iframe.onload = () => {
+        iframe.onload = null;
+
+        try {
+          const iframeDoc = iframe.contentWindow.document;
+          
+          const style = iframeDoc.createElement('style');
+          style.innerHTML = `
+            .loading, #loading, .loader, .progress, .ng-progress-bar, .ng-progress { display: none !important; }
+          `;
+          iframeDoc.head.appendChild(style);
+
+          const allElements = iframeDoc.body.getElementsByTagName("*");
+          for (let i = 0; i < allElements.length; i++) {
+             const el = allElements[i];
+             if (el.textContent && (el.textContent.includes("Đang tải") || el.textContent.includes("Loading"))) {
+                 el.style.display = "none";
+                 el.style.visibility = "hidden";
+                 if (el.parentElement) {
+                    const parentStyle = window.getComputedStyle(el.parentElement);
+                    if (parentStyle.position === 'fixed' || parentStyle.position === 'absolute') {
+                        el.parentElement.style.display = 'none';
+                    }
+                 }
+             }
+          }
+        } catch (e) {
+          console.warn(e);
+        }
+
+        setTimeout(() => {
+          try {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+          } catch (e) {
+            console.error(e);
+          }
+        }, 500);
+      };
+
+      doc.open();
+      doc.write(htmlContent);
+      doc.close();
+
+    } catch (err) {
+      console.error(err);
+      alert(`Lỗi khi in: ${err.message}`);
+    } finally {
+      setIsPrinting(false);
+    }
+  };
+
+  // --- ACCEPT / REJECT ---
   const handleAccept = async () => {
     setIsSubmitting(true);
     try {
-      // Gọi API mới của QC (dùng POST)
-      const response = await fetch(`${apiClient}/api/OrderDetail/${orderDetailId}/accept`, {
-        method: "POST", // API của QC dùng POST
-        headers: {
-          "Content-Type": "application/json",
-        },
+      const res = await fetch(`${apiClient.defaults.baseURL}/api/OrderDetail/${orderDetailId}/accept`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP ${response.status}`);
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || `HTTP ${res.status}`);
       }
-
-      alert(`Order Detail #${orderDetailId} đã được chấp nhận (Accepted).`);
-      await fetchLatestData();
-
+      alert(`Order Detail #${orderDetailId} đã được chấp nhận.`);
+      fetchLatestData();
     } catch (err) {
-      console.error("Error accepting order:", err);
+      console.error(err);
       alert(`Failed to accept order: ${err.message}`);
     } finally {
       setIsSubmitting(false);
     }
-  }
+  };
 
-  // ⭐ HÀM REJECT ĐÃ CẬP NHẬT VỚI REASON
   const handleReject = async () => {
-    // 1. Yêu cầu nhập lý do
     const reason = prompt("Vui lòng nhập lý do từ chối (ít nhất 10 ký tự):");
-
-    // 2. Xác thực lý do
-    if (!reason || reason.trim().length < 10) {
-      alert("Lý do là bắt buộc và phải có ít nhất 10 ký tự.");
-      return; // Dừng hàm nếu không có lý do
-    }
+    if (!reason || reason.trim().length < 10) return alert("Lý do phải ≥ 10 ký tự.");
 
     setIsSubmitting(true);
     try {
-      // 3. Gọi API mới của QC (dùng POST)
-      const response = await fetch(`${apiClient}/api/OrderDetail/${orderDetailId}/reject`, {
-        method: "POST", // API của QC dùng POST
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include", 
-        body: JSON.stringify({
-          reason: reason // 4. Gửi lý do trong body
-        })
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP ${response.status}`);
+      const res = await fetch(`${apiClient.defaults.baseURL}/api/OrderDetail/${orderDetailId}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ reason }),
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || `HTTP ${res.status}`);
       }
-
-      alert(`Order Detail #${orderDetailId} đã bị từ chối (Rejected).`);
-      await fetchLatestData();
-
+      alert(`Order Detail #${orderDetailId} đã bị từ chối.`);
+      fetchLatestData();
     } catch (err) {
-      console.error("Error rejecting order:", err);
+      console.error(err);
       alert(`Failed to reject order: ${err.message}`);
     } finally {
       setIsSubmitting(false);
     }
-  }
+  };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg text-gray-600">Loading order details...</div>
-      </div>
-    );
-  }
+  if (loading) return <FullScreenMessage message="Loading order details..." />;
+  if (error) return <FullScreenMessage message={`Error: ${error}`} />;
+  if (!orderDetail) return <FullScreenMessage message="Order detail not found" />;
 
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg text-red-600">Error: {error}</div>
-      </div>
-    );
-  }
-
-  if (!orderDetail) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg text-gray-600">Order detail not found</div>
-      </div>
-    );
-  }
-
-  const product = orderDetail.productVariant?.product
+  const product = orderDetail.productVariant?.product;
   const productImageUrl = orderDetail.linkImg
     ? orderDetail.linkImg.startsWith("http")
-      ? orderDetail.linkImgd // Sửa lỗi 'linkImgd' thành 'linkImg'
-      : `${apiClient}/${orderDetail.linkImg}`
-    : null
+      ? orderDetail.linkImg
+      : `${apiClient.defaults.baseURL}/${orderDetail.linkImg}`
+    : null;
 
-  const statusString = mapProductionStatusToString(orderDetail.productionStatus);
-  const statusVariant = getStatusBadgeVariant(statusString);
+  const statusString = STATUS_MAP[orderDetail.productionStatus] || "UNKNOWN";
+  const statusVariant = getBadgeVariant(statusString);
+  const trackingCode = orderDetail?.order?.tracking || orderDetail?.trackingCode;
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
-          <div className="flex-grow">
-            <h1 className="text-3xl font-bold text-gray-900">Order Detail #{orderDetail.orderDetailId}</h1>
-            <p className="text-gray-600 mt-1 text-sm sm:text-base"> 
-              Order ID: {orderDetail.orderId} | Product: {product?.productName || "N/A"}
-            </p>
-            <div className="mt-2">
-                <Badge variant={statusVariant} className="text-sm px-3 py-1">
-                    Status: {statusString}
-                </Badge>
-            </div>
-          </div>
-          <Button onClick={() => router.back()} variant="outline" className="gap-2 flex-shrink-0">
-            ← Back
-          </Button>
-        </div>
+        <HeaderSection
+          orderDetail={orderDetail}
+          product={product}
+          statusString={statusString}
+          statusVariant={statusVariant}
+          trackingCode={trackingCode}
+          isPrinting={isPrinting}
+          onPrint={handlePrintA5}
+          router={router}
+        />
 
-        {/* Images Section */}
+        {/* Images */}
         {(productImageUrl || orderDetail.linkFileDesign) && (
-          <Card className="p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4">Images</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {productImageUrl && (
-                <div>
-                  <p className="font-medium mb-2 text-gray-700">Product Image</p>
-                  <img
-                    src={productImageUrl || "/placeholder.svg"}
-                    alt="Product"
-                    className="w-full h-80 object-cover rounded-lg border border-gray-200"
-                  />
-                </div>
-              )}
-              {orderDetail.linkFileDesign && (
-                <div>
-                  <p className="font-medium mb-2 text-gray-700">Design File</p>
-                  <a href={orderDetail.linkFileDesign} target="_blank" rel="noopener noreferrer" className="block">
-                    <img
-                      src={orderDetail.linkFileDesign || "/placeholder.svg"}
-                      alt="Design file"
-                      className="w-full h-80 object-cover rounded-lg border border-gray-200 hover:opacity-90 transition-opacity cursor-pointer"
-                    />
-                  </a>
-                  <p className="text-sm text-gray-500 mt-2">Click to view full size</p>
-                </div>
-              )}
-            </div>
-          </Card>
+          <ImagesSection productImageUrl={productImageUrl} designFile={orderDetail.linkFileDesign} />
         )}
 
-        {/* Order Information */}
-        <Card className="p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">Order Information</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <InfoItem label="Order Detail ID" value={orderDetail.orderDetailId} />
-            <InfoItem label="Order ID" value={orderDetail.orderId} />
-            <InfoItem label="Quantity" value={orderDetail.quantity} />
-            <InfoItem label="Price" value={`$${orderDetail.price.toFixed(2)}`} />
-            <InfoItem label="Created Date" value={new Date(orderDetail.createdDate).toLocaleString()} />
-            <InfoItem label="Production Status" value={orderDetail.productionStatus || "Pending"} />
-            <InfoItem label="Need Design" value={orderDetail.needDesign ? "Yes" : "No"} />
-            <InfoItem
-              label="Assigned At"
-              value={orderDetail.assignedAt ? new Date(orderDetail.assignedAt).toLocaleString() : "Not assigned"}
-            />
-            <InfoItem label="Designer ID" value={orderDetail.assignedDesignerUserId || "Not assigned"} />
-          </div>
-        </Card>
+        {/* Info Cards */}
+        <InfoCard title="Order Information">
+          <InfoGrid items={[
+            { label: "Order Detail ID", value: orderDetail.orderDetailId },
+            { label: "Order ID", value: orderDetail.orderId },
+            { label: "Quantity", value: orderDetail.quantity },
+            { label: "Price", value: `$${orderDetail.price.toFixed(2)}` },
+            { label: "Created Date", value: new Date(orderDetail.createdDate).toLocaleString() },
+            { label: "Production Status", value: orderDetail.productionStatus },
+            { label: "Need Design", value: orderDetail.needDesign ? "Yes" : "No" },
+            { label: "Assigned At", value: orderDetail.assignedAt ? new Date(orderDetail.assignedAt).toLocaleString() : "Not assigned" },
+            { label: "Designer ID", value: orderDetail.assignedDesignerUserId || "Not assigned" },
+          ]} />
+        </InfoCard>
 
-        {/* Product Information */}
-        <Card className="p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">Product Information</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <InfoItem label="Product Name" value={product?.productName} />
-            <InfoItem label="Product Code" value={product?.productCode} />
-            <InfoItem label="Category ID" value={product?.categoryId} />
-            <InfoItem label="Status" value={product?.status} />
-            <InfoItem label="SKU" value={orderDetail.productVariant?.sku} />
-            <InfoItem label="Accessory" value={orderDetail.accessory} />
-          </div>
+        <InfoCard title="Product Information">
+          <InfoGrid items={[
+            { label: "Product Name", value: product?.productName },
+            { label: "Product Code", value: product?.productCode },
+            { label: "Category ID", value: product?.categoryId },
+            { label: "Status", value: product?.status },
+            { label: "SKU", value: orderDetail.productVariant?.sku },
+            { label: "Accessory", value: orderDetail.accessory },
+          ]} />
           {product?.describe && (
-            <div className="mt-4">
-              <p className="font-medium text-gray-700 mb-1">Description</p>
-              <p className="text-gray-600">{product.describe}</p>
-            </div>
+            <p className="text-gray-600 mt-2">{product.describe}</p>
           )}
-        </Card>
+        </InfoCard>
 
-        {/* Product Variant Details */}
-        <Card className="p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">Product Variant Details</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <InfoItem label="Size (inch)" value={orderDetail.productVariant?.sizeInch} />
-            <InfoItem label="Thickness (mm)" value={orderDetail.productVariant?.thicknessMm} />
-            <InfoItem label="Layer" value={orderDetail.productVariant?.layer} />
-            <InfoItem label="Custom Shape" value={orderDetail.productVariant?.customShape} />
-            <InfoItem label="Length (cm)" value={orderDetail.productVariant?.lengthCm} />
-            <InfoItem label="Height (cm)" value={orderDetail.productVariant?.heightCm} />
-            <InfoItem label="Width (cm)" value={orderDetail.productVariant?.widthCm} />
-            <InfoItem label="Weight (gram)" value={orderDetail.productVariant?.weightGram} />
-          </div>
-        </Card>
+        <InfoCard title="Product Variant Details">
+          <InfoGrid items={[
+            { label: "Size (inch)", value: orderDetail.productVariant?.sizeInch },
+            { label: "Thickness (mm)", value: orderDetail.productVariant?.thicknessMm },
+            { label: "Layer", value: orderDetail.productVariant?.layer },
+            { label: "Custom Shape", value: orderDetail.productVariant?.customShape },
+            { label: "Length (cm)", value: orderDetail.productVariant?.lengthCm },
+            { label: "Height (cm)", value: orderDetail.productVariant?.heightCm },
+            { label: "Width (cm)", value: orderDetail.productVariant?.widthCm },
+            { label: "Weight (gram)", value: orderDetail.productVariant?.weightGram },
+          ]} />
+        </InfoCard>
 
-        {/* Cost Breakdown */}
-        <Card className="p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">Cost Breakdown</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <InfoItem label="Base Cost" value={`$${orderDetail.productVariant?.baseCost.toFixed(2)}`} />
-            <InfoItem label="Ship Cost" value={`$${orderDetail.productVariant?.shipCost.toFixed(2)}`} />
-            <InfoItem label="Extra Shipping" value={`$${orderDetail.productVariant?.extraShipping.toFixed(2)}`} />
-            <InfoItem
-              label="Total Cost"
-              value={`$${orderDetail.productVariant?.totalCost.toFixed(2)}`}
-              className="font-semibold text-lg"
-            />
-          </div>
-        </Card>
+        <InfoCard title="Cost Breakdown">
+          <InfoGrid items={[
+            { label: "Base Cost", value: `$${orderDetail.productVariant?.baseCost.toFixed(2)}` },
+            { label: "Ship Cost", value: `$${orderDetail.productVariant?.shipCost.toFixed(2)}` },
+            { label: "Extra Shipping", value: `$${orderDetail.productVariant?.extraShipping.toFixed(2)}` },
+            { label: "Total Cost", value: `$${orderDetail.productVariant?.totalCost.toFixed(2)}`, className: "font-semibold text-lg" },
+          ]} />
+        </InfoCard>
 
-        {/* Notes */}
         {orderDetail.note && (
-          <Card className="p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4">Notes</h2>
+          <InfoCard title="Notes">
             <p className="text-gray-700">{orderDetail.note}</p>
-          </Card>
+          </InfoCard>
         )}
 
-        {/* ⭐ 7. SỬA LẠI LOGIC NÚT BẤM (GIỮ NGUYÊN STATUS 8) */}
+        {/* Accept / Reject Buttons */}
         <div className="flex justify-end gap-4">
-          {/* Trạng thái 8 (FINISHED) = Chờ QC */}
           {orderDetail.productionStatus === 8 ? (
             <>
-              <Button 
-                onClick={handleReject} 
-                variant="destructive" 
-                size="lg" 
-                className="px-8"
-                disabled={isSubmitting} // Thêm disabled
-              >
-                {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Reject Order"}
-              </Button>
-              <Button 
-                onClick={handleAccept} 
-                size="lg" 
-                className="px-8 bg-green-600 hover:bg-green-700"
-                disabled={isSubmitting} // Thêm disabled
-              >
-                {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Accept Order"}
-              </Button>
+              <ActionButton label="Reject Order" onClick={handleReject} isLoading={isSubmitting} destructive />
+              <ActionButton label="Accept Order" onClick={handleAccept} isLoading={isSubmitting} success />
             </>
-          ) 
-          // Trạng thái 9 (QC_DONE) = Đã Accept
-          : orderDetail.productionStatus === 9 ? (
-            <div className="px-8 py-3 bg-green-100 text-green-700 rounded-md font-medium">Already Accepted</div>
-          ) 
-          // Trạng thái 11 (PROD_REWORK) = Đã Reject
-          : orderDetail.productionStatus === 11 ? (
-            <div className="px-8 py-3 bg-red-100 text-red-700 rounded-md font-medium">Already Rejected</div>
+          ) : orderDetail.productionStatus === 9 ? (
+            <StatusMessage label="Already Accepted" success />
+          ) : orderDetail.productionStatus === 10 ? (
+            <StatusMessage label="Already Rejected" destructive />
           ) : null}
         </div>
       </div>
@@ -371,11 +329,101 @@ export default function OrderDetailPage() {
   );
 }
 
-function InfoItem({ label, value, className = "" }) {
-  return (
-    <div className={className}>
-      <p className="text-sm text-gray-500 mb-1">{label}</p>
-      <p className="font-medium text-gray-900">{value ?? "N/A"}</p>
+/* --- COMPONENTS --- */
+const FullScreenMessage = ({ message }) => (
+  <div className="flex items-center justify-center min-h-screen">
+    <div className="text-lg text-gray-600">{message}</div>
+  </div>
+);
+
+const HeaderSection = ({ orderDetail, product, statusString, statusVariant, trackingCode, isPrinting, onPrint, router }) => (
+  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+    <div className="flex-grow">
+      <h1 className="text-3xl font-bold text-gray-900">Order Detail #{orderDetail.orderDetailId}</h1>
+      <p className="text-gray-600 mt-1 text-sm sm:text-base">Order ID: {orderDetail.orderId} | Product: {product?.productName || "N/A"}</p>
+      <div className="mt-2 flex items-center gap-2">
+        <Badge variant={statusVariant} className="text-sm px-3 py-1">Status: {statusString}</Badge>
+        {trackingCode && <span className="text-sm text-gray-500 font-mono bg-gray-100 px-2 py-0.5 rounded border border-gray-200">{trackingCode}</span>}
+      </div>
     </div>
-  );
-}
+    <div className="flex gap-3">
+      {trackingCode && (
+        <Button
+          variant="default"
+          onClick={onPrint}
+          disabled={isPrinting}
+          className="gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+        >
+          {isPrinting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+          In Label
+        </Button>
+      )}
+      <Button onClick={() => router.back()} variant="outline" className="gap-2 flex-shrink-0">← Back</Button>
+    </div>
+  </div>
+);
+
+const ImagesSection = ({ productImageUrl, designFile }) => (
+  <Card className="p-6 mb-6">
+    <h2 className="text-xl font-semibold mb-4">Images</h2>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {productImageUrl && (
+        <div>
+          <p className="font-medium mb-2 text-gray-700">Product Image</p>
+          <a href={productImageUrl} target="_blank" rel="noopener noreferrer">
+            <img src={productImageUrl} alt="Product" className="w-full h-80 object-cover rounded-lg border border-gray-200 hover:opacity-90 transition-opacity cursor-pointer" />
+          </a>
+          <p className="text-sm text-gray-500 mt-2">Click to view full size</p>
+        </div>
+      )}
+      {designFile && (
+        <div>
+          <p className="font-medium mb-2 text-gray-700">Design File</p>
+          <a href={designFile} target="_blank" rel="noopener noreferrer">
+            <img src={designFile} alt="Design file" className="w-full h-80 object-cover rounded-lg border border-gray-200 hover:opacity-90 transition-opacity cursor-pointer" />
+          </a>
+          <p className="text-sm text-gray-500 mt-2">Click to view full size</p>
+        </div>
+      )}
+    </div>
+  </Card>
+);
+
+const InfoCard = ({ title, children }) => (
+  <Card className="p-6 mb-6">
+    <h2 className="text-xl font-semibold mb-4">{title}</h2>
+    {children}
+  </Card>
+);
+
+const InfoGrid = ({ items }) => (
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    {items.map((item, idx) => (
+      <InfoItem key={idx} label={item.label} value={item.value} className={item.className} />
+    ))}
+  </div>
+);
+
+const InfoItem = ({ label, value, className = "" }) => (
+  <div className={className}>
+    <p className="text-sm text-gray-500 mb-1">{label}</p>
+    <p className="font-medium text-gray-900">{value ?? "N/A"}</p>
+  </div>
+);
+
+const ActionButton = ({ label, onClick, isLoading, destructive, success }) => (
+  <Button
+    onClick={onClick}
+    size="lg"
+    className={`px-8 ${destructive ? "bg-red-600 hover:bg-red-700 text-white" : ""} ${success ? "bg-green-600 hover:bg-green-700 text-white" : ""}`}
+    disabled={isLoading}
+  >
+    {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : label}
+  </Button>
+);
+
+const StatusMessage = ({ label, success, destructive }) => (
+  <div className={`px-8 py-3 rounded-md font-medium ${success ? "bg-green-100 text-green-700" : ""} ${destructive ? "bg-red-100 text-red-700" : ""}`}>
+    {label}
+  </div>
+);

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Loader2, AlertTriangle } from "lucide-react";
+import apiClient from "../../../lib/apiClient";
 // Import modal thanh toán và modal chi tiết của bạn
 import PaymentMethodSelector from "@/components/layout/seller/PaymentMethodSelector"; // (Bạn cần tạo component này)
 import SellerInvoiceDetailsModal from "@/components/invoices/seller-invoice-details-modal";
@@ -28,7 +29,7 @@ const ForcedPaymentModal = ({ invoiceId }) => {
       setError(null);
       try {
         const response = await fetch(
-          `https://localhost:7015/api/invoices/${invoiceId}`,
+          `${apiClient.defaults.baseURL}/api/invoices/${invoiceId}`,
           { credentials: "include" }
         );
         if (!response.ok) throw new Error("Could not load invoice details.");
@@ -78,7 +79,7 @@ export default function OverdueInvoiceBlocker({ children }) {
     const checkStatus = async () => {
       try {
         const response = await fetch(
-          "https://localhost:7015/api/auth/status",
+          `${apiClient.defaults.baseURL}/api/auth/status`,
           {
             credentials: "include",
           }

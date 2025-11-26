@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import apiClient from "../../../lib/apiClient";
 import {
   Package,
   Clock,
@@ -20,7 +21,7 @@ export default function DashboardContent() {
   useEffect(() => {
     const fetchOrders = async () => {
       try {
-        const res = await fetch("https://localhost:7015/api/seller", {
+        const res = await fetch(`${apiClient.defaults.baseURL}/api/seller`, {
           credentials: "include",
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
