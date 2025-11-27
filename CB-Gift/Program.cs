@@ -176,8 +176,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
             "http://localhost:3000",
             "https://cb-gift-fe-sby6-mazut4syf-bachquangles-projects.vercel.app", // Domain Preview 
-            "https://cb-gift-fe-sby6.vercel.app", // Domain Production 
-            "https://*.vercel.app" // TÙY CHỌN: Cho phép tất cả các bản Preview trên Vercel
+            "https://cb-gift-fe-sby6.vercel.app" // Domain Production 
         )
              .AllowAnyHeader()
              .AllowAnyMethod()
