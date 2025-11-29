@@ -291,7 +291,7 @@ namespace CB_Gift.Services
                     await _notificationService.CreateAndSendNotificationAsync(
                         "StaffGroup", // Gửi tới nhóm Staff
                         $"Yêu cầu hoàn tiền mới cho Order #{order.OrderCode} ({newRefunds.Count} items). Tổng: {totalRequestedAmount:N0}đ",
-                        $"/manager/review-requests" // Đường dẫn xem yêu cầu
+                        $"/manager/refund-reprint-review" // Đường dẫn xem yêu cầu
                     );
                 }
                 catch (Exception ex)
