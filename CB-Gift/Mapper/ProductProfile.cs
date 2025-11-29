@@ -18,7 +18,11 @@ namespace CB_Gift.Mapper
             // Map từ DTO → Entity
             CreateMap<ProductCreateDto, Product>();
             CreateMap<ProductUpdateDto, Product>();
-            CreateMap<ProductVariantCreateDto, ProductVariant>();
+            CreateMap<ProductVariantCreateDto, ProductVariant>()
+                 .ForMember(dest => dest.Sku, opt => opt.MapFrom(src =>
+                     // Logic tính toán SKU: "CBG"-CustomShape-Layer-SizeInch-ThicknessMm
+                     $"CBG-{src.CustomShape}-{src.Layer}-{src.SizeInch}-{src.ThicknessMm}"
+                 ));
         }
     }
 }
