@@ -77,6 +77,7 @@ namespace CB_Gift.Controllers
 
         // POST: api/Categories
         [HttpPost]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> CreateCategory([FromBody] CreateCategoryDto createCategoryDto)
         {
             if (!ModelState.IsValid)
@@ -122,6 +123,7 @@ namespace CB_Gift.Controllers
         // UPDATE CATEGORY (ONLY name + code)
         // ---------------------------
         [HttpPut("{id}")]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> UpdateCategory(int id, [FromBody] UpdateCategoryDto updateCategoryDto)
         {
             if (!ModelState.IsValid)
@@ -167,6 +169,7 @@ namespace CB_Gift.Controllers
         // SOFT DELETE CATEGORY (status = 0)
         // ---------------------------
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> SoftDeleteCategory(int id)
         {
             try
@@ -192,6 +195,7 @@ namespace CB_Gift.Controllers
         // UPDATE STATUS (Restore, Disable…)
         // ---------------------------
         [HttpPatch("{id}/status")]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> UpdateCategoryStatus(int id, [FromBody] UpdateCategoryStatusDto statusDto)
         {
             if (!ModelState.IsValid)
