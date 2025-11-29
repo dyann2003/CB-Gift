@@ -1,6 +1,7 @@
 ﻿using CB_Gift.DTOs;
 using CB_Gift.Services;
 using CB_Gift.Services.IService;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CB_Gift.Controllers
@@ -28,11 +29,11 @@ namespace CB_Gift.Controllers
 
         [HttpGet("filter")]
         public async Task<IActionResult> FilterProducts(
-   string? searchTerm = "",
-   string? category = "",
-   int? status = null,
-   int page = 1,
-   int pageSize = 10)
+           string? searchTerm = "",
+           string? category = "",
+           int? status = null,
+           int page = 1,
+           int pageSize = 10)
         {
             var (total, products) = await _service.FilterProductsAsync(
                 searchTerm, category, status, page, pageSize);
@@ -42,6 +43,7 @@ namespace CB_Gift.Controllers
 
         //GET: api/Prodcut/active   -- các sản phẩm được active
         [HttpGet("active")]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> GetAllProductHaveStatusTrue()
         {
             var products = await _service.GetAllProductsHaveStatusTrueAsync();
@@ -49,6 +51,7 @@ namespace CB_Gift.Controllers
         }
         //GET: api/Product/hidden  -- Các sản phẩm bị ẩn
         [HttpGet("hidden")]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> GetHiddenProducts()
         {
             var products = await _service.GetHiddenProductsAsync();
@@ -68,6 +71,7 @@ namespace CB_Gift.Controllers
 
         // POST: api/Product
         [HttpPost]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> Create([FromBody] ProductCreateDto dto)
         {
             if (!ModelState.IsValid)
@@ -79,6 +83,7 @@ namespace CB_Gift.Controllers
 
         // PUT: api/Product/5 //Update Product
         [HttpPut("{id}")]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> Update(int id, [FromBody] ProductUpdateDto dto)
         {
             if (!ModelState.IsValid)
@@ -93,6 +98,7 @@ namespace CB_Gift.Controllers
 
         // DELETE: api/Product/5
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> Delete(int id)
         {
             var result = await _service.DeleteAsync(id);
@@ -105,6 +111,7 @@ namespace CB_Gift.Controllers
 
 
         [HttpDelete("hidden/{id}")]
+        [Authorize(Roles = "Manager")]
         // Ẩn sản phẩm
         public async Task<IActionResult> SoftDeleteProduct(int id)
         {
@@ -114,6 +121,7 @@ namespace CB_Gift.Controllers
         }
         //Hiển thị lại sản phẩm
         [HttpPatch("restore/{id}")]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> RestoreProduct(int id)
         {
             var sucess = await _service.RestoreProductAsync(id);
@@ -123,6 +131,7 @@ namespace CB_Gift.Controllers
 
         //Update Status Product theo danh sách
         [HttpPut("bulk-update-status")]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> BulkUpdateStatus([FromBody] BulkUpdateProductStatusDto request)
         {
             try
