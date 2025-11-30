@@ -19,6 +19,7 @@ namespace CB_Gift.Services
 
         public async Task<object> GenerateQrCodeAsync(int orderDetailId)
         {
+            // 1. Lấy thông tin chi tiết hiện tại
             var detail = await _context.OrderDetails
                 .Include(od => od.Order)
                 .Include(od => od.ProductVariant)
@@ -27,18 +28,45 @@ namespace CB_Gift.Services
 
             if (detail == null) return null;
 
-            // Chuỗi data cần encode
+            // 2. Lấy danh sách tất cả các Order Detail trong cùng 1 Order
+            // Chỉ lấy OrderDetailId và Quantity để tính toán cho nhẹ DB
+            var siblings = await _context.OrderDetails
+                .Where(od => od.OrderId == detail.OrderId)
+                .OrderBy(od => od.OrderDetailId) // Sắp xếp cố định (ví dụ theo ID tăng dần) để thứ tự không bị nhảy
+                .Select(od => new { od.OrderDetailId, od.Quantity })
+                .ToListAsync();
+
+            // 3. Tính Tổng số Item (Cộng dồn Quantity của tất cả detail)
+            int totalItems = siblings.Sum(s => s.Quantity);
+
+            // 4. Tính Chỉ số bắt đầu (ItemIndex) dựa trên cộng dồn Quantity của các item đứng trước
+            int itemIndex = 1;
+            foreach (var sib in siblings)
+            {
+                if (sib.OrderDetailId == orderDetailId)
+                {
+                    // Đã tìm thấy item hiện tại, dừng cộng
+                    break;
+                }
+                // Nếu chưa tới item hiện tại, cộng dồn số lượng của các item trước đó
+                itemIndex += sib.Quantity;
+            }
+
+            // 5. Tạo URL QR Code
             string frontendUrl = $"http://localhost:3000/qc/order-detail/{orderDetailId}";
-
             string qrUrl = $"https://api.qrserver.com/v1/create-qr-code/?size=400x400&data={System.Net.WebUtility.UrlEncode(frontendUrl)}";
-
+            string orderCode = detail.Order.OrderCode + "_" + totalItems + "IT_" + itemIndex;
             return new
             {
                 detail.OrderDetailId,
-                detail.Order.OrderCode,
+                orderCode,
                 ProductName = detail.ProductVariant?.Product?.ProductName ?? "",
                 detail.Quantity,
-                QrCodeUrl = qrUrl
+                QrCodeUrl = qrUrl,
+
+                // Trả về 2 giá trị đã tính toán theo logic mới
+                TotalItems = totalItems, // Tổng số lượng sản phẩm vật lý
+                ItemIndex = itemIndex    // Số thứ tự bắt đầu của detail này (dựa trên tích lũy quantity)
             };
         }
 

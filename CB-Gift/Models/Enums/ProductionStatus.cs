@@ -23,11 +23,12 @@
         PROD_REWORK, //11
 
         // Đóng gói/Giao hàng
-        PACKING, //12
+        SHIPPING, //12
+        SHIPPED, // 13 Đã giao hàng
 
         // Khác
-        HOLD,  //13
-        HOLD_RP, //14
-        CANCELLED 
+        HOLD,  //14
+        HOLD_RP, //15
+        REFUND //16
     }
 }

@@ -47,7 +47,7 @@ namespace CB_Gift.Services
                     _logger.LogInformation("Job GroupSubmittedOrdersAsync SKIPPED. No orders to group.");
                     return;
                 }
-                
+
                 var groupedByCategory = orderDetailsToGroup.GroupBy(od => od.ProductVariant.Product.CategoryId);
                 var ordersToUpdate = new HashSet<Order>();
 
@@ -139,7 +139,7 @@ namespace CB_Gift.Services
                     //query = query.Where(pd => pd.StatusOrder == 0 || pd.StatusOrder == 1);
                     query = query.Where(pd => pd.OrderDetail.ProductionStatus == ProductionStatus.READY_PROD
                     || pd.OrderDetail.ProductionStatus == ProductionStatus.IN_PROD
-                    || pd.OrderDetail.ProductionStatus == ProductionStatus.PROD_REWORK);
+                    || pd.OrderDetail.ProductionStatus == ProductionStatus.QC_FAIL);
                 }
                 else
                 {
@@ -150,45 +150,62 @@ namespace CB_Gift.Services
 
             // Xây dựng toàn bộ câu truy vấn và chỉ thực thi một lần duy nhất ở cuối
             var results = await query
-                .GroupBy(pd => pd.OrderDetail.ProductVariant.Product.Category) // Gom nhóm cấp 1 trên DB
+                .GroupBy(pd => pd.OrderDetail.ProductVariant.Product.Category) // Gom nhóm Cấp 1: Category
                 .Select(categoryGroup => new StaffCategoryPlanViewDto
                 {
                     CategoryId = categoryGroup.Key.CategoryId,
                     CategoryName = categoryGroup.Key.CategoryName ?? "Unknown",
-                    TotalItems = categoryGroup.Count(), // DB sẽ thực hiện COUNT
+                    TotalItems = categoryGroup.Count(),
 
                     DateGroups = categoryGroup
-                        .GroupBy(pd => pd.Plan.CreateDate.Value.Date) // Gom nhóm cấp 2 trên DB
+                        .GroupBy(pd => pd.Plan.CreateDate.Value.Date) // Gom nhóm Cấp 2: Date
                         .OrderBy(dateGroup => dateGroup.Key)
                         .Select(dateGroup => new StaffDateGroupDto
                         {
                             GroupDate = dateGroup.Key,
                             ItemCount = dateGroup.Count(),
-                            Details = dateGroup.Select(pd => new StaffPlanDetailDto
-                            {
-                                PlanDetailId = pd.PlanDetailId,
-                                OrderDetailId = pd.OrderDetailId,
-                                OrderId = pd.OrderDetail.OrderId,
-                                OrderCode = pd.OrderDetail.Order.OrderCode,
-                                CustomerName = pd.OrderDetail.Order.EndCustomer.Name,
-                                ImageUrl = pd.OrderDetail.LinkImg,
-                                NoteOrEngravingContent = pd.OrderDetail.Note,
-                                ProductionFileUrl = pd.OrderDetail.LinkFileDesign,
-                                ThankYouCardUrl = pd.OrderDetail.LinkThanksCard,
-                                Quantity = pd.OrderDetail.Quantity,
-                                StatusOrder = pd.OrderDetail.ProductionStatus,
-                                Reason = (
-                                        pd.OrderDetail.ProductionStatus == ProductionStatus.PROD_REWORK ||
-                                        pd.OrderDetail.ProductionStatus == ProductionStatus.QC_FAIL
-                                    )
-                                    ? (from log in _context.OrderDetailLogs
-                                       where log.OrderDetailId == pd.OrderDetailId &&
-                                             log.EventType == "QC_REJECTED"
-                                       orderby log.CreatedAt descending
-                                       select log.Reason
-                                      ).FirstOrDefault()
-                                    : null
-                            }).ToList()
+                            // Gom nhóm Cấp 3: Order
+                            OrderGroups = dateGroup
+                                .GroupBy(pd => new
+                                {
+                                    pd.OrderDetail.OrderId,
+                                    pd.OrderDetail.Order.OrderCode,
+                                    CustomerName = pd.OrderDetail.Order.EndCustomer.Name
+                                })
+                                .Select(orderGroup => new StaffOrderGroupDto
+                                {
+                                    OrderId = orderGroup.Key.OrderId,
+                                    OrderCode = orderGroup.Key.OrderCode,
+                                    CustomerName = orderGroup.Key.CustomerName,
+
+                                    // Chi tiết các item trong order
+                                    Details = orderGroup.Select(pd => new StaffPlanDetailDto
+                                    {
+                                        PlanDetailId = pd.PlanDetailId,
+                                        OrderDetailId = pd.OrderDetailId,
+                                        OrderId = pd.OrderDetail.OrderId,
+                                        OrderCode = pd.OrderDetail.Order.OrderCode,
+                                        CustomerName = pd.OrderDetail.Order.EndCustomer.Name,
+                                        ImageUrl = pd.OrderDetail.LinkImg,
+                                        NoteOrEngravingContent = pd.OrderDetail.Note,
+                                        ProductionFileUrl = pd.OrderDetail.LinkFileDesign,
+                                        ThankYouCardUrl = pd.OrderDetail.LinkThanksCard,
+                                        Quantity = pd.OrderDetail.Quantity,
+                                        StatusOrder = pd.OrderDetail.ProductionStatus,
+                                        Sku = pd.OrderDetail.ProductVariant.Sku,
+                                        ProductName = pd.OrderDetail.ProductVariant.Product.ProductName,
+                                        Reason = (
+                                                pd.OrderDetail.ProductionStatus == ProductionStatus.PROD_REWORK ||
+                                                pd.OrderDetail.ProductionStatus == ProductionStatus.QC_FAIL
+                                            )
+                                            ? _context.OrderDetailLogs
+                                                .Where(log => log.OrderDetailId == pd.OrderDetailId && log.EventType == "QC_REJECTED")
+                                                .OrderByDescending(log => log.CreatedAt)
+                                                .Select(log => log.Reason)
+                                                .FirstOrDefault()
+                                            : null
+                                    }).ToList()
+                                }).ToList()
                         }).ToList()
                 })
                 .ToListAsync();
@@ -280,7 +297,8 @@ namespace CB_Gift.Services
                 ProductionStatus.DRAFT => 1,
                 ProductionStatus.CREATED => 2,
                 ProductionStatus.HOLD => 16,
-                ProductionStatus.CANCELLED => 17,
+                ProductionStatus.HOLD_RP => 17,
+                ProductionStatus.REFUND => 18,
 
                 // Trạng thái Design:
                 ProductionStatus.NEED_DESIGN => 3,
@@ -299,7 +317,8 @@ namespace CB_Gift.Services
 
                 // Trạng thái Hoàn thành/Giao hàng:
                 ProductionStatus.QC_DONE => 11, // Đã Kiểm tra Chất lượng
-                ProductionStatus.PACKING => 13,
+                ProductionStatus.SHIPPING => 13,
+                ProductionStatus.SHIPPED => 14,
                 ProductionStatus.FINISHED => 10, // Sản xuất xong
 
                 // Trạng thái không rõ hoặc mặc định
