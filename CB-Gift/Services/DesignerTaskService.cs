@@ -50,9 +50,11 @@ namespace CB_Gift.Services
                 ProductionStatus.FINISHED,
                 ProductionStatus.QC_FAIL,
                 ProductionStatus.PROD_REWORK,
-                ProductionStatus.PACKING,
+                ProductionStatus.SHIPPING,
+                ProductionStatus.SHIPPED,
                 ProductionStatus.HOLD,
-                ProductionStatus.CANCELLED
+                ProductionStatus.HOLD_RP,
+                ProductionStatus.REFUND
             };
             // Định nghĩa các trạng thái OrderStatus liên quan đến thiết kế
             var designOrderStatuses = new[] { 3, 4, 5, 6 }; // StatusOrder là kiểu int
