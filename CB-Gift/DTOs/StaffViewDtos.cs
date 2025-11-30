@@ -26,15 +26,23 @@ namespace CB_Gift.DTOs
 
             public ProductionStatus? StatusOrder { get; set; }
             public string? Reason { get; set; }
+            public string Sku { get; set; }
+            public string ProductName { get; set; }
+        }
+        public class StaffOrderGroupDto
+        {
+            public int OrderId { get; set; }
+            public string OrderCode { get; set; }
+            public string CustomerName { get; set; }
+            public List<StaffPlanDetailDto> Details { get; set; } = new List<StaffPlanDetailDto>();
         }
 
         public class StaffDateGroupDto
         {
             public DateTime GroupDate { get; set; }
-
             public int ItemCount { get; set; }
 
-            public List<StaffPlanDetailDto> Details { get; set; } = new List<StaffPlanDetailDto>();
+            public List<StaffOrderGroupDto> OrderGroups { get; set; } = new List<StaffOrderGroupDto>();
         }
 
         public class StaffCategoryPlanViewDto
