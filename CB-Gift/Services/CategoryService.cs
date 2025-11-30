@@ -104,5 +104,64 @@ namespace CB_Gift.Services
 
             return true;
         }
+
+        public async Task<(IEnumerable<CategoryDto> Categories, int Total)>
+   GetFilteredAndPagedCategoriesAsync(
+       string? searchTerm,
+       int? status,
+       string? sortColumn,
+       string? sortDirection,
+       int page,
+       int pageSize)
+        {
+            var query = _context.Categories.AsQueryable();
+
+            // 🔍 Lọc theo Status (0 = inactive, 1 = active)
+            if (status.HasValue)
+                query = query.Where(c => c.Status == status.Value);
+
+            // 🔍 Lọc search
+            if (!string.IsNullOrEmpty(searchTerm))
+                query = query.Where(c =>
+                    c.CategoryName.Contains(searchTerm) ||
+                    c.CategoryCode.Contains(searchTerm));
+
+            // 🔽 Sắp xếp động
+            query = sortColumn?.ToLower() switch
+            {
+                "name" => sortDirection == "desc"
+                                    ? query.OrderByDescending(c => c.CategoryName)
+                                    : query.OrderBy(c => c.CategoryName),
+
+                "code" => sortDirection == "desc"
+                                    ? query.OrderByDescending(c => c.CategoryCode)
+                                    : query.OrderBy(c => c.CategoryCode),
+
+                "status" => sortDirection == "desc"
+                                    ? query.OrderByDescending(c => c.Status)
+                                    : query.OrderBy(c => c.Status),
+
+                _ => query.OrderByDescending(c => c.CategoryId) // mặc định ID mới nhất
+            };
+
+            // 🧮 Tổng số bản ghi
+            int total = await query.CountAsync();
+
+            // 📄 Phân trang + Map DTO
+            var categories = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .AsNoTracking()
+                .Select(c => new CategoryDto
+                {
+                    CategoryId = c.CategoryId,
+                    CategoryName = c.CategoryName,
+                    CategoryCode = c.CategoryCode,
+                    Status = c.Status,
+                })
+                .ToListAsync();
+
+            return (categories, total);
+        }
     }
 }

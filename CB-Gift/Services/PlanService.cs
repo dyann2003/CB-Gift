@@ -137,8 +137,9 @@ namespace CB_Gift.Services
                 else if (status.Equals("needs_production", StringComparison.OrdinalIgnoreCase))
                 {
                     //query = query.Where(pd => pd.StatusOrder == 0 || pd.StatusOrder == 1);
-                    query = query.Where(pd => pd.OrderDetail.ProductionStatus == ProductionStatus.READY_PROD
-                    || pd.OrderDetail.ProductionStatus == ProductionStatus.IN_PROD
+                    query = query.Where(pd => pd.OrderDetail.ProductionStatus == ProductionStatus.READY_PROD 
+                    || pd.OrderDetail.ProductionStatus == ProductionStatus.IN_PROD 
+                    || pd.OrderDetail.ProductionStatus == ProductionStatus.PROD_REWORK
                     || pd.OrderDetail.ProductionStatus == ProductionStatus.QC_FAIL);
                 }
                 else

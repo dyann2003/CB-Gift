@@ -28,15 +28,23 @@ namespace CB_Gift.Mapper
             .ForMember(dest => dest.SellerId, opt => opt.MapFrom(src => src.SellerUserId))
             .ForMember(dest => dest.SellerName, opt => opt.MapFrom(src => src.SellerUser.FullName))
             .ForMember(dest => dest.StatusOderName, opt => opt.MapFrom(src => src.StatusOrderNavigation.NameVi))
-            .ForMember(dest => dest.Details, opt => opt.MapFrom(src => src.OrderDetails));
+            .ForMember(dest => dest.Details, opt => opt.MapFrom(src => src.OrderDetails))
+                .ForMember(dest => dest.SellerName, opt => opt.MapFrom(src => src.SellerUser.FullName))
+                .ForMember(dest => dest.StatusOderName, opt => opt.MapFrom(src => src.StatusOrderNavigation.Code))
+                .ForMember(dest => dest.Details, opt => opt.MapFrom(src => src.OrderDetails));
 
             CreateMap<OrderDetail, OrderDetailDto>()
                     .ForMember(dest => dest.OrderDetailID, opt => opt.MapFrom(src => src.OrderDetailId))
                     .ForMember(dest => dest.ProductVariantID, opt => opt.MapFrom(src => src.ProductVariantId))
+                    .ForMember(dest => dest.Sku,opt => opt.MapFrom(src=>src.ProductVariant.Sku))
                     .ForMember(dest => dest.Size, opt => opt.MapFrom(src => src.ProductVariant.SizeInch))
+                    .ForMember(dest => dest.Layer, opt => opt.MapFrom(src => src.ProductVariant.Layer))
                     .ForMember(dest => dest.ProductName, opt => opt.MapFrom(src => src.ProductVariant.Product.ProductName))
-                    .ForMember(dest => dest.Price, opt => opt.MapFrom(src => src.ProductVariant.TotalCost))
+                    //.ForMember(dest => dest.Price, opt => opt.MapFrom(src => src.ProductVariant.TotalCost))
+                    .ForMember(dest => dest.Price, opt => opt.MapFrom(src => src.Price))
                     .ForMember(dest => dest.Quantity, opt => opt.MapFrom(src => src.Quantity))
+                     .ForMember(dest => dest.AssignedAt, opt => opt.MapFrom(src => src.AssignedAt))
+                     .ForMember(dest => dest.AssignedDesignerUserId, opt => opt.MapFrom(src => src.AssignedDesignerUserId))
                     .ForMember(dest => dest.LinkImg, opt => opt.MapFrom(src => src.LinkImg))
                     .ForMember(dest => dest.NeedDesign, opt => opt.MapFrom(src => src.NeedDesign))
                     .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.ProductionStatus));
@@ -65,7 +73,8 @@ namespace CB_Gift.Mapper
                 .ForMember(dest => dest.Note, opt => opt.MapFrom(src => src.Note))
                 .ForMember(dest => dest.Quantity, opt => opt.MapFrom(src => src.Quantity))
                 .ForMember(dest => dest.NeedDesign, opt => opt.MapFrom(src => src.NeedDesign))
-                .ForMember(dest => dest.Price, opt => opt.MapFrom(src => src.Price ?? 0))
+                //.ForMember(dest => dest.Price, opt => opt.MapFrom(src => src.Price ?? 0))
+                .ForMember(dest => dest.Price, opt => opt.Ignore())
                 .ForMember(dest => dest.CreatedDate, opt => opt.MapFrom(_ => DateTime.UtcNow));
             // test MakeOrder
             CreateMap<EndCustomerCreateRequest, EndCustomer>();

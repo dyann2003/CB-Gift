@@ -82,4 +82,27 @@ namespace CB_Gift.DTOs
         // Thêm trường Reason
         public string? Reason { get; set; }
     }
+    public class OrderDetailLogDto
+    {
+        public int OrderDetailLogId { get; set; }
+        public string EventType { get; set; }
+        public string Reason { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public string UserName { get; set; } // Tên của người reject
+    }
+    public class DesignTaskDetailDto
+    {
+        public DesignTaskDto TaskInfo { get; set; }
+        public IEnumerable<OrderDetailLogDto> Logs { get; set; }
+    }
+    public class ProductFilterDto
+    {
+        public int ProductId { get; set; }
+        public string ProductName { get; set; }
+    }
+    public class SellerFilterDto
+    {
+        public string SellerId { get; set; }
+        public string SellerName { get; set; }
+    }
 }
