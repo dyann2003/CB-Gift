@@ -422,5 +422,21 @@ namespace CB_Gift.Controllers
 
             return Ok(result);
         }
+
+        [HttpGet("{orderId}/activity")]
+        public async Task<IActionResult> GetOrderActivityTimeline(int orderId)
+        {
+            // Cần xác định SellerId nếu endpoint này chỉ dành cho Seller xem
+            // Đối với Seller:
+            // var sellerUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            // var activityData = await _orderService.GetOrderActivityTimelineAsync(orderId, sellerUserId); 
+
+            // Đối với Manager/Staff (truy cập Order bất kỳ):
+            var activityData = await _orderService.GetOrderActivityTimelineAsync(orderId);
+
+            if (activityData == null) return NotFound("Order activity not found");
+
+            return Ok(activityData);
+        }
     }
 }

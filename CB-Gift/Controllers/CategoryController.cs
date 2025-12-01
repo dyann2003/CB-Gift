@@ -7,7 +7,7 @@ namespace CB_Gift.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-  //  [Authorize(Roles = "Manager")] 
+    [Authorize]
     public class CategoriesController : ControllerBase
     {
         private readonly ICategoryService _categoryService;
@@ -19,6 +19,7 @@ namespace CB_Gift.Controllers
 
         // GET: api/Categories
         [HttpGet]
+        [AllowAnonymous]
         public async Task<IActionResult> GetCategories()
         {
             var categories = await _categoryService.GetAllCategoriesAsync();
@@ -29,6 +30,7 @@ namespace CB_Gift.Controllers
         // 🔍 FILTER + SEARCH + PAGING
         // ---------------------------
         [HttpGet("filter")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetFilteredCategories(
             [FromQuery] string? searchTerm = null,
             [FromQuery] int? status = null,
@@ -65,6 +67,7 @@ namespace CB_Gift.Controllers
 
         // GET: api/Categories/5
         [HttpGet("{id}")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetCategory(int id)
         {
             var category = await _categoryService.GetCategoryByIdAsync(id);

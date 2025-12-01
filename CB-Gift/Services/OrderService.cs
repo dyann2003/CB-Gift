@@ -1713,5 +1713,112 @@ namespace CB_Gift.Services
             return result;
         }
 
+        public async Task<OrderActivityDto?> GetOrderActivityTimelineAsync(int orderId)
+        {
+            // 1. Truy vấn Order chính và các OrderDetails nhẹ để lấy các ID cần thiết
+            var orderData = await _context.Orders
+                .Include(o => o.OrderDetails) // Cần Include để lấy OrderDetailID
+                .Where(o => o.OrderId == orderId)
+                .Select(o => new
+                {
+                    OrderId = o.OrderId,
+                    OrderCode = o.OrderCode,
+                    CreationDate = o.CreationDate,
+                    OrderDate = o.OrderDate,
+                    // Đảm bảo lấy OrderDetailID đúng cách
+                    OrderDetailIds = o.OrderDetails.Select(od => od.OrderDetailId).ToList()
+                })
+                .FirstOrDefaultAsync();
+
+            if (orderData == null) return null;
+
+            var orderActivityDto = new OrderActivityDto
+            {
+                CreationDate = orderData.CreationDate,
+                OrderDate = orderData.OrderDate
+            };
+
+            var allRefunds = await _context.Refunds
+        // Phải Include OrderDetail để lấy thông tin sản phẩm (ProductName, Sku, Price)
+        .Include(r => r.OrderDetail)
+        .Where(r => r.OrderId == orderId)
+        .OrderByDescending(r => r.CreatedAt)
+        .ToListAsync();
+
+            orderActivityDto.AllRefunds = allRefunds.Select(r =>
+            {
+                // 🚨 CHÚ Ý: Vì mỗi Refund chỉ là 1 Item, TotalRequestedAmount = Amount
+                var refundItemDetails = new RefundItemDetailsDto
+                {
+                    OrderDetailId = r.OrderDetailId ?? 0,
+                 //   ProductName = r.OrderDetail?.ProductVariant.Product.ProductName ?? "N/A",
+                 //   Sku = r.OrderDetail?.ProductVariant.Sku ?? "N/A",
+                    Quantity = r.OrderDetail?.Quantity ?? 0,
+                    OriginalPrice = r.OrderDetail?.Price ?? 0,
+                    RefundAmount = r.Amount // Số tiền yêu cầu hoàn
+                };
+
+                return new RefundDetailsDto
+                {
+                    RefundId = r.RefundId,
+                    OrderId = r.OrderId,
+                    OrderCode = orderData.OrderCode ?? "N/A",
+                    Status = r.Status,
+                    TotalRequestedAmount = r.Amount, // Total = Amount vì chỉ có 1 item
+                    Reason = r.Reason,
+                    ProofUrl = r.ProofUrl,
+                    StaffRejectionReason = r.StaffRejectionReason,
+                    CreatedAt = r.CreatedAt,
+                    ReviewedAt = r.ReviewedAt,
+                    // ✨ Tạo danh sách chỉ với Item duy nhất này ✨
+                    Items = new List<RefundItemDetailsDto> { refundItemDetails }
+                };
+            }).ToList();
+
+
+            // ----------------------------------------------------------------------
+            // --- 3. XỬ LÝ REPRINT CHI TIẾT (TỔNG HỢP CẤP ORDER) ---
+            // ----------------------------------------------------------------------
+
+            // Sử dụng OrderDetailIds từ bước 1 để truy vấn Reprints
+            var reprints = await _context.Reprints
+                .Include(r => r.OriginalOrderDetail)
+                // Kiểm tra xem OrderDetailIds có dữ liệu trước khi dùng Contains
+                .Where(r => orderData.OrderDetailIds != null && orderData.OrderDetailIds.Contains(r.OriginalOrderDetailId))
+                .OrderByDescending(r => r.RequestDate)
+                .ToListAsync();
+
+            orderActivityDto.AllReprints = reprints.Select(r => new ReprintDetailsDto
+            {
+                Id = r.Id,
+
+                // ✨ FIX 1: Dùng ?. trên OriginalOrderDetail ✨
+             //   OrderId = r.OriginalOrderDetail?.OrderId ?? 0,
+
+               // OrderCode = orderData.OrderCode ?? "N/A",
+                Status = r.Status,
+                Reason = r.Reason,
+                ProofUrl = r.ProofUrl,
+                RejectionReason = r.StaffRejectionReason,
+                RequestDate = r.RequestDate,
+
+                RequestedItems = new List<ReprintItemDto>
+        {
+            new ReprintItemDto
+            {
+                OrderDetailId = r.OriginalOrderDetailId,
+            
+                // ✨ FIX 2: Dùng ?. trên OriginalOrderDetail ✨
+             //   ProductName = r.OriginalOrderDetail?.ProductVariant.Product.ProductName ?? "Unknown Product",
+              //  SKU = r.OriginalOrderDetail?.ProductVariant.Sku ?? "N/A",
+                Quantity = r.OriginalOrderDetail?.Quantity ?? 0, // Sử dụng ?? 0 cho kiểu int
+                ReprintSelected = true
+            }
+        }
+                }).ToList();
+
+            return orderActivityDto;
+        }
+
     }
 }
