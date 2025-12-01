@@ -214,7 +214,7 @@ namespace CB_Gift.Services
                 ProductionStatus.SHIPPING => 13,
                 ProductionStatus.SHIPPED => 14,
                 ProductionStatus.PROD_REWORK => 15,
-                ProductionStatus.HOLD => 16,
+                ProductionStatus.HOLD_RF => 16,
                 ProductionStatus.HOLD_RP => 17,
                 ProductionStatus.REFUND => 18,
                 _ => 1

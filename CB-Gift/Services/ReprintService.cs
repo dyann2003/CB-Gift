@@ -1,9 +1,12 @@
 ﻿using AutoMapper;
 using CB_Gift.Data;
 using CB_Gift.DTOs;
+using CB_Gift.Hubs;
 using CB_Gift.Models;
 using CB_Gift.Models.Enums;
 using CB_Gift.Services.IService;
+using DocumentFormat.OpenXml.Drawing;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace CB_Gift.Services
@@ -13,12 +16,21 @@ namespace CB_Gift.Services
         private readonly CBGiftDbContext _context;
         private readonly IOrderService _orderService;
         private readonly IMapper _mapper;
+        private readonly INotificationService _notificationService;
+        private readonly IHubContext<NotificationHub> _hubContext;
+        private readonly ILogger<RefundService> _logger;
 
-        public ReprintService(CBGiftDbContext context, IOrderService orderService, IMapper mapper)
+
+        public ReprintService(CBGiftDbContext context, IOrderService orderService, IMapper mapper, INotificationService notificationService,
+            IHubContext<NotificationHub> hubContext,
+            ILogger<RefundService> logger)
         {
             _context = context;
             _orderService = orderService;
             _mapper = mapper;
+            _notificationService = notificationService;
+            _hubContext = hubContext;
+            _logger = logger;
         }
 
         // 1️ USER SUBMIT REPRINT REQUEST
@@ -198,6 +210,28 @@ namespace CB_Gift.Services
             originalOrder.StatusOrder = 15;
 
             await _context.SaveChangesAsync();
+            // ✨ GỬI THÔNG BÁO CHẤP NHẬN ✨
+            try
+            {
+                string newOrderCode = created.OrderCode; // Giả sử created là OrderDto trả về từ MakeOrder
+
+                // Gửi thông báo (chuông) cho Seller
+                await _notificationService.CreateAndSendNotificationAsync(
+                    sellerId,
+                    $"Yêu cầu In lại cho Order #{originalOrder.OrderCode} đã được CHẤP NHẬN. Đơn In lại mới: #{newOrderCode}",
+                    $"/seller/orders/{created.OrderId}" // Link đến đơn mới
+                );
+
+                // Gửi cập nhật trạng thái real-time
+                await _hubContext.Clients.User(sellerId).SendAsync( // Hoặc Clients.Group($"order_{originalOrder.OrderId}")
+                    "ReprintStatusChanged",
+                    new { orderId = originalOrder.OrderId, newStatus = "Approved", newOrderId = created.OrderId }
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho ApproveReprintAsync (Order ID: {OrderId})", originalOrder.OrderId);
+            }
         }
 
         // 3️ MANAGER REJECT
@@ -221,7 +255,9 @@ namespace CB_Gift.Services
             {
                 throw new Exception("Lỗi: Vui lòng chỉ xử lý (Từ chối) các sản phẩm thuộc cùng 1 đơn hàng.");
             }
-
+            var sellerId = listReprints.First().OriginalOrderDetail.Order.SellerUserId;
+            var originalOrderCode = listReprints.First().OriginalOrderDetail.Order.OrderCode;
+            var originalOrderId = listReprints.First().OriginalOrderDetail.Order.OrderId;
             // 2. Duyệt qua từng yêu cầu để cập nhật
             foreach (var reprint in listReprints)
             {
@@ -230,6 +266,14 @@ namespace CB_Gift.Services
                 reprint.Status = "Rejected"; //Set trạng thái từ chối
                 reprint.StaffRejectionReason = dto.RejectReason;
 
+                if (reprint.OriginalOrderDetail != null)
+                {
+                    // GIẢ ĐỊNH 1: Sử dụng giá trị số 9 (Dựa trên PRODUCTION_STATUS_MAP phổ biến)
+                    reprint.OriginalOrderDetail.ProductionStatus = ProductionStatus.QC_DONE;
+
+                    // HOẶC (Nếu bạn dùng Enum ProductionStatus):
+                    // reprint.OriginalOrderDetail.ProductionStatus = (int)ProductionStatus.QC_DONE; 
+                }
                 // 3. Khôi phục trạng thái đơn hàng gốc (Nếu cần)
                 if (reprint.OriginalOrderDetail?.Order != null)
                 {
@@ -238,6 +282,30 @@ namespace CB_Gift.Services
             }
 
             await _context.SaveChangesAsync();
+            try
+            {
+                // Gửi thông báo (chuông) cho Seller
+                await _notificationService.CreateAndSendNotificationAsync(
+                    sellerId,
+                    $"Yêu cầu In lại cho Order #{originalOrderCode} đã bị TỪ CHỐI. Lý do: {dto.RejectReason}",
+                    $"/seller/order-view/{originalOrderId}"
+                );
+
+                // Gửi cập nhật trạng thái real-time
+                await _hubContext.Clients.User(sellerId).SendAsync( // Hoặc Clients.Group($"order_{originalOrder.OrderId}")
+                    "ReprintStatusChanged",
+                    new
+                    {
+                        orderId = originalOrderId,
+                        newStatus = "Rejected",
+                        rejectionReason = dto.RejectReason,
+                    }
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho RejectReprintAsync (Order ID: {OrderId})", originalOrderId);
+            }
         }
         /* public async Task RequestReprintAsync(SellerReprintRequestDto request, string sellerId)
          {
@@ -352,8 +420,32 @@ namespace CB_Gift.Services
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                // 4. GỬI THÔNG BÁO (Logic SignalR)
-                // ...
+                // 4. ✨ GỬI THÔNG BÁO (SignalR/Notification) ✨
+                try
+                {
+                    // Gửi thông báo đến Staff dashboards (SignalR)
+                    await _hubContext.Clients.Group("StaffNotifications").SendAsync(
+                        "NewReprintRequest",
+                        new
+                        {
+                            orderId = request.OrderId,
+                            orderCode = order.OrderCode,
+                           // itemCount = newReprintCount,
+                            sellerId = sellerId
+                        }
+                    );
+
+                    // Thêm notification vào DB cho Staff/Manager
+                    await _notificationService.CreateAndSendNotificationAsync(
+                        "StaffGroup", // Gửi tới nhóm Staff/Manager
+                        $"Yêu cầu In lại mới cho Order #{order.OrderCode}.",
+                        $"/manager/reprint-review/{request.OrderId}" // Đường dẫn xem yêu cầu
+                    );
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho RequestReprintAsync (OrderID: {OrderId})", request.OrderId);
+                }
             }
             catch (Exception ex)
             {
@@ -628,6 +720,7 @@ namespace CB_Gift.Services
                 ProofUrl = primaryReprint.ProofUrl,
 
                 RejectionReason = primaryReprint.StaffRejectionReason,
+                RequestDate = primaryReprint.RequestDate,
 
                 // 🎯 TRUYỀN TOÀN BỘ DANH SÁCH ITEMS THUỘC NHÓM
                 RequestedItems = requestedItems

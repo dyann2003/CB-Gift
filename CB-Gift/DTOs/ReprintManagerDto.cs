@@ -36,6 +36,7 @@ namespace CB_Gift.DTOs
 
         // Thông tin Duyệt
         public string? RejectionReason { get; set; } // Lý do từ chối (của staff/manager)
+        public DateTime RequestDate { get; set; }
 
         // Danh sách các OrderDetail liên quan (ReprintItemDto giữ nguyên)
         public List<ReprintItemDto> RequestedItems { get; set; } = new List<ReprintItemDto>();
