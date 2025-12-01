@@ -52,7 +52,7 @@ namespace CB_Gift.Services
                 ProductionStatus.PROD_REWORK,
                 ProductionStatus.SHIPPING,
                 ProductionStatus.SHIPPED,
-                ProductionStatus.HOLD,
+                ProductionStatus.HOLD_RF,
                 ProductionStatus.HOLD_RP,
                 ProductionStatus.REFUND
             };

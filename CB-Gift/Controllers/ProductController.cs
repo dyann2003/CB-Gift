@@ -8,6 +8,7 @@ namespace CB_Gift.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class ProductController : ControllerBase
     {
         private readonly IProductService _service;
@@ -21,6 +22,7 @@ namespace CB_Gift.Controllers
 
         // GET: api/Product
         [HttpGet]
+        [AllowAnonymous]
         public async Task<IActionResult> GetAll()
         {
             var products = await _service.GetAllAsync();
@@ -28,6 +30,7 @@ namespace CB_Gift.Controllers
         }
 
         [HttpGet("filter")]
+        [AllowAnonymous]
         public async Task<IActionResult> FilterProducts(
            string? searchTerm = "",
            string? category = "",
@@ -60,6 +63,7 @@ namespace CB_Gift.Controllers
 
         // GET: api/Product/5
         [HttpGet("{id}")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetById(int id)
         {
             var product = await _service.GetByIdAsync(id);

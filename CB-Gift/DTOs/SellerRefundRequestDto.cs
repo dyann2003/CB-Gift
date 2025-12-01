@@ -74,6 +74,7 @@ namespace CB_Gift.DTOs
         public string? ProofUrl { get; set; }
         public string? StaffRejectionReason { get; set; }
         public DateTime CreatedAt { get; set; }
+        public DateTime? ReviewedAt { get; set; }
         public List<RefundItemDetailsDto> Items { get; set; } = new List<RefundItemDetailsDto>();
     }
 
