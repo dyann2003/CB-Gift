@@ -233,13 +233,23 @@ builder.Services.AddQuartz(q =>
     // Đăng ký Job
     var jobKey = new JobKey("groupOrdersJob");
     q.AddJob<GroupOrdersJob>(opts => opts.WithIdentity(jobKey));
-
     // Trigger hằng ngày 00:05
     q.AddTrigger(opts => opts
         .ForJob(jobKey)
         .WithIdentity("groupOrdersTrigger")
         .StartNow()
         .WithSchedule(CronScheduleBuilder.DailyAtHourAndMinute(0, 5)) // chạy 00:05 hàng ngày
+    );
+    var invoiceJobKey = new JobKey("createMonthlyInvoicesJob");
+    q.AddJob<CreateMonthlyInvoicesJob>(opts => opts.WithIdentity(invoiceJobKey));
+    // 2. Trigger chạy vào ngày 10 hàng tháng, lúc 00:05
+    q.AddTrigger(opts => opts
+        .ForJob(invoiceJobKey)
+        .WithIdentity("monthlyInvoiceTrigger")
+        .StartNow()
+        // Sử dụng builder để đặt lịch: Ngày 10, Giờ 0 (12 AM), Phút 5
+        .WithSchedule(CronScheduleBuilder.MonthlyOnDayAndHourAndMinute(10, 0, 5))
+    // Hoặc Cron Expression: "0 5 0 10 * ?"
     );
 });
 
