@@ -681,6 +681,64 @@ namespace CB_Gift.Services
 
             return _mapper.Map<MakeOrderResponse>(updatedOrder);
         }
+
+        public async Task<OrderDto> UpdateOrderAddressAsync(int orderId, UpdateAddressRequest request, string sellerUserId)
+        {
+            var order = await _context.Orders
+                .FirstOrDefaultAsync(o => o.OrderId == orderId && o.SellerUserId == sellerUserId);
+
+            if (order == null)
+                throw new KeyNotFoundException("Không tìm thấy đơn hàng hoặc không có quyền.");
+
+            var customer = await _context.EndCustomers.FindAsync(order.EndCustomerId);
+
+            if (customer == null)
+                throw new KeyNotFoundException("Không tìm thấy thông tin khách hàng.");
+
+            // ==========================================================
+            // BƯỚC 1: Cập nhật thông tin khách hàng (EndCustomer)
+            // ==========================================================
+
+            // Cập nhật các trường tên và địa chỉ chi tiết (EndCustomer)
+            customer.Name = request.Name;
+            customer.Phone = request.Phone;
+            customer.Email = request.Email;
+            customer.Address = request.Address;
+            customer.Address1 = request.Address1;
+            // customer.Zipcode = request.ZipCode; // Nếu ZipCode nằm trong EndCustomer
+
+            // Mapping các TÊN địa lý (Province/District/Ward Name) vào EndCustomer
+            // (Giữ lại để đảm bảo không mất dữ liệu hiển thị nếu EndCustomer dùng các trường này)
+            customer.ShipState = request.ProvinceName;
+            customer.ShipCity = request.DistrictName;
+            customer.ShipCountry = request.WardName;
+
+            // ==========================================================
+            // BƯỚC 2: Cập nhật các ID địa lý vào Order
+            // (Các trường này phải được thêm vào UpdateAddressRequest)
+            // ==========================================================
+
+            // ✅ CẬP NHẬT ID TỈNH/HUYỆN/XÃ VÀO BẢNG ORDER
+            order.ToProvinceId = request.ToProvinceId;
+            order.ToDistrictId = request.ToDistrictId;
+            order.ToWardCode = request.ToWardCode;
+
+            // Đảm bảo TotalCost không bị thay đổi trong hàm này
+            // _context.Orders.Update(order); // Entity Framework sẽ tự động theo dõi thay đổi
+
+            await _context.SaveChangesAsync();
+
+            // Trả về Order DTO mới
+            var dto = await _context.Orders
+                .Include(o => o.EndCustomer)
+                .Include(o => o.OrderDetails)
+                .AsNoTracking()
+                .Where(o => o.OrderId == orderId)
+                .Select(o => _mapper.Map<OrderDto>(o))
+                .FirstAsync();
+
+            return dto;
+        }
         public async Task<bool> DeleteOrderAsync(int orderId, string sellerUserId)
         {
             var order = await _context.Orders

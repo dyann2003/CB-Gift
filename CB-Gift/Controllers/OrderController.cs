@@ -144,6 +144,30 @@ namespace CB_Gift.Controllers
                 return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn.", error = ex.Message });
             }
         }
+
+
+        //edit address 
+
+        [HttpPut("update-address/{orderId}")]
+        public async Task<IActionResult> UpdateAddress(int orderId, [FromBody] UpdateAddressRequest request)
+        {
+            try
+            {
+                string sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+                var result = await _orderService.UpdateOrderAddressAsync(orderId, request, sellerId);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn.", error = ex.Message });
+            }
+        }
+
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteOrder(int id)
         {
