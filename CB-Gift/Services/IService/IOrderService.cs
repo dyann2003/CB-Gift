@@ -70,5 +70,6 @@ namespace CB_Gift.Services.IService
         /// sellerUserId = id của Seller đang đăng nhập.
         /// </summary>
         Task<OrderImportResult> ImportFromExcelAsync(IFormFile file, string sellerUserId);
+        Task<OrderActivityDto?> GetOrderActivityTimelineAsync(int orderId);
     }
 }

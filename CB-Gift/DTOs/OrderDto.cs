@@ -235,4 +235,22 @@ namespace CB_Gift.DTOs
         public string? ToWardCode { get; set; }
     }
 
+    public class OrderActivityDto
+    {
+        // Dữ liệu cơ bản cho timeline
+        public DateTime? CreationDate { get; set; }
+        public DateTime? OrderDate { get; set; } // Ngày confirmed
+
+        // --- Danh sách YÊU CẦU REFUND đã tổng hợp ---
+        // Sử dụng RefundDetailsDto (chứa CreatedAt, ReviewedAt, Status, Items)
+        public List<RefundDetailsDto> AllRefunds { get; set; } = new List<RefundDetailsDto>();
+
+        // --- Danh sách YÊU CẦU REPRINT đã tổng hợp ---
+        // Sử dụng ReprintDetailsDto (chứa RequestDate, Status, RequestedItems)
+        public List<ReprintDetailsDto> AllReprints { get; set; } = new List<ReprintDetailsDto>();
+
+        // Dữ liệu cho Order Detail (cần thiết để lấy tên sản phẩm cho mô tả Reprint/Refund nếu không dùng AllReprints/AllRefunds)
+        // Tuy nhiên, vì bạn đã dùng AllRefunds/AllReprints, trường này chỉ cần thiết nếu bạn muốn kiểm tra dữ liệu Order Detail cơ bản.
+        // Tôi sẽ giữ nó ở dạng List ID để làm nhẹ DTO nhất có thể, hoặc bỏ qua nếu không cần.
+    }
 }

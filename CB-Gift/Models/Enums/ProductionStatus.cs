@@ -20,15 +20,15 @@
         FINISHED, //8
         QC_DONE, //9    
         QC_FAIL, //10
-        PROD_REWORK, //11
+        PROD_REWORK, //11  // Đã Reprint
 
         // Đóng gói/Giao hàng
         SHIPPING, //12
         SHIPPED, // 13 Đã giao hàng
 
         // Khác
-        HOLD,  //14
-        HOLD_RP, //15
-        REFUND //16
+        HOLD_RF,  //14 // chờ Refund
+        HOLD_RP, //15  // Chờ reprint
+        REFUND //16    // Đã Refund
     }
 }

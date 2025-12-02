@@ -61,7 +61,7 @@ namespace CB_Gift.Services
             };
             _context.Refunds.Add(newRefund);
             // chuyển order sang trạng thái HOLD
-            order.StatusOrder = 16; // 16 = HOLD (Chuyển sang "Chờ")
+            order.StatusOrder = 16; // 16 = HOLD_RF (Chuyển sang "Chờ")
             // ✅ LƯU VÀO DB TRƯỚC
             await _context.SaveChangesAsync();
 
@@ -235,7 +235,8 @@ namespace CB_Gift.Services
 
                     if (orderDetail == null)
                         throw new KeyNotFoundException($"Không tìm thấy chi tiết sản phẩm ID: {itemRequest.OrderDetailId} trong đơn hàng.");
-
+                    //set orderdetail = HOLF_RF
+                    orderDetail.ProductionStatus = Models.Enums.ProductionStatus.HOLD_RF;
                     if (itemRequest.RequestedAmount <= 0)
                         throw new ArgumentException($"Số tiền hoàn lại cho sản phẩm {itemRequest.OrderDetailId} phải lớn hơn 0.");
 
@@ -478,6 +479,7 @@ namespace CB_Gift.Services
                 ProofUrl = refund.ProofUrl,
                 StaffRejectionReason = refund.StaffRejectionReason,
                 CreatedAt = refund.CreatedAt,
+                ReviewedAt = refund.ReviewedAt,
                 // Trả về tất cả các items liên quan đến Order gốc để Manager có cái nhìn tổng quan
                 Items = items
             };
