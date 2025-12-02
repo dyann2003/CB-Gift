@@ -160,6 +160,27 @@ builder.Services.AddHttpClient("GhnDevClient", client =>
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
+// Luôn đăng ký Service thật vào container, vì thằng Demo cần gọi thằng này
+builder.Services.AddScoped<GhnShippingService>();
+
+// LOGIC CHUYỂN ĐỔI (SWITCH) DEMO/REAL CHO INTERFACE
+// Lấy cấu hình từ appsettings.json
+var useDemoMode = builder.Configuration.GetValue<bool>("GhnSettings:UseDemoMode");
+
+if (useDemoMode)
+{
+    Console.WriteLine(">>> HỆ THỐNG ĐANG CHẠY CHẾ ĐỘ DEMO SHIPMENT <<<");
+    // Nếu bật Demo: Inject DemoShippingService khi ai đó gọi IShippingService
+    builder.Services.AddScoped<IShippingService, DemoShippingService>();
+}
+else
+{
+    Console.WriteLine(">>> HỆ THỐNG ĐANG CHẠY CHẾ ĐỘ REAL SHIPMENT <<<");
+    // Nếu tắt Demo: Trỏ IShippingService về GhnShippingService đã đăng ký ở trên
+    builder.Services.AddScoped<IShippingService>(provider =>
+        provider.GetRequiredService<GhnShippingService>());
+}
+
 // ------------------------------------
 
 // ================== CORS (cho Next.js FE) ==================
@@ -200,7 +221,7 @@ builder.Services.AddScoped<ICancellationService, CancellationService>();
 builder.Services.AddScoped<IRefundService, RefundService>();
 builder.Services.AddScoped<IReprintService, ReprintService>();
 builder.Services.AddScoped<ILocationService, GhnLocationService>();
-builder.Services.AddScoped<IShippingService, GhnShippingService>();
+//builder.Services.AddScoped<IShippingService, GhnShippingService>();
 builder.Services.AddScoped<IGhnPrintService, GhnPrintService>();
 builder.Services.AddScoped<IManagementAccountService, ManagementAccountService>();
 builder.Services.AddSingleton<NotificationHub>();

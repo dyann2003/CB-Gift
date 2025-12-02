@@ -37,6 +37,7 @@ namespace CB_Gift.Data
         public virtual DbSet<Refund> Refunds { get; set; }
         public virtual DbSet<Reprint> Reprints { get; set; }
         public virtual DbSet<Discount> Discounts { get; set; }
+        public DbSet<GhnTrackingLog> GhnTrackingLogs { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
