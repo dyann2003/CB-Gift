@@ -1164,6 +1164,71 @@ public class InvoiceService : IInvoiceService
         // 3. Gọi hàm tạo hóa đơn gốc (mà bạn đã cung cấp)
         return await CreateInvoiceAsync(createInvoiceRequest, staffId);
     }
+    public async Task RunMonthlyInvoiceCreationJobAsync(string staffId, int year, int month)
+    {
+        var startTime = DateTime.UtcNow;
+        _logger.LogInformation("Job RunMonthlyInvoiceCreationJobAsync STARTED for {Month}/{Year} at: {Time}", month, year, startTime);
+
+        try
+        {
+            // 1. Tìm tất cả các Seller có đơn hàng trong tháng mục tiêu
+            var allSellerIds = await _context.Orders
+                .Where(o => o.OrderDate.Year == year && o.OrderDate.Month == month)
+                .Select(o => o.SellerUserId)
+                .Distinct()
+                .ToListAsync();
+
+            int invoicesCreated = 0;
+
+            if (!allSellerIds.Any())
+            {
+                _logger.LogInformation("Job SKIPPED. No sellers found with orders in {Month}/{Year}.", month, year);
+                return;
+            }
+
+            // 2. Lặp qua từng Seller và tạo hóa đơn cho họ
+            foreach (var sellerId in allSellerIds)
+            {
+                // Tạo Request DTO cho hàm nghiệp vụ chính
+                var request = new CreateMonthlyInvoiceRequest
+                {
+                    SellerId = sellerId,
+                    Year = year,
+                    Month = month,
+                    Notes = $"Hóa đơn tổng hợp tự động tháng {month}/{year}"
+                };
+
+                try
+                {
+                    // Gọi hàm tạo hóa đơn đã có logic nghiệp vụ đầy đủ
+                    var newInvoice = await CreateInvoiceForMonthAsync(request, staffId);
+                    invoicesCreated++;
+                    // LOG NÀY để xác nhận luồng đã tạo hóa đơn và kích hoạt thông báo
+                    _logger.LogInformation("Successfully created Invoice {InvoiceId} for Seller {SellerId}. Notification triggered.",
+                        newInvoice.InvoiceId, sellerId);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    // Bỏ qua nếu Seller không có đơn hàng "Đã Ship" mới (logic trong CreateInvoiceForMonthAsync)
+                    _logger.LogWarning("Skipped invoice creation for Seller {SellerId}: {Message}", sellerId, ex.Message);
+                }
+                catch (Exception ex)
+                {
+                    // Log lỗi và tiếp tục với Seller tiếp theo
+                    _logger.LogError(ex, "FAILED to create invoice for Seller {SellerId} in {Month}/{Year}", sellerId, month, year);
+                }
+            }
+
+            // 3. Ghi log khi hoàn thành
+            var duration = DateTime.UtcNow - startTime;
+            _logger.LogInformation("Job RunMonthlyInvoiceCreationJobAsync COMPLETED successfully. Created {Count} invoices. Duration: {Duration}ms",
+                invoicesCreated, duration.TotalMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Job RunMonthlyInvoiceCreationJobAsync FAILED (Unhandled Top-Level Exception)");
+        }
+    }
 
 
 }
