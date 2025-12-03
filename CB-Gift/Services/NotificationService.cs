@@ -42,12 +42,17 @@ namespace CB_Gift.Services
             );
         }
 
-        public async Task<List<Notification>> GetForUserAsync(string userId, int top = 50)
+        public async Task<List<Notification>> GetForUserAsync(string userId, int pageIndex, int pageSize)
         {
+            // Validate để tránh lỗi nếu FE truyền số âm
+            if (pageIndex < 1) pageIndex = 1;
+            if (pageSize <= 0) pageSize = 10;
+
             return await _context.Notifications
                 .Where(x => x.UserId == userId)
-                .OrderByDescending(x => x.CreatedAt)
-                .Take(top)
+                .OrderByDescending(x => x.CreatedAt) // Sắp xếp mới nhất lên đầu
+                .Skip((pageIndex - 1) * pageSize)      // Bỏ qua (Trang hiện tại - 1) * Số lượng
+                .Take(pageSize)                        // Chỉ lấy đúng số lượng yêu cầu
                 .ToListAsync();
         }
 
@@ -62,6 +67,27 @@ namespace CB_Gift.Services
                 await _context.SaveChangesAsync();
             }
         }
+
+        public async Task MarkAllAsReadAsync(string userId)
+        {
+            // Tìm tất cả thông báo chưa đọc của user đó
+            var unreadNotifications = await _context.Notifications
+                .Where(x => x.UserId == userId && !x.IsRead)
+                .ToListAsync();
+
+            if (unreadNotifications.Any())
+            {
+                // Cập nhật trạng thái
+                foreach (var noti in unreadNotifications)
+                {
+                    noti.IsRead = true;
+                }
+
+                // Lưu DB
+                await _context.SaveChangesAsync();
+            }
+        }
+
         public async Task<int> CountUnreadForUserAsync(string userId)
         {
             return await _context.Notifications

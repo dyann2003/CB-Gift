@@ -20,14 +20,17 @@ namespace CB_Gift.Controllers
 
         // ✔ 1. Lấy danh sách thông báo của user hiện tại
         [HttpGet]
-        public async Task<IActionResult> GetMyNotifications([FromQuery] int top = 50)
+        // Mặc định: Trang 1, mỗi lần lấy 10 tin
+        public async Task<IActionResult> GetMyNotifications([FromQuery] int pageIndex = 1, [FromQuery] int pageSize = 10)
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
             if (userId == null)
                 return Unauthorized();
 
-            var list = await _notificationService.GetForUserAsync(userId, top);
+            // Gọi service với tham số phân trang
+            var list = await _notificationService.GetForUserAsync(userId, pageIndex, pageSize);
+
             return Ok(list);
         }
 
@@ -69,6 +72,16 @@ namespace CB_Gift.Controllers
 
             var count = await _notificationService.CountUnreadForUserAsync(userId);
             return Ok(new { unreadCount = count });
+        }
+
+        [HttpPut("read-all")]
+        public async Task<IActionResult> MarkAllAsRead()
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (userId == null) return Unauthorized();
+
+            await _notificationService.MarkAllAsReadAsync(userId);
+            return NoContent();
         }
 
         public class CreateNotificationDto

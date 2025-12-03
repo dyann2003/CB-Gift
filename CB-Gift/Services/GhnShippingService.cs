@@ -134,7 +134,7 @@ namespace CB_Gift.Services
                 throw new InvalidOperationException("Không tìm thấy dữ liệu đơn hàng.");
             }
             //LOGIC ĐỒNG BỘ STATUS VÀO DB (MỚI THÊM VÀO)
-            await SyncGhnStatusToLocalDbAsync(orderCode, data.Status);
+            //await SyncGhnStatusToLocalDbAsync(orderCode, data.Status);
 
             return new TrackingResult
             {
