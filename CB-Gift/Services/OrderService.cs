@@ -909,7 +909,7 @@ namespace CB_Gift.Services
                     // 1. Gửi thông báo (chuông) cho Seller
                     await _notificationService.CreateAndSendNotificationAsync(
                         order.SellerUserId,
-                        $"Đơn hàng #{orderId} của bạn đang tiến hành giao. Mã vận đơn: {order.Tracking}",
+                        $"Đơn hàng #{order.OrderCode} của bạn đang tiến hành giao. Mã vận đơn: {order.Tracking}",
                         $"/seller/orders/{orderId}"
                     );
 
@@ -926,6 +926,58 @@ namespace CB_Gift.Services
                 }
                 // ✅ KẾT THÚC GỬI THÔNG BÁO
                 return new ApproveOrderResult { IsSuccess = true };
+            }
+            // Bắt lỗi 400 (Bad Request)
+            // Bắt lỗi 400 (Bad Request)
+            catch (Exception ex) when (ex.Message.Contains("400") || (ex is System.Net.Http.HttpRequestException httpEx && httpEx.StatusCode == System.Net.HttpStatusCode.BadRequest))
+            {
+                try
+                {
+                    // 1. Phân tích nguyên nhân cụ thể từ Message lỗi
+                    string reasonDetail = "Địa chỉ hoặc SĐT không hợp lệ"; // Mặc định
+                    string logReason = "Likely invalid Address or Phone";
+
+                    // Kiểm tra các từ khóa lỗi thường gặp của GHN/GHTK
+                    if (ex.Message.Contains("PHONE_INVALID") || ex.Message.Contains("phone"))
+                    {
+                        reasonDetail = "Số điện thoại người nhận không đúng định dạng (thừa/thiếu số hoặc đầu số lạ)";
+                        logReason = "Invalid Phone Number";
+                    }
+                    else if (ex.Message.Contains("WARD") || ex.Message.Contains("DISTRICT") || ex.Message.Contains("ADDRESS"))
+                    {
+                        reasonDetail = "Địa chỉ (Phường/Xã hoặc Quận/Huyện) không khớp với hệ thống vận chuyển";
+                        logReason = "Invalid Address/Geography";
+                    }
+
+                    // 2. Cập nhật trạng thái về 19 (CHANGE_ADDRESS)
+                    order.StatusOrder = 19;
+                    _context.Orders.Update(order);
+                    await _context.SaveChangesAsync();
+
+                    // 3. Gửi thông báo chi tiết cho Seller
+                    string notificationMsg = $"Tạo đơn vận chuyển thất bại: {reasonDetail}. Đơn hàng #{order.OrderCode} đã chuyển sang trạng thái chờ. Vui lòng cập nhật lại.";
+
+                    await _notificationService.CreateAndSendNotificationAsync(
+                        order.SellerUserId,
+                        notificationMsg,
+                        $"/seller/orders/{orderId}"
+                    );
+
+                    // Log lỗi hệ thống
+                    _logger.LogWarning(ex, $"Shipping API returned 400 for Order {orderId}. Reason: {logReason}.");
+
+                    return new ApproveOrderResult
+                    {
+                        IsSuccess = false,
+                        // Trả về FE thông báo cụ thể luôn
+                        ErrorMessage = notificationMsg
+                    };
+                }
+                catch (Exception updateEx)
+                {
+                    _logger.LogError(updateEx, "Lỗi khi cập nhật trạng thái chờ cho đơn hàng " + orderId);
+                    return new ApproveOrderResult { IsSuccess = false, ErrorMessage = "Lỗi nghiêm trọng: Không thể cập nhật trạng thái đơn hàng sau khi API vận chuyển lỗi." };
+                }
             }
             catch (DbUpdateException ex)
             {
