@@ -7,7 +7,7 @@ namespace CB_Gift.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-  //  [Authorize(Roles = "Manager")] 
+    [Authorize]
     public class CategoriesController : ControllerBase
     {
         private readonly ICategoryService _categoryService;
@@ -19,11 +19,44 @@ namespace CB_Gift.Controllers
 
         // GET: api/Categories
         [HttpGet]
+        [AllowAnonymous]
         public async Task<IActionResult> GetCategories()
         {
             var categories = await _categoryService.GetAllCategoriesAsync();
             return Ok(categories);
         }
+
+        // ---------------------------
+        // 🔍 FILTER + SEARCH + PAGING
+        // ---------------------------
+        [HttpGet("filter")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetFilteredCategories(
+            [FromQuery] string? searchTerm = null,
+            [FromQuery] int? status = null,
+            [FromQuery] string? sortColumn = null,
+            [FromQuery] string? sortDirection = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10)
+        {
+            try
+            {
+                var (categories, total) = await _categoryService.GetFilteredAndPagedCategoriesAsync(
+                    searchTerm, status, sortColumn, sortDirection, page, pageSize);
+
+                return Ok(new { total, categories });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    message = "Lỗi khi lấy danh sách danh mục.",
+                    detail = ex.Message
+                });
+            }
+        }
+
+
         [HttpGet("public")]
         [AllowAnonymous] // Cho phép tất cả mọi người truy cập
         public async Task<IActionResult> GetPublicCategories()
@@ -34,6 +67,7 @@ namespace CB_Gift.Controllers
 
         // GET: api/Categories/5
         [HttpGet("{id}")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetCategory(int id)
         {
             var category = await _categoryService.GetCategoryByIdAsync(id);
@@ -46,6 +80,7 @@ namespace CB_Gift.Controllers
 
         // POST: api/Categories
         [HttpPost]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> CreateCategory([FromBody] CreateCategoryDto createCategoryDto)
         {
             if (!ModelState.IsValid)
@@ -64,21 +99,47 @@ namespace CB_Gift.Controllers
         }
 
         // PUT: api/Categories/5
+        //[HttpPut("{id}")]
+        //public async Task<IActionResult> UpdateCategory(int id, [FromBody] UpdateCategoryDto updateCategoryDto)
+        //{
+        //    if (!ModelState.IsValid)
+        //    {
+        //        return BadRequest(ModelState);
+        //    }
+        //    try
+        //    {
+        //        var success = await _categoryService.UpdateCategoryAsync(id, updateCategoryDto);
+        //        if (!success)
+        //        {
+        //            return NotFound($"Không tìm thấy danh mục với ID = {id}.");
+        //        }
+        //        return NoContent(); // Cập nhật thành công
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return BadRequest(ex.Message);
+        //    }
+        //}
+
+
+        // ---------------------------
+        // UPDATE CATEGORY (ONLY name + code)
+        // ---------------------------
         [HttpPut("{id}")]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> UpdateCategory(int id, [FromBody] UpdateCategoryDto updateCategoryDto)
         {
             if (!ModelState.IsValid)
-            {
                 return BadRequest(ModelState);
-            }
+
             try
             {
                 var success = await _categoryService.UpdateCategoryAsync(id, updateCategoryDto);
+
                 if (!success)
-                {
                     return NotFound($"Không tìm thấy danh mục với ID = {id}.");
-                }
-                return NoContent(); // Cập nhật thành công
+
+                return NoContent();
             }
             catch (Exception ex)
             {
@@ -86,18 +147,45 @@ namespace CB_Gift.Controllers
             }
         }
 
+
+
         // DELETE: api/Categories/5
+        //[HttpDelete("{id}")]
+        //public async Task<IActionResult> DeleteCategory(int id)
+        //{
+        //    try
+        //    {
+        //        var success = await _categoryService.DeleteCategoryAsync(id);
+        //        if (!success)
+        //        {
+        //            return NotFound($"Không tìm thấy danh mục với ID = {id}.");
+        //        }
+        //        return NoContent(); // Xóa thành công
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return BadRequest(ex.Message);
+        //    }
+        //}
+
+        // ---------------------------
+        // SOFT DELETE CATEGORY (status = 0)
+        // ---------------------------
         [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteCategory(int id)
+        [Authorize(Roles = "Manager")]
+        public async Task<IActionResult> SoftDeleteCategory(int id)
         {
             try
             {
-                var success = await _categoryService.DeleteCategoryAsync(id);
+                var success = await _categoryService.UpdateCategoryStatusAsync(
+                    id,
+                    new UpdateCategoryStatusDto { Status = 0 }
+                );
+
                 if (!success)
-                {
                     return NotFound($"Không tìm thấy danh mục với ID = {id}.");
-                }
-                return NoContent(); // Xóa thành công
+
+                return NoContent();
             }
             catch (Exception ex)
             {
@@ -105,22 +193,23 @@ namespace CB_Gift.Controllers
             }
         }
 
-        //Cap nhật status
+
+        // ---------------------------
+        // UPDATE STATUS (Restore, Disable…)
+        // ---------------------------
         [HttpPatch("{id}/status")]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> UpdateCategoryStatus(int id, [FromBody] UpdateCategoryStatusDto statusDto)
         {
             if (!ModelState.IsValid)
-            {
                 return BadRequest(ModelState);
-            }
 
             var success = await _categoryService.UpdateCategoryStatusAsync(id, statusDto);
-            if (!success)
-            {
-                return NotFound($"Không tìm thấy danh mục với ID = {id}.");
-            }
 
-            return NoContent(); // Cập nhật thành công
+            if (!success)
+                return NotFound($"Không tìm thấy danh mục với ID = {id}.");
+
+            return NoContent();
         }
     }
 }

@@ -8,7 +8,7 @@ namespace CB_Gift.Controllers
 {
     [ApiController]
     [Route("api/invoices")]
-    //[Authorize]
+    [Authorize]
     public class InvoicesController : ControllerBase
     {
         private readonly IInvoiceService _invoiceService;
@@ -27,7 +27,7 @@ namespace CB_Gift.Controllers
             return Ok(invoice);
         }
 
-        [HttpPost("create-payment-link")]
+    /*    [HttpPost("create-payment-link")]
         [Authorize(Roles = "Seller")]
         public async Task<IActionResult> CreatePaymentLink([FromBody] CreatePaymentLinkRequest request)
         {
@@ -45,7 +45,7 @@ namespace CB_Gift.Controllers
             {
                 return BadRequest(new { message = ex.Message });
             }
-        }
+        }*/
         /// <summary>
         /// Lấy danh sách hóa đơn cho Seller đang đăng nhập.
         /// Chỉ người dùng có vai trò "Seller" mới có thể gọi API này.
@@ -232,9 +232,9 @@ namespace CB_Gift.Controllers
             }
         }
 
-        // [THÊM MỚI] - API CHO NÚT "CREATE MONTHLY RECEIPT"
+        // - API CHO NÚT "CREATE MONTHLY RECEIPT"
         [HttpPost("create-monthly-invoice")]
-       // [Authorize(Roles = "Staff, Manager")]
+        [Authorize(Roles = "Staff, Manager")]
         public async Task<IActionResult> CreateMonthlyInvoice([FromBody] CreateMonthlyInvoiceRequest request)
         {
             try

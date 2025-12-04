@@ -86,13 +86,13 @@ namespace CB_Gift.Tests.Services
 
             logger = Mock.Of<ILogger<InvoiceService>>();
 
-            return new InvoiceService(
-                db,
-                CreateConfig(),
-                notifyMock.Object,
-                hubCtxMock.Object,
-                logger
-            );
+             return new InvoiceService(
+                 db,
+                 CreateConfig(),
+                 notifyMock.Object,
+                 hubCtxMock.Object,
+                 logger
+             );
         }
 
         /// <summary>

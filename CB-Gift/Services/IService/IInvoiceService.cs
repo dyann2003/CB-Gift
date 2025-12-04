@@ -8,7 +8,7 @@ namespace CB_Gift.Services.IService
         Task<Invoice> CreateInvoiceAsync(CreateInvoiceRequest request, string staffId);
         Task<string> CreatePaymentLinkAsync(CreatePaymentLinkRequest request, string sellerId);
         Task<int> LogWebhookAsync(string gateway, string payload, string signature);
-        Task ProcessPayOSWebhookAsync(int webhookLogId);
+        Task ProcessWebhookPaymentAsync(int webhookLogId, string gatewayName);
         Task<Invoice> GetInvoiceDetailsAsync(int invoiceId);
         Task<IEnumerable<Invoice>> GetInvoicesForSellerAsync(string sellerId);
         Task<PaginatedResult<InvoiceSummaryDto>> GetInvoicesForSellerPageAsync(
@@ -54,6 +54,9 @@ namespace CB_Gift.Services.IService
 
         // [API CHO NÚT "CREATE MONTHLY RECEIPT"]
         Task<Invoice> CreateInvoiceForMonthAsync(CreateMonthlyInvoiceRequest request, string staffId);
+
+        // Phương thức mới dành cho Job tự động
+        Task RunMonthlyInvoiceCreationJobAsync(string staffId, int year, int month);
 
         // [API CHO TAB "PAYMENT HISTORY"]
         //huy
