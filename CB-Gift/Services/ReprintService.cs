@@ -5,6 +5,7 @@ using CB_Gift.Hubs;
 using CB_Gift.Models;
 using CB_Gift.Models.Enums;
 using CB_Gift.Services.IService;
+using Microsoft.AspNetCore.Identity;
 using DocumentFormat.OpenXml.Drawing;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -17,18 +18,25 @@ namespace CB_Gift.Services
         private readonly IOrderService _orderService;
         private readonly IMapper _mapper;
         private readonly INotificationService _notificationService;
+        private readonly UserManager<AppUser> _userManager;
+        private readonly ILogger<ReprintService> _logger;
         private readonly IHubContext<NotificationHub> _hubContext;
-        private readonly ILogger<RefundService> _logger;
 
-
-        public ReprintService(CBGiftDbContext context, IOrderService orderService, IMapper mapper, INotificationService notificationService,
+        // Inject NotificationService vào Constructor
+        public ReprintService(
+            CBGiftDbContext context,
+            IOrderService orderService,
+            IMapper mapper,
+            ILogger<ReprintService> logger,
+            INotificationService notificationService,
             IHubContext<NotificationHub> hubContext,
-            ILogger<RefundService> logger)
+            UserManager<AppUser> userManager)
         {
             _context = context;
             _orderService = orderService;
             _mapper = mapper;
             _notificationService = notificationService;
+            _userManager = userManager;
             _hubContext = hubContext;
             _logger = logger;
         }
@@ -61,6 +69,36 @@ namespace CB_Gift.Services
 
             _context.Reprints.Add(reprint);
             await _context.SaveChangesAsync();
+
+            // GỬI THÔNG BÁO CHO TẤT CẢ MANAGER
+            // BƯỚC 1: Lấy danh sách Manager
+            var managers = await _userManager.GetUsersInRoleAsync("Manager");
+
+            // Lấy list ID (Nếu Project dùng Guid thì nhớ convert, nếu string thì giữ nguyên)
+            var managerIds = managers.Select(u => u.Id).ToList();
+
+            // BƯỚC 2: Gửi thông báo tuần tự (Sequential)
+            // KHÔNG dùng List<Task> và Task.WhenAll để tránh xung đột DbContext
+            if (managerIds.Any())
+            {
+                foreach (var mgrId in managerIds)
+                {
+                    try
+                    {
+                        // Dùng await trực tiếp để xử lý xong người này mới đến người kia
+                        await _notificationService.CreateAndSendNotificationAsync(
+                            mgrId.ToString(), // Chuyển sang string nếu mgrId là Guid
+                            $"Yêu cầu in lại MỚI từ đơn hàng #{orderDetail.Order.OrderCode}. Lý do: {dto.Reason}",
+                            $"/manager/reprint" // Link tới trang quản lý
+                        );
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log lỗi nếu gửi cho 1 manager bị fail, để không ảnh hưởng các manager còn lại
+                        _logger.LogError($"Lỗi gửi thông báo cho manager {mgrId}: {ex.Message}");
+                    }
+                }
+            }
         }
 
         // 2️ MANAGER APPROVE
@@ -80,8 +118,7 @@ namespace CB_Gift.Services
             if (!listOrderDetails.Any())
                 throw new Exception("Không tìm thấy sản phẩm nào trong hệ thống.");
 
-            // 3. VALIDATION QUAN TRỌNG: Kiểm tra xem tất cả có thuộc cùng 1 Order không?
-            // (Không thể gộp sản phẩm của đơn A và đơn B vào chung 1 đơn in lại được)
+            // 3. VALIDATION QUAN TRỌNG
             var firstOrderId = listOrderDetails.First().OrderId;
             if (listOrderDetails.Any(od => od.OrderId != firstOrderId))
             {
@@ -108,7 +145,6 @@ namespace CB_Gift.Services
 
             foreach (var item in listOrderDetails)
             {
-                // Tìm lý do lỗi tương ứng của từng sản phẩm để ghi chú
                 var reprintRequest = listReprints.FirstOrDefault(r => r.OriginalOrderDetailId == item.OrderDetailId);
                 string reason = reprintRequest?.Reason ?? "N/A";
 
@@ -122,7 +158,6 @@ namespace CB_Gift.Services
                     LinkDesign = item.LinkFileDesign,
                     LinkThanksCard = item.LinkThanksCard,
                     Accessory = item.Accessory,
-                    // Ghi chú rõ ràng lý do cho xưởng
                     Note = $"REPRINT item {item.ProductVariantId}. Lý do: {reason} \n Note cũ: {item.Note}",
                     ProductionStatus = ProductionStatus.READY_PROD
                 });
@@ -146,7 +181,7 @@ namespace CB_Gift.Services
                 OrderCreate = new OrderCreateRequest
                 {
                     CostScan = 0,
-                    OrderCode = originalOrder.OrderCode, // Tạm lấy mã cũ
+                    OrderCode = originalOrder.OrderCode,
                     ToDistrictId = originalOrder.ToDistrictId,
                     ToProvinceId = originalOrder.ToProvinceId,
                     ToWardCode = originalOrder.ToWardCode,
@@ -156,7 +191,7 @@ namespace CB_Gift.Services
                     Tracking = string.Empty,
                     TotalCost = 0
                 },
-                OrderDetails = newDetailsList // Gán danh sách đã tạo ở trên
+                OrderDetails = newDetailsList
             };
 
             // 7. Gọi Service tạo đơn
@@ -168,6 +203,7 @@ namespace CB_Gift.Services
             var newOrder = await _context.Orders
                 .Include(o => o.OrderDetails)
                 .FirstOrDefaultAsync(o => o.OrderId == created.OrderId);
+
             if (newOrder != null)
             {
                 string oldCode = originalOrder.OrderCode;
@@ -195,7 +231,6 @@ namespace CB_Gift.Services
                 newOrder.ToProvinceId = originalOrder.ToProvinceId;
                 newOrder.ToWardCode = originalOrder.ToWardCode;
 
-                // Reset giá của từng sản phẩm con về 0
                 if (newOrder.OrderDetails != null)
                 {
                     foreach (var detail in newOrder.OrderDetails)
