@@ -1,92 +1,94 @@
-﻿namespace CB_Gift.Orders.Import
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using ClosedXML.Excel;
+using FluentValidation;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+
+
+namespace CB_Gift.Orders.Import
 {
-    /// <summary>
-    /// DTO đại diện cho 1 dòng trong file Excel import Order.
-    /// Dùng để:
-    ///  - Đọc dữ liệu từ Excel
-    ///  - Validate bằng FluentValidation
-    ///  - Map sang EndCustomer + Order + OrderDetail
-    /// </summary>
     public class OrderImportRowDto
     {
-        /// <summary>
-        /// Số dòng trong Excel (để báo lỗi chính xác).
-        /// </summary>
         public int RowNumber { get; set; }
-        public int Quantity { get; set; }
-        // ========= Thông tin đơn hàng =========
-        public String OrderID { get; set; }
+
+
+        // Required
         public string? OrderCode { get; set; }
-        public DateTime? OrderDate { get; set; }
-
         public string? CustomerName { get; set; }
-
         public string? Phone { get; set; }
         public string? Email { get; set; }
 
+
         public string? Address { get; set; }
-        public string? Zipcode { get; set; }
+        public string? Province { get; set; }
+        public string? District { get; set; }
+        public string? Ward { get; set; }
 
-        /// <summary>
-        /// Tỉnh/Thành (VD: "Hồ Chí Minh", "Hà Nội").
-        /// </summary>
-        public string? ShipState { get; set; }
 
-        /// <summary>
-        /// Quận/Huyện/Thành phố trực thuộc (VD: "Quận 1").
-        /// </summary>
-        public string? ShipCity { get; set; }
-
-        /// <summary>
-        /// Quốc gia – luôn phải là Việt Nam.
-        /// </summary>
-        public string? ShipCountry { get; set; }
-
-        public string? PaymentStatus { get; set; }
-        public string? Note { get; set; }
-        /// <summary>
-        /// Bật Text-To-Speech hay không.
-        /// </summary>
-        public bool? ActiveTTS { get; set; }
-
-        public decimal? TotalCost { get; set; }
-
-        /// <summary>
-        /// Trạng thái đơn (map với Order.StatusOrder).
-        /// </summary>
-        public int StatusOrder { get; set; }
-
-        // ========= Thông tin sản phẩm =========
-
-        /// <summary>
-        /// Tên Product (VD: "SUN-WOOD-ACR-MIRROR", "SUN-GLASS").
-        /// </summary>
-        public string? ProductName { get; set; }
-
-        /// <summary>
-        /// Size theo inch (VD: "8IN", "10IN").
-        /// </summary>
-        public string? SizeInch { get; set; }
-
+        // Product by SKU
+        public string? SKU { get; set; }
+        public int Quantity { get; set; } = 1;
         public string? Accessory { get; set; }
-
+        public string? Note { get; set; }
         public string? LinkImg { get; set; }
         public string? LinkThanksCard { get; set; }
         public string? LinkFileDesign { get; set; }
+    }
+    public class OrderImportRowValidator2 : AbstractValidator<OrderImportRowDto>
+    {
+        public OrderImportRowValidator2(ReferenceDataCache cache)
+        {
+            RuleFor(x => x.OrderCode)
+            .NotEmpty().WithMessage("OrderCode là bắt buộc.");
 
-        /// <summary>
-        /// Thành tiền cho dòng sản phẩm (nếu có).
-        /// </summary>
-        public decimal? TotalAmount { get; set; }
 
-        /// <summary>
-        /// Ghi chú cho đơn / sản phẩm.
-        /// </summary>
-        public string? OrderNotes { get; set; }
+            RuleFor(x => x.CustomerName)
+            .NotEmpty().WithMessage("CustomerName là bắt buộc.");
 
-        /// <summary>
-        /// Thời điểm tạo đơn (nếu Excel có cột này).
-        /// </summary>
-        public DateTime? TimeCreated { get; set; }
+
+            RuleFor(x => x.Phone)
+            .NotEmpty().WithMessage("Phone là bắt buộc.")
+            .MinimumLength(7).WithMessage("Phone không hợp lệ");
+
+
+            RuleFor(x => x.SKU)
+            .NotEmpty().WithMessage("SKU là bắt buộc.")
+            .Must(sku => sku != null && cache.ProductVariants.Any(v => !string.IsNullOrWhiteSpace(v.Sku) && v.Sku.Equals(sku.Trim(), StringComparison.OrdinalIgnoreCase)))
+            .WithMessage("SKU không tồn tại trong hệ thống.");
+
+
+            RuleFor(x => x.Quantity)
+            .GreaterThan(0).WithMessage("Quantity phải lớn hơn 0.");
+
+
+            RuleFor(x => x.Province)
+            .Cascade(CascadeMode.Stop)
+            .NotEmpty().WithMessage("Province là bắt buộc.")
+            .Must(p => p != null && cache.Provinces.Any(prov => string.Equals(NormalizeText(prov), NormalizeText(p))))
+            .WithMessage("Province không hợp lệ.");
+
+
+            // District/Ward are optional but if provided validate minimal existence by non-empty
+            RuleFor(x => x.District)
+            .NotEmpty().WithMessage("District là bắt buộc.");
+
+
+            RuleFor(x => x.Ward)
+            .NotEmpty().WithMessage("Ward là bắt buộc.");
+        }
+
+
+        private static string NormalizeText(string? s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return string.Empty;
+            return s.Trim().ToLowerInvariant();
+        }
     }
 }

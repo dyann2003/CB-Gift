@@ -5,18 +5,15 @@ using CB_Gift.Orders.Import;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace CB_Gift.Services
 {
-    /// <summary>
-    /// Chịu trách nhiệm map từ OrderImportRowDto -> Order (kèm EndCustomer + OrderDetail)
-    /// </summary>
     public class OrderFactory
     {
         private readonly ReferenceDataCache _cache;
-        private readonly CBGiftDbContext _db; // hiện chưa dùng, nhưng để sẵn nếu sau này cần lookup
+        private readonly CBGiftDbContext _db;
 
         public OrderFactory(ReferenceDataCache cache, CBGiftDbContext db)
         {
@@ -24,185 +21,136 @@ namespace CB_Gift.Services
             _db = db;
         }
 
-        /// <summary>
-        /// Tạo entity Order hoàn chỉnh từ 1 dòng Excel (OrderImportRowDto) + seller hiện tại.
-        /// </summary>
-        /// 
         private static string? Clean(string? s)
         {
-            if (string.IsNullOrWhiteSpace(s))
-                return null;
-
-            // Loại mọi whitespace unicode
-            var cleaned = System.Text.RegularExpressions.Regex.Replace(s, @"\s+", "");
-
+            if (string.IsNullOrWhiteSpace(s)) return null;
+            var cleaned = System.Text.RegularExpressions.Regex.Replace(s, @"\s+", " ");
             return string.IsNullOrWhiteSpace(cleaned) ? null : cleaned.Trim();
         }
-        private string NormalizeSize(string? size)
+
+        // =========================================================================
+        // PHƯƠNG THỨC MỚI: Xử lý 1 Group (Nhiều dòng cùng OrderCode)
+        // =========================================================================
+        public async Task<Order> CreateOrderFromGroupAsync(IGrouping<string, OrderImportRowDto> group, string sellerUserId)
         {
-            if (string.IsNullOrWhiteSpace(size))
-                return string.Empty;
+            // 1. Lấy dòng đầu tiên để làm thông tin Header (Khách hàng, Địa chỉ, Ngày tạo...)
+            var firstRow = group.First();
 
-            var s = size.Trim().ToLower();
+            // 2. Xử lý EndCustomer (Dựa trên dòng đầu tiên)
+            var endCustomer = await GetOrCreateEndCustomerAsync(firstRow);
 
-            // bỏ chữ "inch", "in" nếu có
-            s = s.Replace("inch", "").Replace("in", "").Trim();
-
-            // parse số: xử lý 4, 4.0, 4.00, 4,0 ...
-            if (decimal.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var val))
-            {
-                return val.ToString("0.##", CultureInfo.InvariantCulture); // 4.00 -> "4", 5.90 -> "5.9"
-            }
-
-            return s;
-        }
-        public async Task<Order> CreateOrderEntityAsync(OrderImportRowDto dto, string sellerUserId)
-        {
-            
-            if (dto == null) throw new ArgumentNullException(nameof(dto));
-            if (string.IsNullOrWhiteSpace(sellerUserId))
-                throw new ArgumentException("SellerUserId không hợp lệ.", nameof(sellerUserId));
-            var normalizedEmail = Clean(dto.Email)?.ToLowerInvariant();
-            EndCustomer endCustomer;
-            // 1️⃣ Tìm Product theo ProductName
-            var product = _cache.Products.FirstOrDefault(p =>
-                p.ProductName.Equals(dto.ProductName!.Trim(), StringComparison.OrdinalIgnoreCase));
-
-            if (product == null)
-                throw new Exception($"Product '{dto.ProductName}' không tồn tại (Row {dto.RowNumber}).");
-
-            // 2️⃣ Tìm ProductVariant theo ProductId + SizeInch
-            var dtoSize = NormalizeSize(dto.SizeInch);
-
-            var variant = _cache.ProductVariants
-                .Where(v => v.ProductId == product.ProductId)
-                .FirstOrDefault(v => NormalizeSize(v.SizeInch) == dtoSize);
-
-            if (variant == null)
-                throw new Exception(
-                    $"Không tìm thấy ProductVariant cho Product = {product.ProductName}, Size = {dto.SizeInch} (Row {dto.RowNumber}).");
-            var unitPrice = variant.TotalCost ?? 0m;
-            // 3️⃣ Tạo EndCustomer từ dữ liệu Excel
-            var email = Clean(dto.Email)?.ToLowerInvariant();  // email nên lower luôn
-
-            if (!string.IsNullOrEmpty(normalizedEmail))
-            {
-                // 2️⃣ Tìm EndCustomer theo email
-                endCustomer = await _db.EndCustomers
-                    .FirstOrDefaultAsync(c => c.Email != null &&
-                                              c.Email.ToLower() == normalizedEmail);
-
-                // 3️⃣ Nếu chưa có thì tạo mới
-                if (endCustomer == null)
-                {
-                    endCustomer = new EndCustomer
-                    {
-                        Name = Clean(dto.CustomerName),
-                        Phone = Clean(dto.Phone),
-                        Email = normalizedEmail,
-                        Address = Clean(dto.Address),
-                        ShipState = Clean(dto.ShipState),
-                        ShipCity = Clean(dto.ShipCity),
-                        ShipCountry = Clean(dto.ShipCountry),
-                        Zipcode = Clean(dto.Zipcode)
-                    };
-
-                    _db.EndCustomers.Add(endCustomer);
-                }
-            }
-            else
-            {
-                // Không có email → bạn có thể quyết định logic riêng (tạo mới luôn
-                // hoặc tìm theo Name + Phone…)
-                endCustomer = new EndCustomer
-                {
-                    Name = Clean(dto.CustomerName),
-                    Phone = Clean(dto.Phone),
-                    Address = Clean(dto.Address),
-                    ShipState = Clean(dto.ShipState),
-                    ShipCity = Clean(dto.ShipCity),
-                    ShipCountry = Clean(dto.ShipCountry),
-                    Zipcode = Clean(dto.Zipcode)
-                };
-
-                _db.EndCustomers.Add(endCustomer);
-            }
-
-            // 4️⃣ Tạo Order chính
+            // 3. Tạo Order Header
             var order = new Order
             {
-                OrderCode = dto.OrderCode ?? string.Empty,
-                OrderDate = dto.OrderDate ?? DateTime.UtcNow,
-
-                // dùng navigation EndCustomer, EF sẽ tự insert và set EndCustomerId
+                OrderCode = Clean(firstRow.OrderCode),
+                OrderDate = DateTime.UtcNow,
                 EndCustomer = endCustomer,
                 SellerUserId = sellerUserId,
+                CreationDate = DateTime.UtcNow,
 
-                CreationDate = dto.TimeCreated ?? DateTime.UtcNow,
-                CostScan = null, // nếu sau này Excel có cột CostScan thì map thêm
-
-                ActiveTts = dto.ActiveTTS,
-
-                TotalCost = dto.TotalCost ?? dto.TotalAmount,
-
-                ProductionStatus = "DRAFT", // default workflow
-                PaymentStatus = MapPaymentStatus(dto.PaymentStatus),
-                Tracking = null, // nếu Excel có cột Tracking thì map thêm
-
-                StatusOrder = dto.StatusOrder,
+                ActiveTts = false,
+                ProductionStatus = "Created",
+                PaymentStatus = "Unpaid",
+                StatusOrder = 1,
 
                 OrderDetails = new List<OrderDetail>()
             };
 
-            var detail = new OrderDetail
+            // 4. Duyệt qua từng dòng trong Group để tạo OrderDetails
+            decimal calculatedTotalCost = 0;
+
+            foreach (var row in group)
             {
-                ProductVariantId = variant.ProductVariantId,
+                // Tìm Variant cho từng dòng
+                var sku = row.SKU.Trim();
+                var variant = _cache.ProductVariants.FirstOrDefault(v =>
+                    !string.IsNullOrEmpty(v.Sku) &&
+                    v.Sku.Equals(sku, StringComparison.OrdinalIgnoreCase));
 
-                LinkImg = dto.LinkImg,
-                LinkThanksCard = dto.LinkThanksCard,
-                LinkFileDesign = dto.LinkFileDesign,
-                Accessory = dto.Accessory,
-                Note = dto.OrderNotes,
+                if (variant == null) continue; // (Lý thuyết đã validate ở Service rồi)
 
-                // 👉 dùng Quantity từ file Excel, fallback = 1
-                Quantity = dto.Quantity > 0 ? dto.Quantity : 1,
-                CreatedDate = DateTime.UtcNow,
+                var unitPrice = variant.TotalCost ?? 0;
+                var quantity = row.Quantity > 0 ? row.Quantity : 1;
 
-                ProductionStatus = Models.Enums.ProductionStatus.DRAFT,
-                NeedDesign = false,
+                var detail = new OrderDetail
+                {
+                    ProductVariantId = variant.ProductVariantId,
+                    Quantity = quantity,
+                    Price = unitPrice,
 
-                AssignedDesignerUserId = null,
-                AssignedAt = null,
+                    Accessory = row.Accessory,
+                    Note = row.Note,
+                    LinkImg = row.LinkImg,
+                    LinkThanksCard = row.LinkThanksCard,
+                    LinkFileDesign = row.LinkFileDesign,
 
-                // 👉 Price lấy theo ProductVariant trong DB
-                Price = unitPrice
-            };
+                    CreatedDate = DateTime.UtcNow,
+                    ProductionStatus = ProductionStatus.DRAFT,
+                    NeedDesign = false
+                };
 
+                order.OrderDetails.Add(detail);
 
-            order.OrderDetails.Add(detail);
-            
+                // Cộng dồn tiền
+                calculatedTotalCost += (unitPrice * quantity);
+            }
+
+            // 5. Cập nhật tổng tiền cho Order
+            // Nếu Excel có cột TotalCost tổng, bạn có thể lấy firstRow.TotalCost
+            // Nhưng tốt nhất là tính tổng từ chi tiết để chính xác.
+            order.TotalCost = calculatedTotalCost;
+
             return order;
         }
 
-        /// <summary>
-        /// Chuẩn hóa PaymentStatus từ dữ liệu Excel sang giá trị lưu trong DB (string).
-        /// </summary>
+        // Tách hàm xử lý Customer cho gọn
+        private async Task<EndCustomer> GetOrCreateEndCustomerAsync(OrderImportRowDto dto)
+        {
+            var normalizedEmail = Clean(dto.Email)?.ToLowerInvariant();
+            var normalizedPhone = Clean(dto.Phone);
+            EndCustomer? customer = null;
+
+            if (!string.IsNullOrEmpty(normalizedEmail))
+                customer = await _db.EndCustomers.FirstOrDefaultAsync(c => c.Email == normalizedEmail);
+
+            if (customer == null && !string.IsNullOrEmpty(normalizedPhone))
+                customer = await _db.EndCustomers.FirstOrDefaultAsync(c => c.Phone == normalizedPhone);
+
+            var addressFull = string.IsNullOrEmpty(dto.Ward)
+                ? dto.Address
+                : $"{dto.Address}, {dto.Ward}";
+
+            if (customer == null)
+            {
+                customer = new EndCustomer
+                {
+                    Name = Clean(dto.CustomerName),
+                    Phone = normalizedPhone,
+                    Email = normalizedEmail,
+                    Address = addressFull,
+                    ShipState = Clean(dto.Province),
+                    ShipCity = Clean(dto.District),
+                    ShipCountry = "Vietnam"
+                };
+                _db.EndCustomers.Add(customer);
+            }
+            else
+            {
+                // Update info mới nhất
+                customer.Name = Clean(dto.CustomerName);
+                customer.Address = addressFull;
+                customer.ShipState = Clean(dto.Province);
+                customer.ShipCity = Clean(dto.District);
+            }
+            return customer;
+        }
+
         private string MapPaymentStatus(string? status)
         {
-            if (string.IsNullOrWhiteSpace(status))
-                return "Pending";
-
+            if (string.IsNullOrWhiteSpace(status)) return "Unpaid";
             var s = status.Trim().ToLower();
-
-            return s switch
-            {
-                "paid" or "completed" => "Paid",
-                "pending" => "Pending",
-                "unpaid" => "Unpaid",
-                "refunded" => "Refunded",
-                "cancelled" or "canceled" => "Cancelled",
-                _ => "Pending"
-            };
+            return s is "paid" or "completed" ? "Paid" :
+                   s is "cancelled" ? "Cancelled" : "Pending";
         }
     }
 }
