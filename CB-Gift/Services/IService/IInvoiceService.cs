@@ -55,6 +55,9 @@ namespace CB_Gift.Services.IService
         // [API CHO NÚT "CREATE MONTHLY RECEIPT"]
         Task<Invoice> CreateInvoiceForMonthAsync(CreateMonthlyInvoiceRequest request, string staffId);
 
+        // Phương thức mới dành cho Job tự động
+        Task RunMonthlyInvoiceCreationJobAsync(string staffId, int year, int month);
+
         // [API CHO TAB "PAYMENT HISTORY"]
         //huy
         Task<PaginatedResult<PaymentSummaryDto>> GetPaymentsForSellerAsync(string sellerId, int page, int pageSize);

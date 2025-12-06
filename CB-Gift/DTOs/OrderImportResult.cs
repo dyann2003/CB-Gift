@@ -6,35 +6,26 @@
     /// </summary>
     public class OrderImportResult
     {
-        /// <summary>
-        /// Tổng số dòng (không tính header).
-        /// </summary>
         public int TotalRows { get; set; }
-
-        /// <summary>
-        /// Số dòng tạo Order thành công.
-        /// </summary>
         public int SuccessCount { get; set; }
+        public List<OrderImportRowError> Errors { get; set; } = new();
+
 
         /// <summary>
-        /// Danh sách lỗi theo dòng.
+        /// If created, error report workbook bytes (xlsx) — optional.
         /// </summary>
-        public List<OrderImportRowError> Errors { get; set; } = new();
+        public byte[]? ErrorReportFileBytes { get; set; }
+
+
+        /// <summary>
+        /// Suggested filename for error report when returning as file.
+        /// </summary>
+        public string? ErrorReportFileName { get; set; }
     }
 
-    /// <summary>
-    /// Lỗi chi tiết của từng dòng trong Excel.
-    /// </summary>
     public class OrderImportRowError
     {
-        /// <summary>
-        /// Số dòng trong Excel (RowNumber).
-        /// </summary>
         public int RowNumber { get; set; }
-
-        /// <summary>
-        /// Danh sách message lỗi cho dòng này.
-        /// </summary>
         public List<string> Messages { get; set; } = new();
     }
 }

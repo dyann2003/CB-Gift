@@ -165,6 +165,7 @@ builder.Services.AddHttpClient("GhnDevClient", client =>
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
+
 // ------------------------------------
 
 // ================== CORS (cho Next.js FE) ==================
@@ -183,6 +184,26 @@ builder.Services.AddCors(options =>
              .AllowCredentials(); // SignalR
     });
 });
+// Luôn đăng ký Service thật vào container, vì thằng Demo cần gọi thằng này
+builder.Services.AddScoped<GhnShippingService>();
+
+// LOGIC CHUYỂN ĐỔI (SWITCH) DEMO/REAL CHO INTERFACE
+// Lấy cấu hình từ appsettings.json
+var useDemoMode = builder.Configuration.GetValue<bool>("GhnSettings:UseDemoMode");
+
+if (useDemoMode)
+{
+    Console.WriteLine(">>> HỆ THỐNG ĐANG CHẠY CHẾ ĐỘ DEMO SHIPMENT <<<");
+    // Nếu bật Demo: Inject DemoShippingService khi ai đó gọi IShippingService
+    builder.Services.AddScoped<IShippingService, DemoShippingService>();
+}
+else
+{
+    Console.WriteLine(">>> HỆ THỐNG ĐANG CHẠY CHẾ ĐỘ REAL SHIPMENT <<<");
+    // Nếu tắt Demo: Trỏ IShippingService về GhnShippingService đã đăng ký ở trên
+    builder.Services.AddScoped<IShippingService>(provider =>
+        provider.GetRequiredService<GhnShippingService>());
+}
 
 // Đăng ký CloudinarySettings
 builder.Services.Configure<CloudinarySettings>(
@@ -214,7 +235,7 @@ builder.Services.AddScoped<VNPayService>();
 builder.Services.AddScoped<PaymentGatewayFactory>();
 builder.Services.AddScoped<VnPayHelper>();
 builder.Services.AddScoped<ILocationService, GhnLocationService>();
-builder.Services.AddScoped<IShippingService, GhnShippingService>();
+//builder.Services.AddScoped<IShippingService, GhnShippingService>();
 builder.Services.AddScoped<IGhnPrintService, GhnPrintService>();
 builder.Services.AddScoped<IManagementAccountService, ManagementAccountService>();
 builder.Services.AddSingleton<NotificationHub>();
@@ -223,6 +244,7 @@ builder.Services.AddScoped<OrderFactory>();
 builder.Services.AddScoped<ReferenceDataCache>();
 builder.Services.AddScoped<IValidator<OrderImportRowDto>, OrderImportRowValidator>();
 builder.Services.AddScoped<IReportService, ReportService>();
+builder.Services.AddScoped<IOrderImportService, OrderImportService>();
 
 // --- Quartz ---
 builder.Services.AddQuartz(q =>
@@ -233,13 +255,23 @@ builder.Services.AddQuartz(q =>
     // Đăng ký Job
     var jobKey = new JobKey("groupOrdersJob");
     q.AddJob<GroupOrdersJob>(opts => opts.WithIdentity(jobKey));
-
     // Trigger hằng ngày 00:05
     q.AddTrigger(opts => opts
         .ForJob(jobKey)
         .WithIdentity("groupOrdersTrigger")
         .StartNow()
         .WithSchedule(CronScheduleBuilder.DailyAtHourAndMinute(0, 5)) // chạy 00:05 hàng ngày
+    );
+    var invoiceJobKey = new JobKey("createMonthlyInvoicesJob");
+    q.AddJob<CreateMonthlyInvoicesJob>(opts => opts.WithIdentity(invoiceJobKey));
+    // 2. Trigger chạy vào ngày 10 hàng tháng, lúc 00:05
+    q.AddTrigger(opts => opts
+        .ForJob(invoiceJobKey)
+        .WithIdentity("monthlyInvoiceTrigger")
+        .StartNow()
+        // Sử dụng builder để đặt lịch: Ngày 10, Giờ 0 (12 AM), Phút 5
+        .WithSchedule(CronScheduleBuilder.MonthlyOnDayAndHourAndMinute(10, 0, 5))
+    // Hoặc Cron Expression: "0 5 0 10 * ?"
     );
 });
 

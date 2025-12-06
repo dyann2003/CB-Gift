@@ -181,6 +181,9 @@ namespace CB_Gift.DTOs
         public string? ShipState { get; set; }
         public string? ShipCity { get; set; }
         public string? ShipCountry { get; set; }
+        public int? ToProvinceId { get; set; }  // <-- THÊM TRƯỜNG NÀY
+        public int? ToDistrictId { get; set; }  // <-- THÊM TRƯỜNG NÀY
+        public string? ToWardCode { get; set; } // <-- THÊM TRƯỜNG NÀY
     }
     public class OrderCoreUpdateRequest
     {
@@ -189,6 +192,13 @@ namespace CB_Gift.DTOs
         public string? Tracking { get; set; }
         public string? ProductionStatus { get; set; }
         public string? PaymentStatus { get; set; }
+
+        public int? ToProvinceId { get; set; }  // <--- THÊM
+        public int? ToDistrictId { get; set; }  // <--- THÊM
+        public string? ToWardCode { get; set; } // <--- THÊM
+
+        public decimal? TotalCost { get; set; }
+
     }
     public class OrderDetailUpdateRequest
     {
@@ -209,6 +219,30 @@ namespace CB_Gift.DTOs
         public EndCustomerUpdateRequest CustomerInfo { get; set; }
         public OrderCoreUpdateRequest OrderUpdate { get; set; } 
         public List<OrderDetailUpdateRequest> OrderDetailsUpdate { get; set; }
+    }
+
+    // Trong file UpdateAddressRequest.cs (hoặc DTOs/UpdateAddressRequest.cs)
+
+    public class UpdateAddressRequest
+    {
+        // Các trường tên/thông tin liên hệ mà FE đang gửi
+        public string Name { get; set; }
+        public string Phone { get; set; }
+
+        // ✅ THÊM CÁC TRƯỜNG BỊ THIẾU
+        public string Email { get; set; }     // <-- Bị thiếu
+        public string Address { get; set; }   // <-- Bị thiếu
+        public string Address1 { get; set; }
+
+        // Tên địa lý
+        public string? ProvinceName { get; set; }
+        public string? DistrictName { get; set; }
+        public string? WardName { get; set; }
+
+        // ID địa lý (Cho bảng Order)
+        public int? ToProvinceId { get; set; }
+        public int? ToDistrictId { get; set; }
+        public string? ToWardCode { get; set; }
     }
 
     public class OrderActivityDto

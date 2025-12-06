@@ -1,4 +1,5 @@
 ﻿using CB_Gift.DTOs;
+using CB_Gift.Services;
 using CB_Gift.Services.IService;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -17,6 +18,9 @@ namespace CB_Gift.Controllers
         {
             _shippingService = shippingService;
             _logger = logger;
+
+            // Dòng này giúp bạn debug: Khi chạy, nhìn vào Console sẽ thấy nó đang dùng Demo hay Real
+            _logger.LogInformation($"Shipping Controller đang sử dụng dịch vụ: {_shippingService.GetType().Name}");
         }
 
         [HttpPost("create")]
@@ -51,6 +55,8 @@ namespace CB_Gift.Controllers
         {
             try
             {
+                // Nếu là DemoService -> Logic tự nhảy status
+                // Nếu là RealService -> Logic gọi API GHN
                 var result = await _shippingService.TrackOrderAsync(orderCode);
                 return Ok(new { data = result });
             }
@@ -62,6 +68,26 @@ namespace CB_Gift.Controllers
             {
                 _logger.LogError(ex, "Lỗi hệ thống khi theo dõi đơn.");
                 return StatusCode(500, new { message = "Lỗi server nội bộ." });
+            }
+        }
+
+        [HttpPost("update-status-manual")]
+        public async Task<IActionResult> UpdateStatusManual([FromBody] UpdateTrackingRequest request)
+        {
+            try
+            {
+                // Kiểm tra xem service hiện tại có phải là ManualGhnService không
+                if (_shippingService is DemoShippingService manualService)
+                {
+                    await manualService.ManualUpdateStatusAsync(request.OrderCode, request.NewStatus);
+                    return Ok(new { Message = $"Đã cập nhật đơn {request.OrderCode} sang trạng thái {request.NewStatus}" });
+                }
+
+                return BadRequest(new { Message = "Hệ thống đang chạy chế độ Real, không thể cập nhật thủ công." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
             }
         }
 
