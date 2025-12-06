@@ -133,7 +133,7 @@ namespace CB_Gift.Services
                 // ⭐ 1. LOGIC MỚI: GHI LOG NẾU CÓ
                 if (!string.IsNullOrEmpty(actorUserId) && !string.IsNullOrEmpty(reason))
                 {
-                    string eventType = (newProductionStatus == ProductionStatus.QC_FAIL)
+                    string eventType = (newProductionStatus == ProductionStatus.PROD_REWORK || newProductionStatus == ProductionStatus.QC_FAIL)
                         ? "QC_REJECTED"
                         : "STATUS_UPDATED";
 

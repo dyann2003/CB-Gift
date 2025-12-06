@@ -165,6 +165,25 @@ builder.Services.AddHttpClient("GhnDevClient", client =>
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
+
+// ------------------------------------
+
+// ================== CORS (cho Next.js FE) ==================
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        // THÊM CÁC DOMAIN CỦA VERCEL VÀO ĐÂY
+        policy.WithOrigins(
+            "http://localhost:3000",
+            "https://cb-gift-fe-sby6-mazut4syf-bachquangles-projects.vercel.app", // Domain Preview 
+            "https://cb-gift-fe-sby6.vercel.app" // Domain Production 
+        )
+             .AllowAnyHeader()
+             .AllowAnyMethod()
+             .AllowCredentials(); // SignalR
+    });
+});
 // Luôn đăng ký Service thật vào container, vì thằng Demo cần gọi thằng này
 builder.Services.AddScoped<GhnShippingService>();
 
@@ -185,25 +204,6 @@ else
     builder.Services.AddScoped<IShippingService>(provider =>
         provider.GetRequiredService<GhnShippingService>());
 }
-
-// ------------------------------------
-
-// ================== CORS (cho Next.js FE) ==================
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowFrontend", policy =>
-    {
-        // THÊM CÁC DOMAIN CỦA VERCEL VÀO ĐÂY
-        policy.WithOrigins(
-            "http://localhost:3000",
-            "https://cb-gift-fe-sby6-mazut4syf-bachquangles-projects.vercel.app", // Domain Preview 
-            "https://cb-gift-fe-sby6.vercel.app" // Domain Production 
-        )
-             .AllowAnyHeader()
-             .AllowAnyMethod()
-             .AllowCredentials(); // SignalR
-    });
-});
 
 // Đăng ký CloudinarySettings
 builder.Services.Configure<CloudinarySettings>(
@@ -244,6 +244,7 @@ builder.Services.AddScoped<OrderFactory>();
 builder.Services.AddScoped<ReferenceDataCache>();
 builder.Services.AddScoped<IValidator<OrderImportRowDto>, OrderImportRowValidator>();
 builder.Services.AddScoped<IReportService, ReportService>();
+builder.Services.AddScoped<IOrderImportService, OrderImportService>();
 
 // --- Quartz ---
 builder.Services.AddQuartz(q =>
