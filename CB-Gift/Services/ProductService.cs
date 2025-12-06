@@ -399,6 +399,24 @@ namespace CB_Gift.Services
             return (total, list);
         }
 
+        // 🟢 THÊM: Phương thức tìm ProductId và Variants từ ProductVariantId
+        public async Task<ProductDto?> GetProductByVariantIdAsync(int productVariantId)
+        {
+            // 1. Tìm ProductVariant dựa trên ID
+            var productVariant = await _context.ProductVariants
+                .Include(v => v.Product) // Tải thông tin Product cha (navigation property)
+                .ThenInclude(p => p.ProductVariants) // Tải tất cả các Variants của Product cha
+                .FirstOrDefaultAsync(v => v.ProductVariantId == productVariantId);
+
+            if (productVariant == null || productVariant.Product == null)
+            {
+                return null; // Không tìm thấy variant hoặc product cha
+            }
+
+            // 2. Map Product cha sang DTO. (Nó sẽ tự động chứa ProductId và mảng Variants đầy đủ)
+            return _mapper.Map<ProductDto>(productVariant.Product);
+        }
+
 
     }
    

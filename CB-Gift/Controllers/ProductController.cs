@@ -189,5 +189,19 @@ namespace CB_Gift.Controllers
             return NoContent();
         }
 
+        // 🟢 THÊM: GET: api/Product/by-variant/{productVariantId}
+        [HttpGet("by-variant/{productVariantId}")]
+        [AllowAnonymous] // Có thể để AllowAnonymous nếu frontend public cần dùng
+        public async Task<IActionResult> GetProductByVariantId(int productVariantId)
+        {
+            var productDto = await _service.GetProductByVariantIdAsync(productVariantId);
+
+            if (productDto == null)
+                return NotFound(new { message = $"Không tìm thấy sản phẩm cho biến thể ID {productVariantId}." });
+
+            // Trả về toàn bộ ProductDto. DTO này chứa ProductId và mảng Variants đầy đủ.
+            return Ok(productDto);
+        }
+
     }
 }

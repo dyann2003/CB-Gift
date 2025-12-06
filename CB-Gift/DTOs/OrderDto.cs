@@ -181,6 +181,9 @@ namespace CB_Gift.DTOs
         public string? ShipState { get; set; }
         public string? ShipCity { get; set; }
         public string? ShipCountry { get; set; }
+        public int? ToProvinceId { get; set; }  // <-- THÊM TRƯỜNG NÀY
+        public int? ToDistrictId { get; set; }  // <-- THÊM TRƯỜNG NÀY
+        public string? ToWardCode { get; set; } // <-- THÊM TRƯỜNG NÀY
     }
     public class OrderCoreUpdateRequest
     {
@@ -189,6 +192,13 @@ namespace CB_Gift.DTOs
         public string? Tracking { get; set; }
         public string? ProductionStatus { get; set; }
         public string? PaymentStatus { get; set; }
+
+        public int? ToProvinceId { get; set; }  // <--- THÊM
+        public int? ToDistrictId { get; set; }  // <--- THÊM
+        public string? ToWardCode { get; set; } // <--- THÊM
+
+        public decimal? TotalCost { get; set; }
+
     }
     public class OrderDetailUpdateRequest
     {

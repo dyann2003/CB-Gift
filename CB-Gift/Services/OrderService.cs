@@ -610,7 +610,7 @@ namespace CB_Gift.Services
 
         public async Task<MakeOrderResponse> UpdateOrderAsync(int orderId, OrderUpdateDto request, string sellerUserId)
         {
-            // Step 1: Tìm đơn hàng và kiểm tra điều kiện
+            // Step 1: Tìm đơn hàng và kiểm tra điều kiện (GIỮ NGUYÊN)
             var order = await _context.Orders
                 .Include(o => o.OrderDetails) // Lấy danh sách chi tiết hiện có
                 .FirstOrDefaultAsync(o => o.OrderId == orderId && o.SellerUserId == sellerUserId);
@@ -628,9 +628,17 @@ namespace CB_Gift.Services
             // Step 2: Cập nhật thông tin khách hàng và đơn hàng chính
             var customer = await _context.EndCustomers.FindAsync(order.EndCustomerId);
             if (customer != null) _mapper.Map(request.CustomerInfo, customer);
+
+            // Map các trường chung
             _mapper.Map(request.OrderUpdate, order);
 
-            // Step 3: Đồng bộ hóa Order Details
+            // 🔥 FIX QUYẾT ĐỊNH: Đảm bảo TotalCost từ request được ưu tiên và ghi đè
+            // Nếu FE gửi totalCost=254000, nó sẽ được gán.
+            // Nếu FE gửi totalCost=null, nó sẽ giữ giá trị hiện tại (đã được map từ DB)
+            order.TotalCost = request.OrderUpdate.TotalCost ?? order.TotalCost;
+
+
+            // Step 3: Đồng bộ hóa Order Details (GIỮ NGUYÊN LOGIC)
             var detailsInRequest = request.OrderDetailsUpdate ?? new List<OrderDetailUpdateRequest>();
             var requestDetailIds = detailsInRequest.Select(d => d.OrderDetailID).ToHashSet();
 
@@ -666,14 +674,10 @@ namespace CB_Gift.Services
                 }
             }
 
-            // Step 4: Tính toán lại tổng tiền và lưu thay đổi
-            // Bạn nên gọi lại hàm RecalculateOrderTotalCost để đảm bảo logic tính toán là nhất quán
-            await _context.SaveChangesAsync(); // Lưu các thay đổi (add, update, remove)
+            // Step 4: Chỉ gọi SaveChangesAsync() MỘT LẦN để lưu tất cả các thay đổi.
+            await _context.SaveChangesAsync();
 
-            // Gọi hàm tính toán lại sau khi đã lưu DB để nó lấy được dữ liệu mới nhất
-            await RecalculateOrderTotalCost(order.OrderId);
-
-            // Step 5: Chuẩn bị dữ liệu trả về (tương tự như trước)
+            // Step 5: Chuẩn bị dữ liệu trả về (GIỮ NGUYÊN)
             var updatedOrder = await _context.Orders
                 .Include(o => o.OrderDetails)
                 .AsNoTracking()
@@ -739,6 +743,8 @@ namespace CB_Gift.Services
 
             return dto;
         }
+
+
         public async Task<bool> DeleteOrderAsync(int orderId, string sellerUserId)
         {
             var order = await _context.Orders
