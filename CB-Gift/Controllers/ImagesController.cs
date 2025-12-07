@@ -37,7 +37,7 @@ namespace CB_Gift.Controllers
                 }
 
                 // Validate định dạng file hình ảnh
-                var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+                var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp",".mp4" };
                 var fileExtension = Path.GetExtension(uploadDto.File.FileName).ToLowerInvariant();
 
                 if (!allowedExtensions.Contains(fileExtension))
@@ -87,6 +87,55 @@ namespace CB_Gift.Controllers
 
             var images = await _imageService.GetImagesByUserAsync(userId);
             return Ok(images);
+        }
+        // === ENDPOINT MỚI (UPLOAD CẢ ẢNH VÀ VIDEO) ===
+        [HttpPost("upload-media")]
+        [RequestSizeLimit(100 * 1024 * 1024)] // 100 MB Limit
+        public async Task<IActionResult> UploadMedia([FromForm] FileUploadDto uploadDto)
+        {
+            try
+            {
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrEmpty(userId))
+                    return Unauthorized(new { message = "Không thể xác định người dùng." });
+
+                if (uploadDto.File == null || uploadDto.File.Length == 0)
+                    return BadRequest(new { message = "Vui lòng chọn một tệp." });
+
+                // 1. Validate loại file (cho phép cả ảnh và video)
+                var allowedExtensions = new[] {
+                    ".jpg", ".jpeg", ".png", ".gif", ".webp", // Ảnh
+                    ".mp4", ".mov", ".avi", ".wmv" // Video
+                };
+                var fileExtension = Path.GetExtension(uploadDto.File.FileName).ToLowerInvariant();
+                if (!allowedExtensions.Contains(fileExtension))
+                    return BadRequest(new { message = $"Định dạng file không hợp lệ. Chỉ chấp nhận: {string.Join(", ", allowedExtensions)}" });
+
+                // 2. Validate kích thước (100MB)
+                const long maxFileSize = 100 * 1024 * 1024; // 100 MB
+                if (uploadDto.File.Length > maxFileSize)
+                    return BadRequest(new { message = "Kích thước file vượt quá giới hạn (100MB)." });
+
+                await using var stream = uploadDto.File.OpenReadStream();
+
+                // 3. GỌI SERVICE MỚI
+                var result = await _imageService.UploadMediaForUserAsync(
+                    stream,
+                    uploadDto.File.FileName,
+                    userId,
+                    uploadDto.File.ContentType // <-- Truyền ContentType vào
+                );
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                Exception currentEx = ex;
+                while (currentEx.InnerException != null) currentEx = currentEx.InnerException;
+                var rootErrorMessage = currentEx.Message;
+
+                return StatusCode(500, new { message = "Lỗi khi upload media.", error = rootErrorMessage });
+            }
         }
     }
 }

@@ -107,7 +107,7 @@ namespace CB_Gift.Services
         {
             var client = _httpClientFactory.CreateClient("GhnDevClient");
 
-            var trackOrderUrl = _config["GhnSettings:TrackOrderUrl"];
+             var trackOrderUrl = _config["GhnSettings:TrackOrderUrl"];
             var payload = new { order_code = orderCode };
 
             var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");

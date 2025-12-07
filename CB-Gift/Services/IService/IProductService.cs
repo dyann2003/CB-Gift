@@ -15,5 +15,18 @@ namespace CB_Gift.Services.IService
         Task<bool> RestoreProductAsync(int id);
         //Update Status Product theo danh sách
         Task<(int updatedCount, IEnumerable<object> updatedProducts)> BulkUpdateStatusAsync(BulkUpdateProductStatusDto request, string updatedBy);
+
+        Task<(IEnumerable<ProductDto> products, int total)> GetFilteredAndPagedProductsAsync(string? searchTerm, int? status, string? sortColumn, string? sortDirection, int page, int pageSize);
+
+        Task<(int total, List<ProductDto> products)> FilterProductsAsync(
+    string? searchTerm,
+    string? category,
+    int? status,
+    int page,
+    int pageSize);
+
+        Task<ProductDto?> GetProductByVariantIdAsync(int productVariantId);
+        Task<byte[]> ExportProductMasterDataAsync();
+
     }
 }

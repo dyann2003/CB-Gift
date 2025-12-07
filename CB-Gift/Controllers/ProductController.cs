@@ -1,12 +1,14 @@
 ﻿using CB_Gift.DTOs;
 using CB_Gift.Services;
 using CB_Gift.Services.IService;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CB_Gift.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class ProductController : ControllerBase
     {
         private readonly IProductService _service;
@@ -20,13 +22,31 @@ namespace CB_Gift.Controllers
 
         // GET: api/Product
         [HttpGet]
+        [AllowAnonymous]
         public async Task<IActionResult> GetAll()
         {
             var products = await _service.GetAllAsync();
             return Ok(products);
         }
+
+        [HttpGet("filter")]
+        [AllowAnonymous]
+        public async Task<IActionResult> FilterProducts(
+           string? searchTerm = "",
+           string? category = "",
+           int? status = null,
+           int page = 1,
+           int pageSize = 10)
+        {
+            var (total, products) = await _service.FilterProductsAsync(
+                searchTerm, category, status, page, pageSize);
+
+            return Ok(new { total, products });
+        }
+
         //GET: api/Prodcut/active   -- các sản phẩm được active
         [HttpGet("active")]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> GetAllProductHaveStatusTrue()
         {
             var products = await _service.GetAllProductsHaveStatusTrueAsync();
@@ -34,6 +54,7 @@ namespace CB_Gift.Controllers
         }
         //GET: api/Product/hidden  -- Các sản phẩm bị ẩn
         [HttpGet("hidden")]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> GetHiddenProducts()
         {
             var products = await _service.GetHiddenProductsAsync();
@@ -42,6 +63,7 @@ namespace CB_Gift.Controllers
 
         // GET: api/Product/5
         [HttpGet("{id}")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetById(int id)
         {
             var product = await _service.GetByIdAsync(id);
@@ -53,6 +75,7 @@ namespace CB_Gift.Controllers
 
         // POST: api/Product
         [HttpPost]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> Create([FromBody] ProductCreateDto dto)
         {
             if (!ModelState.IsValid)
@@ -64,6 +87,7 @@ namespace CB_Gift.Controllers
 
         // PUT: api/Product/5 //Update Product
         [HttpPut("{id}")]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> Update(int id, [FromBody] ProductUpdateDto dto)
         {
             if (!ModelState.IsValid)
@@ -78,6 +102,7 @@ namespace CB_Gift.Controllers
 
         // DELETE: api/Product/5
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> Delete(int id)
         {
             var result = await _service.DeleteAsync(id);
@@ -86,7 +111,11 @@ namespace CB_Gift.Controllers
 
             return NoContent();
         }
+
+
+
         [HttpDelete("hidden/{id}")]
+        [Authorize(Roles = "Manager")]
         // Ẩn sản phẩm
         public async Task<IActionResult> SoftDeleteProduct(int id)
         {
@@ -96,6 +125,7 @@ namespace CB_Gift.Controllers
         }
         //Hiển thị lại sản phẩm
         [HttpPatch("restore/{id}")]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> RestoreProduct(int id)
         {
             var sucess = await _service.RestoreProductAsync(id);
@@ -105,6 +135,7 @@ namespace CB_Gift.Controllers
 
         //Update Status Product theo danh sách
         [HttpPut("bulk-update-status")]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> BulkUpdateStatus([FromBody] BulkUpdateProductStatusDto request)
         {
             try
@@ -156,6 +187,37 @@ namespace CB_Gift.Controllers
             var success = await _tagService.RemoveTagFromProductAsync(productId, tagId);
             if (!success) return NotFound("Sản phẩm không tồn tại.");
             return NoContent();
+        }
+
+        // 🟢 THÊM: GET: api/Product/by-variant/{productVariantId}
+        [HttpGet("by-variant/{productVariantId}")]
+        [AllowAnonymous] // Có thể để AllowAnonymous nếu frontend public cần dùng
+        public async Task<IActionResult> GetProductByVariantId(int productVariantId)
+        {
+            var productDto = await _service.GetProductByVariantIdAsync(productVariantId);
+
+            if (productDto == null)
+                return NotFound(new { message = $"Không tìm thấy sản phẩm cho biến thể ID {productVariantId}." });
+
+            // Trả về toàn bộ ProductDto. DTO này chứa ProductId và mảng Variants đầy đủ.
+            return Ok(productDto);
+        }
+        [HttpGet("export-master")]
+        public async Task<IActionResult> ExportMasterData()
+        {
+            try
+            {
+                var fileContent = await _service.ExportProductMasterDataAsync();
+
+                string fileName = $"MasterData_Products_{DateTime.Now:yyyyMMdd}.xlsx";
+                string contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+                return File(fileContent, contentType, fileName);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "File export error: " + ex.Message });
+            }
         }
 
     }

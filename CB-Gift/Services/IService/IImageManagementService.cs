@@ -7,5 +7,6 @@ namespace CB_Gift.Services.IService
         Task<UploadedImage> UploadImageForUserAsync(Stream stream, string fileName, string userId);
 
         Task<IEnumerable<UploadedImage>> GetImagesByUserAsync(string userId);
+        Task<UploadedImage> UploadMediaForUserAsync(Stream stream, string fileName, string userId, string contentType);
     }
 }
