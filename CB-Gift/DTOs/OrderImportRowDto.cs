@@ -40,6 +40,8 @@ namespace CB_Gift.Orders.Import
         public string? LinkImg { get; set; }
         public string? LinkThanksCard { get; set; }
         public string? LinkFileDesign { get; set; }
+        public bool IsValid { get; set; } = true;
+        public List<string> Errors { get; set; } = new List<string>();
     }
     public class OrderImportRowValidator2 : AbstractValidator<OrderImportRowDto>
     {
