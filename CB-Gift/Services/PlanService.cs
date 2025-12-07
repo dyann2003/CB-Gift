@@ -148,33 +148,30 @@ namespace CB_Gift.Services
         {
             var query = _context.PlanDetails.AsNoTracking();
 
-            // Lọc theo category nếu có
+            // --- 1. ÁP DỤNG CÁC BỘ LỌC (FILTER) ---
             if (categoryId.HasValue && categoryId.Value > 0)
             {
                 query = query.Where(pd => pd.OrderDetail.ProductVariant.Product.CategoryId == categoryId.Value);
             }
 
-            // Lọc theo ngày tạo plan được chọn
             if (selectedDate.HasValue)
             {
+                // Lọc theo ngày (Bỏ qua phần giờ phút giây)
                 query = query.Where(pd => pd.Plan.CreateDate.HasValue && pd.Plan.CreateDate.Value.Date == selectedDate.Value.Date);
             }
 
             if (!string.IsNullOrEmpty(status))
             {
-                //0 là needs_production, 1 là đang sản xuất , 2 là produced
                 if (status.Equals("produced", StringComparison.OrdinalIgnoreCase))
                 {
-                    //query = query.Where(pd => pd.StatusOrder == 2);
                     query = query.Where(pd => pd.OrderDetail.ProductionStatus == ProductionStatus.FINISHED);
-
                 }
                 else if (status.Equals("needs_production", StringComparison.OrdinalIgnoreCase))
                 {
-                    //query = query.Where(pd => pd.StatusOrder == 0 || pd.StatusOrder == 1);
                     query = query.Where(pd => pd.OrderDetail.ProductionStatus == ProductionStatus.READY_PROD
-                    || pd.OrderDetail.ProductionStatus == ProductionStatus.IN_PROD
-                    || pd.OrderDetail.ProductionStatus == ProductionStatus.QC_FAIL);
+                                           || pd.OrderDetail.ProductionStatus == ProductionStatus.IN_PROD
+                                           || pd.OrderDetail.ProductionStatus == ProductionStatus.QC_FAIL
+                                           || pd.OrderDetail.ProductionStatus == ProductionStatus.PROD_REWORK);
                 }
                 else
                 {
@@ -183,69 +180,94 @@ namespace CB_Gift.Services
                 }
             }
 
-            // Xây dựng toàn bộ câu truy vấn và chỉ thực thi một lần duy nhất ở cuối
-            var results = await query
-                .GroupBy(pd => pd.OrderDetail.ProductVariant.Product.Category) // Gom nhóm Cấp 1: Category
-                .Select(categoryGroup => new StaffCategoryPlanViewDto
-                {
-                    CategoryId = categoryGroup.Key.CategoryId,
-                    CategoryName = categoryGroup.Key.CategoryName ?? "Unknown",
-                    TotalItems = categoryGroup.Count(),
+            // --- 2. LẤY DỮ LIỆU PHẲNG (FLATTEN DATA) ---
+            // Select ra một danh sách phẳng chứa tất cả thông tin cần thiết.
+            // EF Core sẽ dịch đoạn này thành 1 câu SQL tối ưu, bao gồm cả Sub-query lấy Reason.
+            var flatData = await query.Select(pd => new
+            {
+                // Grouping Keys (Dùng để gom nhóm sau này)
+                CategoryId = pd.OrderDetail.ProductVariant.Product.CategoryId,
+                CategoryName = pd.OrderDetail.ProductVariant.Product.Category.CategoryName,
+                PlanDate = pd.Plan.CreateDate,
+                OrderId = pd.OrderDetail.OrderId,
+                OrderCode = pd.OrderDetail.Order.OrderCode,
+                CustomerName = pd.OrderDetail.Order.EndCustomer.Name,
 
-                    DateGroups = categoryGroup
-                        .GroupBy(pd => pd.Plan.CreateDate.Value.Date) // Gom nhóm Cấp 2: Date
-                        .OrderBy(dateGroup => dateGroup.Key)
+                // Data Details
+                PlanDetailId = pd.PlanDetailId,
+                OrderDetailId = pd.OrderDetailId,
+                ImageUrl = pd.OrderDetail.LinkImg,
+                Note = pd.OrderDetail.Note,
+                ProductionFileUrl = pd.OrderDetail.LinkFileDesign,
+                ThankYouCardUrl = pd.OrderDetail.LinkThanksCard,
+                Quantity = pd.OrderDetail.Quantity,
+                StatusOrder = pd.OrderDetail.ProductionStatus,
+                Sku = pd.OrderDetail.ProductVariant.Sku,
+                ProductName = pd.OrderDetail.ProductVariant.Product.ProductName,
+
+                // LOGIC LẤY REASON ĐƯỢC XỬ LÝ TẠI ĐÂY
+                // EF Core hỗ trợ dịch sub-query này trong Select đơn giản
+                Reason = (pd.OrderDetail.ProductionStatus == ProductionStatus.PROD_REWORK ||
+                          pd.OrderDetail.ProductionStatus == ProductionStatus.QC_FAIL)
+                          ? _context.OrderDetailLogs
+                              .Where(log => log.OrderDetailId == pd.OrderDetailId && log.EventType == "QC_REJECTED")
+                              .OrderByDescending(log => log.CreatedAt)
+                              .Select(log => log.Reason)
+                              .FirstOrDefault()
+                          : null
+            }).ToListAsync(); // <--- THỰC THI QUERY TẠI ĐÂY (Lấy dữ liệu về RAM)
+
+
+            // --- 3. GOM NHÓM DỮ LIỆU TRÊN RAM (IN-MEMORY GROUPING) ---
+            // Sử dụng LINQ to Objects, không liên quan đến Database nữa nên cực nhanh và không lỗi.
+            var result = flatData
+                .GroupBy(x => new { x.CategoryId, x.CategoryName }) // Cấp 1: Category
+                .Select(catGroup => new StaffCategoryPlanViewDto
+                {
+                    CategoryId = catGroup.Key.CategoryId,
+                    CategoryName = catGroup.Key.CategoryName ?? "Unknown",
+                    TotalItems = catGroup.Count(),
+
+                    DateGroups = catGroup
+                        .Where(x => x.PlanDate.HasValue) // An toàn null
+                        .GroupBy(x => x.PlanDate.Value.Date) // Cấp 2: Date
+                        .OrderBy(d => d.Key)
                         .Select(dateGroup => new StaffDateGroupDto
                         {
                             GroupDate = dateGroup.Key,
                             ItemCount = dateGroup.Count(),
-                            // Gom nhóm Cấp 3: Order
+
                             OrderGroups = dateGroup
-                                .GroupBy(pd => new
-                                {
-                                    pd.OrderDetail.OrderId,
-                                    pd.OrderDetail.Order.OrderCode,
-                                    CustomerName = pd.OrderDetail.Order.EndCustomer.Name
-                                })
+                                .GroupBy(x => new { x.OrderId, x.OrderCode, x.CustomerName }) // Cấp 3: Order
                                 .Select(orderGroup => new StaffOrderGroupDto
                                 {
                                     OrderId = orderGroup.Key.OrderId,
                                     OrderCode = orderGroup.Key.OrderCode,
                                     CustomerName = orderGroup.Key.CustomerName,
 
-                                    // Chi tiết các item trong order
-                                    Details = orderGroup.Select(pd => new StaffPlanDetailDto
+                                    // Map chi tiết
+                                    Details = orderGroup.Select(d => new StaffPlanDetailDto
                                     {
-                                        PlanDetailId = pd.PlanDetailId,
-                                        OrderDetailId = pd.OrderDetailId,
-                                        OrderId = pd.OrderDetail.OrderId,
-                                        OrderCode = pd.OrderDetail.Order.OrderCode,
-                                        CustomerName = pd.OrderDetail.Order.EndCustomer.Name,
-                                        ImageUrl = pd.OrderDetail.LinkImg,
-                                        NoteOrEngravingContent = pd.OrderDetail.Note,
-                                        ProductionFileUrl = pd.OrderDetail.LinkFileDesign,
-                                        ThankYouCardUrl = pd.OrderDetail.LinkThanksCard,
-                                        Quantity = pd.OrderDetail.Quantity,
-                                        StatusOrder = pd.OrderDetail.ProductionStatus,
-                                        Sku = pd.OrderDetail.ProductVariant.Sku,
-                                        ProductName = pd.OrderDetail.ProductVariant.Product.ProductName,
-                                        Reason = (
-                                                pd.OrderDetail.ProductionStatus == ProductionStatus.PROD_REWORK ||
-                                                pd.OrderDetail.ProductionStatus == ProductionStatus.QC_FAIL
-                                            )
-                                            ? _context.OrderDetailLogs
-                                                .Where(log => log.OrderDetailId == pd.OrderDetailId && log.EventType == "QC_REJECTED")
-                                                .OrderByDescending(log => log.CreatedAt)
-                                                .Select(log => log.Reason)
-                                                .FirstOrDefault()
-                                            : null
+                                        PlanDetailId = d.PlanDetailId,
+                                        OrderDetailId = d.OrderDetailId,
+                                        OrderId = d.OrderId,
+                                        OrderCode = d.OrderCode,
+                                        CustomerName = d.CustomerName,
+                                        ImageUrl = d.ImageUrl,
+                                        NoteOrEngravingContent = d.Note,
+                                        ProductionFileUrl = d.ProductionFileUrl,
+                                        ThankYouCardUrl = d.ThankYouCardUrl,
+                                        Quantity = d.Quantity,
+                                        StatusOrder = d.StatusOrder,
+                                        Sku = d.Sku,
+                                        ProductName = d.ProductName,
+                                        Reason = d.Reason // Dữ liệu đã lấy ở bước 2
                                     }).ToList()
                                 }).ToList()
                         }).ToList()
-                })
-                .ToListAsync();
+                }).ToList();
 
-            return results;
+            return result;
         }
 
         /*public async Task<bool> UpdatePlanDetailStatusAsync(int planDetailId, int newStatus)
