@@ -232,9 +232,9 @@ namespace CB_Gift.Controllers
             }
         }
 
-        // [THÊM MỚI] - API CHO NÚT "CREATE MONTHLY RECEIPT"
+        // - API CHO NÚT "CREATE MONTHLY RECEIPT"
         [HttpPost("create-monthly-invoice")]
-       // [Authorize(Roles = "Staff, Manager")]
+        [Authorize(Roles = "Staff, Manager")]
         public async Task<IActionResult> CreateMonthlyInvoice([FromBody] CreateMonthlyInvoiceRequest request)
         {
             try

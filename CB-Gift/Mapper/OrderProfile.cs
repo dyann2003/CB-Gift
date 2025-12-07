@@ -80,15 +80,19 @@ namespace CB_Gift.Mapper
             CreateMap<EndCustomerCreateRequest, EndCustomer>();
             // UpdateOrder
             CreateMap<OrderCoreUpdateRequest, Order>()
-                // Bỏ qua các thuộc tính không có trong DTO update để tránh ghi đè null
-                .ForAllMembers(opts => opts.Condition((src, dest, srcMember) => srcMember != null));
+    
+    .ForAllMembers(opts => opts.Condition((src, dest, srcMember) => srcMember != null));
+
 
             CreateMap<OrderDetailUpdateRequest, OrderDetail>()
-                // Khi update, không được set lại CreatedDate
-                .ForMember(dest => dest.CreatedDate, opt => opt.Ignore())
-                // Cũng không map OrderDetailID vì đây là khóa chính
-                .ForMember(dest => dest.OrderDetailId, opt => opt.Ignore())
-                .ForMember(dest => dest.ProductVariantId, opt => opt.MapFrom(src => src.ProductVariantID));
+     .ForMember(dest => dest.CreatedDate, opt => opt.Ignore())
+     .ForMember(dest => dest.OrderDetailId, opt => opt.Ignore())
+     .ForMember(dest => dest.ProductVariantId, opt => opt.MapFrom(src => src.ProductVariantID))
+     .ForMember(dest => dest.LinkImg, opt => opt.MapFrom(src => src.LinkImg))
+     .ForMember(dest => dest.LinkThanksCard, opt => opt.MapFrom(src => src.LinkThanksCard))
+     .ForMember(dest => dest.LinkFileDesign, opt => opt.MapFrom(src => src.LinkDesign))   // <--- THÊM DÒNG NÀY
+     .ForMember(dest => dest.Price, opt => opt.MapFrom(src => src.Price));
+
 
             CreateMap<OrderDetail, MakeOrderDetailResponse>()
                 .ForMember(dest => dest.ProductVariantID, opt => opt.MapFrom(src => src.ProductVariantId));
@@ -97,7 +101,21 @@ namespace CB_Gift.Mapper
             CreateMap<Order, MakeOrderResponse>()
                 .ForMember(dest => dest.CustomerName, opt => opt.MapFrom(src => src.EndCustomer.Name))
                 .ForMember(dest => dest.Details, opt => opt.MapFrom(src => src.OrderDetails));
-            CreateMap<EndCustomerUpdateRequest, EndCustomer>();
+            CreateMap<EndCustomerUpdateRequest, EndCustomer>()
+    // Bỏ hẳn các dòng .ForMember gây lỗi biên dịch:
+    // .ForMember(dest => dest.ToProvinceId, opt => opt.Ignore())
+    // .ForMember(dest => dest.ToDistrictId, opt => opt.Ignore())
+    // .ForMember(dest => dest.ToWardCode, opt => opt.Ignore())
+
+    // Nếu EndCustomer Model có các trường Name, Phone, Email, Address, Address1, ZipCode, ShipState, ShipCity, ShipCountry,
+    // hãy đảm bảo bạn map chúng. Nếu các trường này cùng tên, AutoMapper sẽ tự động map.
+
+    // Nếu bạn đang sử dụng ForAllMembers để tránh ghi đè null, hãy giữ lại:
+    .ForAllMembers(opts => opts.Condition((src, dest, srcMember) => srcMember != null));
+
+
+    
+
         }
     }
 

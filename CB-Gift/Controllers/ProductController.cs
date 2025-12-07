@@ -189,5 +189,36 @@ namespace CB_Gift.Controllers
             return NoContent();
         }
 
+        // 🟢 THÊM: GET: api/Product/by-variant/{productVariantId}
+        [HttpGet("by-variant/{productVariantId}")]
+        [AllowAnonymous] // Có thể để AllowAnonymous nếu frontend public cần dùng
+        public async Task<IActionResult> GetProductByVariantId(int productVariantId)
+        {
+            var productDto = await _service.GetProductByVariantIdAsync(productVariantId);
+
+            if (productDto == null)
+                return NotFound(new { message = $"Không tìm thấy sản phẩm cho biến thể ID {productVariantId}." });
+
+            // Trả về toàn bộ ProductDto. DTO này chứa ProductId và mảng Variants đầy đủ.
+            return Ok(productDto);
+        }
+        [HttpGet("export-master")]
+        public async Task<IActionResult> ExportMasterData()
+        {
+            try
+            {
+                var fileContent = await _service.ExportProductMasterDataAsync();
+
+                string fileName = $"MasterData_Products_{DateTime.Now:yyyyMMdd}.xlsx";
+                string contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+                return File(fileContent, contentType, fileName);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "File export error: " + ex.Message });
+            }
+        }
+
     }
 }

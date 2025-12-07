@@ -1,5 +1,7 @@
-﻿using CB_Gift.DTOs;
+﻿using CB_Gift.Data;
+using CB_Gift.DTOs;
 using CB_Gift.Services.IService;
+using Microsoft.EntityFrameworkCore;
 using System.Text;
 using System.Text.Json;
 
@@ -9,16 +11,18 @@ namespace CB_Gift.Services
     {
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly ILogger<GhnShippingService> _logger;
+        private readonly CBGiftDbContext _context;
         private readonly IConfiguration _config;
         private readonly int _shopId;
 
         private readonly JsonSerializerOptions _jsonOptions;
 
-        public GhnShippingService(IHttpClientFactory httpClientFactory, IConfiguration configuration, ILogger<GhnShippingService> logger)
+        public GhnShippingService(IHttpClientFactory httpClientFactory, IConfiguration configuration, ILogger<GhnShippingService> logger, CBGiftDbContext context)
         {
             _httpClientFactory = httpClientFactory;
             _logger = logger;
             _config = configuration;
+            _context = context;
             _jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 
             _shopId = _config.GetValue<int>("GhnSettings:ShopId");
@@ -129,6 +133,8 @@ namespace CB_Gift.Services
             {
                 throw new InvalidOperationException("Không tìm thấy dữ liệu đơn hàng.");
             }
+            //LOGIC ĐỒNG BỘ STATUS VÀO DB (MỚI THÊM VÀO)
+            //await SyncGhnStatusToLocalDbAsync(orderCode, data.Status);
 
             return new TrackingResult
             {
@@ -145,6 +151,58 @@ namespace CB_Gift.Services
                 Items  = data.Items ?? new List<GhnItem>(),
                 Log = data.Log ?? new List<GhnLog>(),
             };
+        }
+        private async Task SyncGhnStatusToLocalDbAsync(string trackingCode, string ghnStatus)
+        {
+            try
+            {
+                var order = await _context.Orders.FirstOrDefaultAsync(o => o.Tracking == trackingCode);
+                if (order == null) return; // Không tìm thấy thì thôi, không lỗi
+
+                bool isChanged = false;
+                string status = ghnStatus.ToLower();
+
+                // Logic Mapping Status (Giống hệt ManualGhnService)
+                // GHN có rất nhiều status con (picking, storing, sorting...), ta gom hết về Shipping
+
+                // 1. Ready To Pick
+                if (status == "ready_to_pick" && order.StatusOrder != 11)
+                {
+                    order.StatusOrder = 11; // QC_Done
+                    isChanged = true;
+                }
+                // 2. Shipping (Gồm picking, transporting, sorting, storing...)
+                else if ((status == "picking" || status == "transporting" || status == "sorting" || status == "storing" || status == "shipping")
+                         && order.StatusOrder != 13)
+                {
+                    order.StatusOrder = 13; // Shipping
+                    isChanged = true;
+                }
+                // 3. Shipped (delivered)
+                else if ((status == "delivered" || status == "shipped") && order.StatusOrder != 14)
+                {
+                    order.StatusOrder = 14; // Shipped
+                    isChanged = true;
+                }
+                //// 4. Return (cancel, return)
+                //else if ((status == "cancel" || status == "return" || status == "returned") && order.StatusOrder != 15)
+                //{
+                //    order.StatusOrder = 15; // Cancelled/Returned
+                //    isChanged = true;
+                //}
+
+                if (isChanged)
+                {
+                    _context.Orders.Update(order);
+                    await _context.SaveChangesAsync();
+                    _logger.LogInformation($"[SYNC] Đã cập nhật đơn {trackingCode} sang StatusOrder: {order.StatusOrder} (GHN: {ghnStatus})");
+                }
+            }
+            catch (Exception ex)
+            {
+                // Chỉ log lỗi, không throw exception để tránh làm hỏng luồng hiển thị Tracking của khách
+                _logger.LogError(ex, $"Lỗi khi đồng bộ status đơn {trackingCode} vào DB.");
+            }
         }
 
     }

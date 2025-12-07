@@ -2,6 +2,7 @@
 using CB_Gift.Models;
 using CB_Gift.Models.Enums;
 using CB_Gift.Services.IService;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using static CB_Gift.DTOs.StaffViewDtos;
@@ -12,11 +13,14 @@ namespace CB_Gift.Services
     {
         private readonly CBGiftDbContext _context;
         private readonly ILogger<PlanService> _logger;
-
-        public PlanService(ILogger<PlanService> logger, CBGiftDbContext context)
+        private readonly INotificationService _notificationService;
+        private readonly UserManager<AppUser> _userManager;
+        public PlanService(ILogger<PlanService> logger, CBGiftDbContext context, INotificationService notificationService, UserManager<AppUser> userManager)
         {
             _logger = logger;
             _context = context ?? throw new ArgumentNullException(nameof(context));
+            _notificationService = notificationService;
+            _userManager = userManager;
         }
 
         /// Lấy tất cả OrderDetail đã submit (StatusOrder = 7) chưa có PlanDetail
@@ -101,6 +105,37 @@ namespace CB_Gift.Services
                 var duration = DateTime.UtcNow - startTime;
                 _logger.LogInformation("Job GroupSubmittedOrdersAsync COMPLETED successfully. Created {PlanCount} plans. Processed {OrderCount} orders. Duration: {Duration}ms",
                     plansCreated, ordersToUpdate.Count, duration.TotalMilliseconds);
+
+                // 3. GỬI THÔNG BÁO CHO STAFF
+                try
+                {
+                    if (plansCreated > 0)
+                    {
+                        var staffUsers = await _userManager.GetUsersInRoleAsync("Staff");
+                        var staffIds = staffUsers.Select(u => u.Id).ToList();
+
+                        if (staffIds.Any())
+                        {
+                            string message = $"Hệ thống vừa tạo {plansCreated} kế hoạch sản xuất mới. Vui lòng kiểm tra.";
+                            string link = "/staff/needs-production";
+
+                            foreach (var staffId in staffIds)
+                            {
+                                await _notificationService.CreateAndSendNotificationAsync(
+                                    staffId.ToString(),
+                                    message,
+                                    link
+                                );
+                            }
+
+                            _logger.LogInformation("Sent notifications to {Count} staff members.", staffIds.Count);
+                        }
+                    }
+                }
+                catch (Exception exNotify)
+                {
+                    _logger.LogError(exNotify, "Error sending notifications to Staff.");
+                }
             }
             catch (Exception ex)
             {

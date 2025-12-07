@@ -1,163 +1,97 @@
 ﻿using FluentValidation;
-using System.Globalization;
+using System;
+using System.Linq;
+
 namespace CB_Gift.Orders.Import
 {
     public class OrderImportRowValidator : AbstractValidator<OrderImportRowDto>
     {
         private readonly ReferenceDataCache _cache;
 
-        public OrderImportRowValidator(ReferenceDataCache cache)
+        public  OrderImportRowValidator(ReferenceDataCache cache)
         {
             _cache = cache;
-            RuleFor(x => x.OrderID).NotEmpty().WithMessage("OrderID không được để trống.");
-            // Required fields
-            RuleFor(x => x.OrderCode).NotEmpty().WithMessage("OrderCode không được để trống.");
-            RuleFor(x => x.Phone).NotEmpty().WithMessage("Phone không được để trống.");
-            RuleFor(x => x.Address).NotEmpty().WithMessage("Address không được để trống.");
+
+            // 1. Thông tin đơn hàng cơ bản
+            RuleFor(x => x.OrderCode)
+                .NotEmpty().WithMessage("Mã đơn hàng (OrderCode) là bắt buộc.");
+
+            // 2. Thông tin khách hàng
+            RuleFor(x => x.CustomerName)
+                .NotEmpty().WithMessage("Tên khách hàng là bắt buộc.");
+
+            RuleFor(x => x.Phone)
+                .NotEmpty().WithMessage("Số điện thoại là bắt buộc.")
+                .MinimumLength(8).WithMessage("Số điện thoại không hợp lệ (quá ngắn).");
 
             RuleFor(x => x.Email)
-                .EmailAddress()
-                .When(x => !string.IsNullOrWhiteSpace(x.Email))
-                .WithMessage("Email không hợp lệ.");
+                .EmailAddress().When(x => !string.IsNullOrWhiteSpace(x.Email))
+                .WithMessage("Định dạng Email không hợp lệ.");
 
-            // ShipCountry = Việt Nam
-            RuleFor(x => x.ShipCountry)
-                .NotEmpty()
-                .Must(BeVietnam)
-                .WithMessage("ShipCountry phải là Việt Nam (Vietnam / Viet Nam / Việt Nam / VN).");
+            // 3. Địa chỉ (Logic mới: Province -> District -> Ward)
+            RuleFor(x => x.Address)
+                .NotEmpty().WithMessage("Địa chỉ chi tiết (Address) là bắt buộc.");
 
-            // Tỉnh/Thành Việt Nam
-            RuleFor(x => x.ShipState)
-                .NotEmpty()
-                .Must(BeValidProvince)
-                .WithMessage("ShipState phải là tên một tỉnh/thành hợp lệ của Việt Nam.");
+            RuleFor(x => x.Province)
+                .NotEmpty().WithMessage("Tỉnh/Thành phố là bắt buộc.")
+                .Must(BeValidProvince).WithMessage("Tỉnh/Thành phố không nằm trong danh sách hỗ trợ.");
 
-            // City – chỉ yêu cầu không rỗng
-            RuleFor(x => x.ShipCity)
-                .NotEmpty()
-                .WithMessage("ShipCity không được để trống.");
+            RuleFor(x => x.District)
+                .NotEmpty().WithMessage("Quận/Huyện là bắt buộc.");
 
-            // Zipcode
-            RuleFor(x => x.Zipcode)
-                .NotEmpty()
-                .Matches(@"^\d{5}$").WithMessage("Zipcode phải gồm 5 chữ số.");
+            RuleFor(x => x.Ward)
+                .NotEmpty().WithMessage("Phường/Xã là bắt buộc.");
 
-            // Payment Status
-            RuleFor(x => x.PaymentStatus)
-                .Must(BeValidPaymentStatus)
-                .When(x => !string.IsNullOrWhiteSpace(x.PaymentStatus))
-                .WithMessage("PaymentStatus không hợp lệ. (Pending, Paid, Refunded, Cancelled, Unpaid)");
+            // 4. Sản phẩm (Quan trọng: Check theo SKU)
+            RuleFor(x => x.SKU)
+                .Cascade(CascadeMode.Stop) // Nếu rỗng thì dừng, không check DB
+                .NotEmpty().WithMessage("SKU là bắt buộc.")
+                .Must(BeExistingSku).WithMessage("SKU '{PropertyValue}' không tồn tại trong hệ thống.");
 
-            // ProductName
-            RuleFor(x => x.ProductName)
-                .NotEmpty()
-                .Must(BeExistingProduct)
-                .WithMessage("ProductName không tồn tại trong hệ thống.");
-
-            // ProductVariant phải khớp ProductName + SizeInch
-            RuleFor(x => x)
-                .Must(HaveValidProductVariant)
-                .WithMessage("Không tìm thấy ProductVariant phù hợp với ProductName + SizeInch.");
-
-            // TotalCost
-            RuleFor(x => x.TotalCost)
-                .GreaterThanOrEqualTo(0)
-                .When(x => x.TotalCost.HasValue);
-
-            // TotalAmount
-            RuleFor(x => x.TotalAmount)
-                .GreaterThanOrEqualTo(0)
-                .When(x => x.TotalAmount.HasValue);
+            RuleFor(x => x.Quantity)
+                .GreaterThan(0).WithMessage("Số lượng phải lớn hơn 0.");
+           
         }
 
-        private bool BeVietnam(string shipCountry)
+        // --- Helper Functions ---
+
+        /// <summary>
+        /// Kiểm tra Tên tỉnh có nằm trong Cache không (So sánh không phân biệt hoa thường)
+        /// </summary>
+        private bool BeValidProvince(string? provinceName)
         {
-            if (string.IsNullOrWhiteSpace(shipCountry)) return false;
+            if (string.IsNullOrWhiteSpace(provinceName)) return false;
 
-            var normalized = shipCountry.Trim().ToLower();
-
-            return normalized == "vietnam"
-                || normalized == "viet nam"
-                || normalized == "việt nam"
-                || normalized == "vn";
-        }
-
-        private bool BeValidProvince(string provinceName)
-        {
-            if (string.IsNullOrWhiteSpace(provinceName))
-                return false;
-
-            var province = provinceName.Trim();
+            var input = provinceName.Trim();
 
             return _cache.Provinces.Any(p =>
-                string.Equals(p, province, StringComparison.OrdinalIgnoreCase));
+                string.Equals(p, input, StringComparison.OrdinalIgnoreCase));
         }
 
-        private bool BeValidCityInProvince(OrderImportRowDto dto)
+        /// <summary>
+        /// Kiểm tra SKU có tồn tại trong ProductVariants Cache không
+        /// </summary>
+        private bool BeExistingSku(string? sku)
         {
-            // Bạn chưa có danh sách quận/huyện → chỉ check khác rỗng
-            return !string.IsNullOrWhiteSpace(dto.ShipCity);
+            if (string.IsNullOrWhiteSpace(sku)) return false;
+
+            var inputSku = sku.Trim();
+
+            return _cache.ProductVariants.Any(v =>
+                !string.IsNullOrEmpty(v.Sku) &&
+                v.Sku.Equals(inputSku, StringComparison.OrdinalIgnoreCase));
         }
 
+        /// <summary>
+        /// Kiểm tra trạng thái thanh toán
+        /// </summary>
         private bool BeValidPaymentStatus(string? status)
         {
-            if (string.IsNullOrWhiteSpace(status)) return true;
+            if (string.IsNullOrWhiteSpace(status)) return true; // Cho phép rỗng (sẽ default là Pending ở Factory)
 
-            var normalized = status.Trim().ToLower();
-
-            return normalized is "pending" or "paid"
-                or "refunded" or "cancelled" or "unpaid";
+            var s = status.Trim().ToLower();
+            return s is "pending" or "paid" or "completed"
+                     or "unpaid" or "refunded" or "cancelled";
         }
-
-        private bool BeExistingProduct(string? productName)
-        {
-            if (string.IsNullOrWhiteSpace(productName))
-                return false;
-
-            return _cache.Products.Any(p =>
-                string.Equals(p.ProductName, productName.Trim(),
-                    StringComparison.OrdinalIgnoreCase));
-        }
-
-        // helper chuẩn hoá size: bỏ "IN", "inch", đổi về số 0.## (5.90 -> "5.9", 5.9IN -> "5.9")
-        private string NormalizeSize(string? size)
-        {
-            if (string.IsNullOrWhiteSpace(size))
-                return string.Empty;
-
-            var s = size.Trim().ToLower();
-
-            // bỏ chữ "inch", "in" nếu có
-            s = s.Replace("inch", "").Replace("in", "").Trim();
-
-            // parse số: xử lý 4, 4.0, 4.00, 4,0 ...
-            if (decimal.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var val))
-            {
-                return val.ToString("0.##", CultureInfo.InvariantCulture); // 4.00 -> "4", 5.90 -> "5.9"
-            }
-
-            return s;
-        }
-        private bool HaveValidProductVariant(OrderImportRowDto dto)
-        {
-            if (string.IsNullOrWhiteSpace(dto.ProductName) ||
-                string.IsNullOrWhiteSpace(dto.SizeInch))
-                return false;
-
-            // tìm product theo tên
-            var product = _cache.Products.FirstOrDefault(p =>
-                p.ProductName.Equals(dto.ProductName.Trim(), StringComparison.OrdinalIgnoreCase));
-
-            if (product == null) return false;
-
-            var dtoSize = NormalizeSize(dto.SizeInch);
-
-            // so sánh size đã chuẩn hoá
-            return _cache.ProductVariants.Any(v =>
-                v.ProductId == product.ProductId &&
-                NormalizeSize(v.SizeInch) == dtoSize);
-        }
-
     }
 }
-

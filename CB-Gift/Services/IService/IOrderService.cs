@@ -42,6 +42,9 @@ namespace CB_Gift.Services.IService
         Task<MakeOrderResponse> MakeOrder(MakeOrderDto request, string sellerUserId);
         Task<MakeOrderResponse> UpdateOrderAsync(int orderId, OrderUpdateDto request, string sellerUserId);
 
+        Task<OrderDto> UpdateOrderAddressAsync(int orderId, UpdateAddressRequest request, string sellerUserId);
+
+
         Task<OrderStatsDto> GetOrderStatsForSellerAsync(string sellerUserId);
 
         Task<bool> DeleteOrderAsync(int orderId, string sellerUserId);
@@ -66,6 +69,8 @@ namespace CB_Gift.Services.IService
         /// Import đơn hàng từ file Excel.
         /// sellerUserId = id của Seller đang đăng nhập.
         /// </summary>
+        Task<List<OrderImportRowDto>> ValidateImportAsync(IFormFile file);
+        Task<OrderImportResult> ConfirmImportAsync(List<OrderImportRowDto> dtos, string sellerUserId);
         Task<OrderImportResult> ImportFromExcelAsync(IFormFile file, string sellerUserId);
         Task<OrderActivityDto?> GetOrderActivityTimelineAsync(int orderId);
     }

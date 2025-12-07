@@ -66,7 +66,7 @@ namespace CB_Gift.Services
                     .ThenInclude(od => od.ProductVariant)
                 .Where(o => o.SellerUserId == sellerUserId)
                 .AsQueryable();
-                
+
             // 1. Lọc theo Status
             if (!string.IsNullOrEmpty(status))
                 // ✅ Logic MỚI: Cho phép lọc theo NameVi HOẶC Code
@@ -610,7 +610,7 @@ namespace CB_Gift.Services
 
         public async Task<MakeOrderResponse> UpdateOrderAsync(int orderId, OrderUpdateDto request, string sellerUserId)
         {
-            // Step 1: Tìm đơn hàng và kiểm tra điều kiện
+            // Step 1: Tìm đơn hàng và kiểm tra điều kiện (GIỮ NGUYÊN)
             var order = await _context.Orders
                 .Include(o => o.OrderDetails) // Lấy danh sách chi tiết hiện có
                 .FirstOrDefaultAsync(o => o.OrderId == orderId && o.SellerUserId == sellerUserId);
@@ -628,9 +628,17 @@ namespace CB_Gift.Services
             // Step 2: Cập nhật thông tin khách hàng và đơn hàng chính
             var customer = await _context.EndCustomers.FindAsync(order.EndCustomerId);
             if (customer != null) _mapper.Map(request.CustomerInfo, customer);
+
+            // Map các trường chung
             _mapper.Map(request.OrderUpdate, order);
 
-            // Step 3: Đồng bộ hóa Order Details
+            // 🔥 FIX QUYẾT ĐỊNH: Đảm bảo TotalCost từ request được ưu tiên và ghi đè
+            // Nếu FE gửi totalCost=254000, nó sẽ được gán.
+            // Nếu FE gửi totalCost=null, nó sẽ giữ giá trị hiện tại (đã được map từ DB)
+            order.TotalCost = request.OrderUpdate.TotalCost ?? order.TotalCost;
+
+
+            // Step 3: Đồng bộ hóa Order Details (GIỮ NGUYÊN LOGIC)
             var detailsInRequest = request.OrderDetailsUpdate ?? new List<OrderDetailUpdateRequest>();
             var requestDetailIds = detailsInRequest.Select(d => d.OrderDetailID).ToHashSet();
 
@@ -666,14 +674,10 @@ namespace CB_Gift.Services
                 }
             }
 
-            // Step 4: Tính toán lại tổng tiền và lưu thay đổi
-            // Bạn nên gọi lại hàm RecalculateOrderTotalCost để đảm bảo logic tính toán là nhất quán
-            await _context.SaveChangesAsync(); // Lưu các thay đổi (add, update, remove)
+            // Step 4: Chỉ gọi SaveChangesAsync() MỘT LẦN để lưu tất cả các thay đổi.
+            await _context.SaveChangesAsync();
 
-            // Gọi hàm tính toán lại sau khi đã lưu DB để nó lấy được dữ liệu mới nhất
-            await RecalculateOrderTotalCost(order.OrderId);
-
-            // Step 5: Chuẩn bị dữ liệu trả về (tương tự như trước)
+            // Step 5: Chuẩn bị dữ liệu trả về (GIỮ NGUYÊN)
             var updatedOrder = await _context.Orders
                 .Include(o => o.OrderDetails)
                 .AsNoTracking()
@@ -681,6 +685,66 @@ namespace CB_Gift.Services
 
             return _mapper.Map<MakeOrderResponse>(updatedOrder);
         }
+
+        public async Task<OrderDto> UpdateOrderAddressAsync(int orderId, UpdateAddressRequest request, string sellerUserId)
+        {
+            var order = await _context.Orders
+                .FirstOrDefaultAsync(o => o.OrderId == orderId && o.SellerUserId == sellerUserId);
+
+            if (order == null)
+                throw new KeyNotFoundException("Không tìm thấy đơn hàng hoặc không có quyền.");
+
+            var customer = await _context.EndCustomers.FindAsync(order.EndCustomerId);
+
+            if (customer == null)
+                throw new KeyNotFoundException("Không tìm thấy thông tin khách hàng.");
+
+            // ==========================================================
+            // BƯỚC 1: Cập nhật thông tin khách hàng (EndCustomer)
+            // ==========================================================
+
+            // Cập nhật các trường tên và địa chỉ chi tiết (EndCustomer)
+            customer.Name = request.Name;
+            customer.Phone = request.Phone;
+            customer.Email = request.Email;
+            customer.Address = request.Address;
+            customer.Address1 = request.Address1;
+            // customer.Zipcode = request.ZipCode; // Nếu ZipCode nằm trong EndCustomer
+
+            // Mapping các TÊN địa lý (Province/District/Ward Name) vào EndCustomer
+            // (Giữ lại để đảm bảo không mất dữ liệu hiển thị nếu EndCustomer dùng các trường này)
+            customer.ShipState = request.ProvinceName;
+            customer.ShipCity = request.DistrictName;
+            customer.ShipCountry = request.WardName;
+
+            // ==========================================================
+            // BƯỚC 2: Cập nhật các ID địa lý vào Order
+            // (Các trường này phải được thêm vào UpdateAddressRequest)
+            // ==========================================================
+
+            // ✅ CẬP NHẬT ID TỈNH/HUYỆN/XÃ VÀO BẢNG ORDER
+            order.ToProvinceId = request.ToProvinceId;
+            order.ToDistrictId = request.ToDistrictId;
+            order.ToWardCode = request.ToWardCode;
+
+            // Đảm bảo TotalCost không bị thay đổi trong hàm này
+            // _context.Orders.Update(order); // Entity Framework sẽ tự động theo dõi thay đổi
+
+            await _context.SaveChangesAsync();
+
+            // Trả về Order DTO mới
+            var dto = await _context.Orders
+                .Include(o => o.EndCustomer)
+                .Include(o => o.OrderDetails)
+                .AsNoTracking()
+                .Where(o => o.OrderId == orderId)
+                .Select(o => _mapper.Map<OrderDto>(o))
+                .FirstAsync();
+
+            return dto;
+        }
+
+
         public async Task<bool> DeleteOrderAsync(int orderId, string sellerUserId)
         {
             var order = await _context.Orders
@@ -1108,7 +1172,7 @@ namespace CB_Gift.Services
                     // 1. Gửi thông báo (chuông) cho Seller
                     await _notificationService.CreateAndSendNotificationAsync(
                         order.SellerUserId,
-                        $"Đơn hàng #{orderId} của bạn đang tiến hành giao. Mã vận đơn: {order.Tracking}",
+                        $"Đơn hàng #{order.OrderCode} của bạn đang tiến hành giao. Mã vận đơn: {order.Tracking}",
                         $"/seller/orders/{orderId}"
                     );
 
@@ -1125,6 +1189,58 @@ namespace CB_Gift.Services
                 }
                 // ✅ KẾT THÚC GỬI THÔNG BÁO
                 return new ApproveOrderResult { IsSuccess = true };
+            }
+            // Bắt lỗi 400 (Bad Request)
+            // Bắt lỗi 400 (Bad Request)
+            catch (Exception ex) when (ex.Message.Contains("400") || (ex is System.Net.Http.HttpRequestException httpEx && httpEx.StatusCode == System.Net.HttpStatusCode.BadRequest))
+            {
+                try
+                {
+                    // 1. Phân tích nguyên nhân cụ thể từ Message lỗi
+                    string reasonDetail = "Địa chỉ hoặc SĐT không hợp lệ"; // Mặc định
+                    string logReason = "Likely invalid Address or Phone";
+
+                    // Kiểm tra các từ khóa lỗi thường gặp của GHN/GHTK
+                    if (ex.Message.Contains("PHONE_INVALID") || ex.Message.Contains("phone"))
+                    {
+                        reasonDetail = "Số điện thoại người nhận không đúng định dạng (thừa/thiếu số hoặc đầu số lạ)";
+                        logReason = "Invalid Phone Number";
+                    }
+                    else if (ex.Message.Contains("WARD") || ex.Message.Contains("DISTRICT") || ex.Message.Contains("ADDRESS"))
+                    {
+                        reasonDetail = "Địa chỉ (Phường/Xã hoặc Quận/Huyện) không khớp với hệ thống vận chuyển";
+                        logReason = "Invalid Address/Geography";
+                    }
+
+                    // 2. Cập nhật trạng thái về 19 (CHANGE_ADDRESS)
+                    order.StatusOrder = 19;
+                    _context.Orders.Update(order);
+                    await _context.SaveChangesAsync();
+
+                    // 3. Gửi thông báo chi tiết cho Seller
+                    string notificationMsg = $"Tạo đơn vận chuyển thất bại: {reasonDetail}. Đơn hàng #{order.OrderCode} đã chuyển sang trạng thái chờ. Vui lòng cập nhật lại.";
+
+                    await _notificationService.CreateAndSendNotificationAsync(
+                        order.SellerUserId,
+                        notificationMsg,
+                        $"/seller/orders/{orderId}"
+                    );
+
+                    // Log lỗi hệ thống
+                    _logger.LogWarning(ex, $"Shipping API returned 400 for Order {orderId}. Reason: {logReason}.");
+
+                    return new ApproveOrderResult
+                    {
+                        IsSuccess = false,
+                        // Trả về FE thông báo cụ thể luôn
+                        ErrorMessage = notificationMsg
+                    };
+                }
+                catch (Exception updateEx)
+                {
+                    _logger.LogError(updateEx, "Lỗi khi cập nhật trạng thái chờ cho đơn hàng " + orderId);
+                    return new ApproveOrderResult { IsSuccess = false, ErrorMessage = "Lỗi nghiêm trọng: Không thể cập nhật trạng thái đơn hàng sau khi API vận chuyển lỗi." };
+                }
             }
             catch (DbUpdateException ex)
             {
@@ -1525,186 +1641,71 @@ namespace CB_Gift.Services
             return dto;
         }
 
-        private DateTime? GetDateTimeSafe(IXLCell cell)
-        {
-            if (cell == null || cell.IsEmpty())
-                return null;
-
-            // Nếu là DateTime / Number chuẩn của Excel
-            if (cell.DataType == XLDataType.DateTime || cell.DataType == XLDataType.Number)
-            {
-                try
-                {
-                    return cell.GetDateTime();
-                }
-                catch
-                {
-                    // bỏ qua, thử parse string bên dưới
-                }
-            }
-
-            var text = cell.GetString().Trim();
-            if (string.IsNullOrWhiteSpace(text))
-                return null;
-
-            // Thử parse tự do
-            if (DateTime.TryParse(text, out var dt))
-                return dt;
-
-            return null;
-        }
-
-        private bool? GetBoolSafe(IXLCell cell)
-        {
-            if (cell == null || cell.IsEmpty())
-                return null;
-
-            if (cell.DataType == XLDataType.Boolean)
-                return cell.GetBoolean();
-
-            var text = cell.GetString().Trim().ToLower();
-            if (text == "true" || text == "1" || text == "yes" || text == "y")
-                return true;
-            if (text == "false" || text == "0" || text == "no" || text == "n")
-                return false;
-
-            return null;
-        }
-
-        private decimal? GetDecimalSafe(IXLCell cell)
-        {
-            if (cell == null || cell.IsEmpty())
-                return null;
-
-            if (cell.DataType == XLDataType.Number)
-                return (decimal)cell.GetDouble();
-
-            var text = cell.GetString().Trim();
-            if (decimal.TryParse(text, out var value))
-                return value;
-
-            return null;
-        }
-
-        private int GetIntSafe(IXLCell cell, int defaultValue = 0)
-        {
-            if (cell == null || cell.IsEmpty())
-                return defaultValue;
-
-            if (cell.DataType == XLDataType.Number)
-                return (int)cell.GetDouble();
-
-            var text = cell.GetString().Trim();
-            if (int.TryParse(text, out var value))
-                return value;
-
-            return defaultValue;
-        }
-        private static string? Clean(string? s)
-        {
-            if (string.IsNullOrWhiteSpace(s))
-                return null;
-
-            // Loại mọi whitespace unicode
-            var cleaned = System.Text.RegularExpressions.Regex.Replace(s, @"\s+", "");
-
-            return string.IsNullOrWhiteSpace(cleaned) ? null : cleaned.Trim();
-        }
         public async Task<OrderImportResult> ImportFromExcelAsync(IFormFile file, string sellerUserId)
         {
             if (file == null || file.Length == 0)
-                throw new ArgumentException("File rỗng hoặc không tồn tại.", nameof(file));
+                throw new ArgumentException("File rỗng.");
 
-            // Đảm bảo cache đã load Product / ProductVariant
-            await _cache.LoadAsync();
+            await _cache.LoadAsync(); // Load cache trước
 
             var result = new OrderImportResult();
+            var validRows = new List<OrderImportRowDto>(); // List tạm để chứa các dòng hợp lệ
 
             using var stream = file.OpenReadStream();
             using var workbook = new XLWorkbook(stream);
+            var worksheet = workbook.Worksheets.FirstOrDefault();
+            if (worksheet == null) throw new Exception("Không có sheet dữ liệu.");
 
-            // Ưu tiên sheet "Payments", nếu không có thì lấy sheet đầu tiên
-            IXLWorksheet worksheet;
-            if (!workbook.TryGetWorksheet("Payments", out worksheet))
-            {
-                worksheet = workbook.Worksheet(1);
-            }
-
-            var rows = worksheet.RangeUsed().RowsUsed().Skip(1); // bỏ header
+            var rows = worksheet.RangeUsed().RowsUsed().Skip(1);
             result.TotalRows = rows.Count();
 
+            // BƯỚC 1: Đọc và Validate toàn bộ các dòng
             foreach (var row in rows)
             {
-                var dto = new OrderImportRowDto
-                {
-                    RowNumber = row.RowNumber(),
+                var dto = MapRowToDto(row.WorksheetRow());
 
-                    OrderID = row.Cell(1).GetString(),
-                    OrderCode = row.Cell(2).GetString(),
-
-                    OrderDate = DateTime.TryParse(row.Cell(3).GetString(), out var date)
-            ? date
-            : DateTime.UtcNow,
-                    CustomerName = row.Cell(4).GetString(),
-                    Phone = row.Cell(5).GetString(),
-                    Email = Clean(row.Cell(6).GetString()),
-                    Address = row.Cell(7).GetString(),
-                    Zipcode = row.Cell(24).GetString(),
-
-                    ShipState = row.Cell(23).GetString(),
-                    ShipCity = row.Cell(22).GetString(),
-                    ShipCountry = row.Cell(21).GetString(),
-
-                    PaymentStatus = row.Cell(12).GetString(),
-                    ActiveTTS = GetBoolSafe(row.Cell(25)),
-
-                    TotalCost = GetDecimalSafe(row.Cell(11)),
-                    StatusOrder = GetIntSafe(row.Cell(17), 0),
-                    Note = row.Cell(13).GetString(),
-                    ProductName = row.Cell(9).GetString(),
-                    SizeInch = row.Cell(8).GetString(),
-                    Accessory = row.Cell(17).GetString(),
-                    Quantity = GetIntSafe(row.Cell(10), 1),
-                    LinkImg = row.Cell(14).GetString(),
-                    LinkThanksCard = row.Cell(15).GetString(),
-                    LinkFileDesign = row.Cell(16).GetString(),
-
-                    TotalAmount = GetDecimalSafe(row.Cell(18)),
-                    OrderNotes = row.Cell(19).GetString(),
-                    TimeCreated = GetDateTimeSafe(row.Cell(20))
-                };
-
-                // Validate
-                var validation = await _validator.ValidateAsync(dto);
-
-                if (!validation.IsValid)
+                var validationResult = await _validator.ValidateAsync(dto);
+                if (!validationResult.IsValid)
                 {
                     result.Errors.Add(new OrderImportRowError
                     {
                         RowNumber = dto.RowNumber,
-                        Messages = validation.Errors
-                                              .Select(e => e.ErrorMessage)
-                                              .ToList()
+                        Messages = validationResult.Errors.Select(e => e.ErrorMessage).ToList()
                     });
-                    continue; // bỏ qua dòng này
+                    // Dòng lỗi thì không add vào validRows
+                    continue;
                 }
 
+                validRows.Add(dto);
+            }
+
+            // BƯỚC 2: Gom nhóm theo OrderCode (Logic gộp đơn)
+            // GroupBy trả về danh sách các nhóm, mỗi nhóm có Key là OrderCode
+            var orderGroups = validRows.GroupBy(x => x.OrderCode);
+
+            // BƯỚC 3: Tạo Order từ từng nhóm
+            foreach (var group in orderGroups)
+            {
                 try
                 {
-                    var order = _orderFactory.CreateOrderEntityAsync(dto, sellerUserId);
-                    _context.Orders.Add(await order);
-                    result.SuccessCount++;
+                    // Gọi hàm factory mới xử lý cả nhóm
+                    var orderEntity = await _orderFactory.CreateOrderFromGroupAsync(group, sellerUserId);
+
+                    _context.Orders.Add(orderEntity);
+                    result.SuccessCount++; // Tính là 1 đơn thành công (dù gồm nhiều dòng)
                 }
                 catch (Exception ex)
                 {
+                    // Nếu lỗi khi tạo đơn, báo lỗi cho tất cả các dòng trong nhóm đó
                     result.Errors.Add(new OrderImportRowError
                     {
-                        RowNumber = dto.RowNumber,
-                        Messages = new List<string> { $"Lỗi tạo Order: {ex.Message}" }
+                        RowNumber = group.First().RowNumber, // Lấy dòng đầu đại diện
+                        Messages = new List<string> { $"Lỗi gộp đơn {group.Key}: {ex.Message}" }
                     });
                 }
             }
 
+            // BƯỚC 4: Lưu Database
             if (result.SuccessCount > 0)
             {
                 await _context.SaveChangesAsync();
@@ -1713,6 +1714,138 @@ namespace CB_Gift.Services
             return result;
         }
 
+        // Tách hàm Map cho gọn code
+        private OrderImportRowDto MapRowToDto(IXLRow row)
+        {
+            return new OrderImportRowDto
+            {
+                RowNumber = row.RowNumber(),
+                OrderCode = GetString(row.Cell(1)),
+                CustomerName = GetString(row.Cell(2)),
+                Phone = GetString(row.Cell(3)),
+                Email = GetString(row.Cell(4)),
+                Address = GetString(row.Cell(5)),
+                Province = GetString(row.Cell(6)),
+                District = GetString(row.Cell(7)),
+                Ward = GetString(row.Cell(8)),
+                SKU = GetString(row.Cell(9)),
+                Quantity = GetInt(row.Cell(10), 1),
+                Accessory = GetString(row.Cell(11)),
+                Note = GetString(row.Cell(12)),
+                LinkImg = GetString(row.Cell(13)),
+                LinkThanksCard = GetString(row.Cell(14)),
+                LinkFileDesign = GetString(row.Cell(15))
+            };
+        }
+
+        private static string? GetString(IXLCell cell)
+        {
+            if (cell == null || cell.IsEmpty()) return null;
+            return cell.GetString().Trim();
+        }
+
+        private static int GetInt(IXLCell cell, int defaultValue = 0)
+        {
+            if (cell == null || cell.IsEmpty()) return defaultValue;
+            if (cell.DataType == XLDataType.Number) return (int)cell.GetDouble();
+            var text = cell.GetString().Trim();
+            return int.TryParse(text, out var val) ? val : defaultValue;
+        }
+        // --- PHASE 1: ĐỌC FILE VÀ VALIDATE (KHÔNG LƯU DB) ---
+        public async Task<List<OrderImportRowDto>> ValidateImportAsync(IFormFile file)
+        {
+            if (file == null || file.Length == 0) throw new ArgumentException("File is empty.");
+
+            await _cache.LoadAsync();
+            var resultList = new List<OrderImportRowDto>();
+
+            using var stream = file.OpenReadStream();
+            using var workbook = new XLWorkbook(stream);
+            var worksheet = workbook.Worksheets.FirstOrDefault();
+            if (worksheet == null) throw new Exception("Excel file has no sheets.");
+
+            var rows = worksheet.RangeUsed().RowsUsed().Skip(1); // Bỏ header
+
+            foreach (var row in rows)
+            {
+                var dto = MapRowToDto(row.WorksheetRow());
+
+                // Thực hiện Validate
+                var validationResult = await _validator.ValidateAsync(dto);
+
+                if (!validationResult.IsValid)
+                {
+                    dto.IsValid = false;
+                    dto.Errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
+                }
+                else
+                {
+                    dto.IsValid = true;
+                }
+
+                resultList.Add(dto);
+            }
+
+            return resultList;
+        }
+
+        // --- PHASE 2: NHẬN JSON ĐÃ SỬA VÀ LƯU DB ---
+        public async Task<OrderImportResult> ConfirmImportAsync(List<OrderImportRowDto> dtos, string sellerUserId)
+        {
+            var result = new OrderImportResult();
+            var rowsWithErrors = new List<OrderImportRowDto>();
+
+            await _cache.LoadAsync();
+
+            // 1. Validate lại toàn bộ list
+            foreach (var dto in dtos)
+            {
+                var valResult = await _validator.ValidateAsync(dto);
+                if (!valResult.IsValid)
+                {
+                    // Thay vì throw Exception, ta gom lỗi lại
+                    result.Errors.Add(new OrderImportRowError
+                    {
+                        RowNumber = dto.RowNumber,
+                        Messages = valResult.Errors.Select(e => e.ErrorMessage).ToList()
+                    });
+                }
+            }
+
+            // 2. Nếu có bất kỳ dòng nào lỗi -> TRẢ VỀ NGAY, KHÔNG LƯU
+            if (result.Errors.Any())
+            {
+                result.SuccessCount = 0;
+                result.TotalRows = dtos.Count;
+                return result; // Frontend sẽ nhận được list Errors này để tô đỏ lại
+            }
+
+            // Gom nhóm theo OrderCode (Logic cũ của bạn)
+            var orderGroups = dtos.GroupBy(x => x.OrderCode);
+
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                foreach (var group in orderGroups)
+                {
+                    // Logic tạo Order từ Group (đã viết trước đó)
+                    var orderEntity = await _orderFactory.CreateOrderFromGroupAsync(group, sellerUserId);
+                    _context.Orders.Add(orderEntity);
+                    result.SuccessCount++;
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+
+            result.TotalRows = dtos.Count;
+            return result;
+        }
         public async Task<OrderActivityDto?> GetOrderActivityTimelineAsync(int orderId)
         {
             // 1. Truy vấn Order chính và các OrderDetails nhẹ để lấy các ID cần thiết
