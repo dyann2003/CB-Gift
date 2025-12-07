@@ -1,4 +1,5 @@
 ﻿using CB_Gift.DTOs;
+using CB_Gift.Orders.Import;
 using CB_Gift.Services;
 using CB_Gift.Services.IService;
 using Microsoft.AspNetCore.Authorization;
@@ -446,7 +447,38 @@ namespace CB_Gift.Controllers
 
             return Ok(result);
         }
+        [HttpPost("validate-import")]
+        public async Task<IActionResult> ValidateImport(IFormFile file)
+        {
+            try
+            {
+                var result = await _orderService.ValidateImportAsync(file);
+                return Ok(result); // Trả về List<DTO> kèm thông tin lỗi
+            }
+            catch (Exception ex) { return StatusCode(500, ex.Message); }
+        }
 
+        [HttpPost("confirm-import")]
+        public async Task<IActionResult> ConfirmImport([FromBody] List<OrderImportRowDto> dtos)
+        {
+            var sellerUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(sellerUserId))
+                return Unauthorized("Current Seller not available.");
+
+
+            try
+            {
+                var result = await _orderService.ConfirmImportAsync(dtos, sellerUserId);
+
+                // Nếu có lỗi validate trả về (Errors > 0), ta vẫn trả về OK (200) 
+                // để Frontend dễ đọc data, nhưng SuccessCount sẽ là 0
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
         [HttpGet("{orderId}/activity")]
         public async Task<IActionResult> GetOrderActivityTimeline(int orderId)
         {
