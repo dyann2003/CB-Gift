@@ -1751,6 +1751,101 @@ namespace CB_Gift.Services
             var text = cell.GetString().Trim();
             return int.TryParse(text, out var val) ? val : defaultValue;
         }
+        // --- PHASE 1: ĐỌC FILE VÀ VALIDATE (KHÔNG LƯU DB) ---
+        public async Task<List<OrderImportRowDto>> ValidateImportAsync(IFormFile file)
+        {
+            if (file == null || file.Length == 0) throw new ArgumentException("File is empty.");
+
+            await _cache.LoadAsync();
+            var resultList = new List<OrderImportRowDto>();
+
+            using var stream = file.OpenReadStream();
+            using var workbook = new XLWorkbook(stream);
+            var worksheet = workbook.Worksheets.FirstOrDefault();
+            if (worksheet == null) throw new Exception("Excel file has no sheets.");
+
+            var rows = worksheet.RangeUsed().RowsUsed().Skip(1); // Bỏ header
+
+            foreach (var row in rows)
+            {
+                var dto = MapRowToDto(row.WorksheetRow());
+
+                // Thực hiện Validate
+                var validationResult = await _validator.ValidateAsync(dto);
+
+                if (!validationResult.IsValid)
+                {
+                    dto.IsValid = false;
+                    dto.Errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
+                }
+                else
+                {
+                    dto.IsValid = true;
+                }
+
+                resultList.Add(dto);
+            }
+
+            return resultList;
+        }
+
+        // --- PHASE 2: NHẬN JSON ĐÃ SỬA VÀ LƯU DB ---
+        public async Task<OrderImportResult> ConfirmImportAsync(List<OrderImportRowDto> dtos, string sellerUserId)
+        {
+            var result = new OrderImportResult();
+            var rowsWithErrors = new List<OrderImportRowDto>();
+
+            await _cache.LoadAsync();
+
+            // 1. Validate lại toàn bộ list
+            foreach (var dto in dtos)
+            {
+                var valResult = await _validator.ValidateAsync(dto);
+                if (!valResult.IsValid)
+                {
+                    // Thay vì throw Exception, ta gom lỗi lại
+                    result.Errors.Add(new OrderImportRowError
+                    {
+                        RowNumber = dto.RowNumber,
+                        Messages = valResult.Errors.Select(e => e.ErrorMessage).ToList()
+                    });
+                }
+            }
+
+            // 2. Nếu có bất kỳ dòng nào lỗi -> TRẢ VỀ NGAY, KHÔNG LƯU
+            if (result.Errors.Any())
+            {
+                result.SuccessCount = 0;
+                result.TotalRows = dtos.Count;
+                return result; // Frontend sẽ nhận được list Errors này để tô đỏ lại
+            }
+
+            // Gom nhóm theo OrderCode (Logic cũ của bạn)
+            var orderGroups = dtos.GroupBy(x => x.OrderCode);
+
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                foreach (var group in orderGroups)
+                {
+                    // Logic tạo Order từ Group (đã viết trước đó)
+                    var orderEntity = await _orderFactory.CreateOrderFromGroupAsync(group, sellerUserId);
+                    _context.Orders.Add(orderEntity);
+                    result.SuccessCount++;
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+
+            result.TotalRows = dtos.Count;
+            return result;
+        }
         public async Task<OrderActivityDto?> GetOrderActivityTimelineAsync(int orderId)
         {
             // 1. Truy vấn Order chính và các OrderDetails nhẹ để lấy các ID cần thiết

@@ -26,7 +26,7 @@ namespace CB_Gift.Services.IService
     int pageSize);
 
         Task<ProductDto?> GetProductByVariantIdAsync(int productVariantId);
-
+        Task<byte[]> ExportProductMasterDataAsync();
 
     }
 }
