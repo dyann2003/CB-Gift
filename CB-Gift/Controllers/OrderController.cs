@@ -116,7 +116,7 @@ namespace CB_Gift.Controllers
                 return Ok(new { message = "Order created susscessfully!" });
             }catch (Exception ex)
             {
-                return BadRequest(ex.Message);
+                return BadRequest(new { message = ex.Message });
             }
             
         }
@@ -494,5 +494,30 @@ namespace CB_Gift.Controllers
 
             return Ok(activityData);
         }
+        // GET: api/Order/check-code?code=ORD-123
+        [HttpGet("check-code")]
+        // [Authorize] // Bật cái này nếu bạn muốn chỉ user đăng nhập mới check được
+        public async Task<IActionResult> CheckOrderCode([FromQuery] string code)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(code))
+                {
+                    return BadRequest(new { message = "Order code is required." });
+                }
+
+                // Gọi Service để kiểm tra
+                bool exists = await _orderService.CheckOrderCodeExistsAsync(code.Trim());
+
+                // Trả về JSON đúng định dạng FE đang chờ: { exists: true/false }
+                return Ok(new { exists = exists });
+            }
+            catch (Exception ex)
+            {
+                // Log lỗi nếu cần
+                return StatusCode(500, new { message = "Internal server error checking order code." });
+            }
+        }
+
     }
 }

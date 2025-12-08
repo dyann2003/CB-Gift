@@ -526,6 +526,18 @@ namespace CB_Gift.Services
 
         public async Task<MakeOrderResponse> MakeOrder(MakeOrderDto request, string sellerUserId)
         {
+            // Kiểm tra nếu OrderCode có dữ liệu thì mới check trùng
+            if (!string.IsNullOrWhiteSpace(request.OrderCreate.OrderCode))
+            {
+                bool isDuplicate = await _context.Orders
+                    .AnyAsync(o => o.OrderCode == request.OrderCreate.OrderCode);
+
+                if (isDuplicate)
+                {
+                    // Ném ra Exception với message cụ thể
+                    throw new Exception($"Order Code '{request.OrderCreate.OrderCode}' already exists in the system.");
+                }
+            }
             // Step 1: Tạo Endcustomer
             var newEndCustomer = _mapper.Map<EndCustomer>(request.CustomerInfo);
             _context.EndCustomers.Add(newEndCustomer);
@@ -1219,6 +1231,12 @@ namespace CB_Gift.Services
 
                     // 2. Cập nhật trạng thái về 19 (CHANGE_ADDRESS)
                     order.StatusOrder = 19;
+                    // 3. Cập nhật ProductionStatus cho TẤT CẢ OrderDetail con (Lưu Enum)
+                    // Việc này giúp Timeline ở Frontend hiện màu xanh ở bước Shipping cho từng sản phẩm
+                    foreach (var detail in order.OrderDetails)
+                    {
+                        detail.ProductionStatus = ProductionStatus.SHIPPING;
+                    }
                     _context.Orders.Update(order);
                     await _context.SaveChangesAsync();
 
@@ -1795,20 +1813,78 @@ namespace CB_Gift.Services
         }
 
         // --- PHASE 2: NHẬN JSON ĐÃ SỬA VÀ LƯU DB ---
+        /* public async Task<OrderImportResult> ConfirmImportAsync(List<OrderImportRowDto> dtos, string sellerUserId)
+         {
+             var result = new OrderImportResult();
+             var rowsWithErrors = new List<OrderImportRowDto>();
+
+             await _cache.LoadAsync();
+
+             // 1. Validate lại toàn bộ list
+             foreach (var dto in dtos)
+             {
+                 var valResult = await _validator.ValidateAsync(dto);
+                 if (!valResult.IsValid)
+                 {
+                     // Thay vì throw Exception, ta gom lỗi lại
+                     result.Errors.Add(new OrderImportRowError
+                     {
+                         RowNumber = dto.RowNumber,
+                         Messages = valResult.Errors.Select(e => e.ErrorMessage).ToList()
+                     });
+                 }
+             }
+
+             // 2. Nếu có bất kỳ dòng nào lỗi -> TRẢ VỀ NGAY, KHÔNG LƯU
+             if (result.Errors.Any())
+             {
+                 result.SuccessCount = 0;
+                 result.TotalRows = dtos.Count;
+                 return result; // Frontend sẽ nhận được list Errors này để tô đỏ lại
+             }
+
+             // Gom nhóm theo OrderCode (Logic cũ của bạn)
+             var orderGroups = dtos.GroupBy(x => x.OrderCode);
+
+             using var transaction = await _context.Database.BeginTransactionAsync();
+             try
+             {
+                 foreach (var group in orderGroups)
+                 {
+                     // Logic tạo Order từ Group (đã viết trước đó)
+                     var orderEntity = await _orderFactory.CreateOrderFromGroupAsync(group, sellerUserId);
+                     _context.Orders.Add(orderEntity);
+                     result.SuccessCount++;
+                 }
+
+                 await _context.SaveChangesAsync();
+                 await transaction.CommitAsync();
+             }
+             catch (Exception ex)
+             {
+                 await transaction.RollbackAsync();
+                 throw;
+             }
+
+             result.TotalRows = dtos.Count;
+             return result;
+         }*/
+
         public async Task<OrderImportResult> ConfirmImportAsync(List<OrderImportRowDto> dtos, string sellerUserId)
         {
             var result = new OrderImportResult();
-            var rowsWithErrors = new List<OrderImportRowDto>();
 
+            // Đảm bảo Cache đã load
             await _cache.LoadAsync();
 
-            // 1. Validate lại toàn bộ list
+            // ========================================================================
+            // BƯỚC 1: Validate dữ liệu từng dòng (Kiểu dữ liệu, bắt buộc...)
+            // ========================================================================
             foreach (var dto in dtos)
             {
                 var valResult = await _validator.ValidateAsync(dto);
                 if (!valResult.IsValid)
                 {
-                    // Thay vì throw Exception, ta gom lỗi lại
                     result.Errors.Add(new OrderImportRowError
                     {
                         RowNumber = dto.RowNumber,
@@ -1817,23 +1893,64 @@ namespace CB_Gift.Services
                 }
             }
 
-            // 2. Nếu có bất kỳ dòng nào lỗi -> TRẢ VỀ NGAY, KHÔNG LƯU
+            // ========================================================================
+            // BƯỚC 1.5: Validate tính nhất quán (Consistency Check)
+            // Cùng OrderCode bắt buộc phải cùng thông tin Customer & Shipping
+            // ========================================================================
+
+            // Gom nhóm để kiểm tra
+            var tempGroups = dtos.GroupBy(x => x.OrderCode);
+
+            foreach (var group in tempGroups)
+            {
+                // Nếu nhóm chỉ có 1 dòng thì không cần check
+                if (group.Count() <= 1) continue;
+
+                // Lấy dòng đầu tiên làm "Dòng Chuẩn"
+                var headerRow = group.First();
+
+                // Duyệt các dòng còn lại để so sánh với dòng chuẩn
+                foreach (var row in group.Skip(1))
+                {
+                    // Hàm kiểm tra xem 2 dòng có khớp thông tin Header không (Viết ở dưới)
+                    if (!IsOrderHeaderConsistent(headerRow, row))
+                    {
+                        result.Errors.Add(new OrderImportRowError
+                        {
+                            RowNumber = row.RowNumber,
+                            Messages = new List<string>
+                    {
+                        $"Data is inconsistent with the stream {headerRow.RowNumber} (same code {headerRow.OrderCode}). " +
+                        "Please double check your Name, Phone Number, Email and Shipping Address."
+                    }
+                        });
+                    }
+                }
+            }
+
+            // ========================================================================
+            // BƯỚC 2: Check lỗi tổng hợp
+            // ========================================================================
+
+            // Nếu có bất kỳ lỗi nào (Validate dòng hoặc Validate logic) -> TRẢ VỀ NGAY
             if (result.Errors.Any())
             {
                 result.SuccessCount = 0;
                 result.TotalRows = dtos.Count;
-                return result; // Frontend sẽ nhận được list Errors này để tô đỏ lại
+                return result;
             }
 
-            // Gom nhóm theo OrderCode (Logic cũ của bạn)
-            var orderGroups = dtos.GroupBy(x => x.OrderCode);
-
+            // ========================================================================
+            // BƯỚC 3: Lưu Database (Logic cũ giữ nguyên)
+            // ========================================================================
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                // Gom nhóm lại (vì bên trên chỉ là tempGroups)
+                var orderGroups = dtos.GroupBy(x => x.OrderCode);
+
                 foreach (var group in orderGroups)
                 {
-                    // Logic tạo Order từ Group (đã viết trước đó)
                     var orderEntity = await _orderFactory.CreateOrderFromGroupAsync(group, sellerUserId);
                     _context.Orders.Add(orderEntity);
                     result.SuccessCount++;
@@ -1845,11 +1962,36 @@ namespace CB_Gift.Services
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                throw;
+                // Log error here if needed
+                throw; // Hoặc return BadRequest tùy logic controller
             }
 
             result.TotalRows = dtos.Count;
             return result;
+        }
+
+        // -------------------------------------------------------------------------
+        // HÀM BỔ TRỢ: So sánh thông tin Header của 2 dòng
+        // -------------------------------------------------------------------------
+        private bool IsOrderHeaderConsistent(OrderImportRowDto row1, OrderImportRowDto row2)
+        {
+            // Helper so sánh chuỗi (bỏ qua chữ hoa thường và null)
+            bool IsEqual(string? s1, string? s2)
+            {
+                return string.Equals((s1 ?? "").Trim(), (s2 ?? "").Trim(), StringComparison.OrdinalIgnoreCase);
+            }
+
+            // Kiểm tra các trường quan trọng tạo nên "Đơn hàng"
+            // Nếu bạn muốn check chặt chẽ (cả tên, email...)
+            return IsEqual(row1.CustomerName, row2.CustomerName) &&
+                   IsEqual(row1.Phone, row2.Phone) &&
+                   IsEqual(row1.Email, row2.Email) &&
+                   IsEqual(row1.Address, row2.Address) &&
+                   IsEqual(row1.Province, row2.Province) &&
+                   IsEqual(row1.District, row2.District) &&
+                   IsEqual(row1.Ward, row2.Ward);
+
+            // GHI CHÚ: Nếu bạn chỉ quan tâm đến Địa chỉ thôi thì bỏ bớt các dòng check Name/Phone/Email
         }
         public async Task<OrderActivityDto?> GetOrderActivityTimelineAsync(int orderId)
         {
@@ -1877,11 +2019,11 @@ namespace CB_Gift.Services
             };
 
             var allRefunds = await _context.Refunds
-        // Phải Include OrderDetail để lấy thông tin sản phẩm (ProductName, Sku, Price)
-        .Include(r => r.OrderDetail)
-        .Where(r => r.OrderId == orderId)
-        .OrderByDescending(r => r.CreatedAt)
-        .ToListAsync();
+            // Phải Include OrderDetail để lấy thông tin sản phẩm (ProductName, Sku, Price)
+            .Include(r => r.OrderDetail)
+            .Where(r => r.OrderId == orderId)
+            .OrderByDescending(r => r.CreatedAt)
+            .ToListAsync();
 
             orderActivityDto.AllRefunds = allRefunds.Select(r =>
             {
@@ -1956,6 +2098,19 @@ namespace CB_Gift.Services
                 }).ToList();
 
             return orderActivityDto;
+        }
+        public async Task<bool> CheckOrderCodeExistsAsync(string orderCode)
+        {
+            if (string.IsNullOrWhiteSpace(orderCode))
+            {
+                return false;
+            }
+
+            // Kiểm tra xem có bất kỳ đơn hàng nào có OrderCode trùng (không phân biệt hoa thường)
+            // Dùng .ToLower() nếu database của bạn phân biệt hoa thường (Case Sensitive)
+            // Tuy nhiên, thường thì EF Core với SQL Server mặc định không phân biệt hoa thường.
+            return await _context.Orders
+                .AnyAsync(o => o.OrderCode == orderCode);
         }
 
     }

@@ -1,6 +1,7 @@
 ﻿using CB_Gift.Data;
 using CB_Gift.DTOs;
 using CB_Gift.Models;
+using CB_Gift.Models.Enums;
 using CB_Gift.Services.IService;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Concurrent;
@@ -96,7 +97,7 @@ namespace CB_Gift.Services
         }
 
         // 3. HÀM CẬP NHẬT TRẠNG THÁI (Dùng cho UI Admin set bằng tay)
-        public async Task ManualUpdateStatusAsync(string trackingCode, string newStatus)
+    /*    public async Task ManualUpdateStatusAsync(string trackingCode, string newStatus)
         {
             // === BƯỚC 1: Debug Input ===
             Console.WriteLine($"[DEBUG] Bắt đầu Update: Code='{trackingCode}', NewStatus='{newStatus}'");
@@ -161,6 +162,99 @@ namespace CB_Gift.Services
 
             // === BƯỚC 6: Lưu DB ===
             var result = await _context.SaveChangesAsync();
+            Console.WriteLine($"[DEBUG] SaveChanges thành công. Số dòng ảnh hưởng: {result}");
+        }*/
+        public async Task ManualUpdateStatusAsync(string trackingCode, string newStatus)
+        {
+            // === BƯỚC 1: Debug Input ===
+            Console.WriteLine($"[DEBUG] Bắt đầu Update: Code='{trackingCode}', NewStatus='{newStatus}'");
+
+            var code = trackingCode.Trim();
+            var status = newStatus.Trim().ToLower();
+
+            // === BƯỚC 2: Thêm Log GhnTracking (Giữ nguyên) ===
+            var log = new GhnTrackingLog
+            {
+                OrderCode = code,
+                Status = status,
+                UpdatedDate = DateTime.Now
+            };
+            _context.GhnTrackingLogs.Add(log);
+
+            // === BƯỚC 3: Lấy Order KÈM THEO OrderDetails (QUAN TRỌNG) ===
+            var order = await _context.Orders
+                                      .Include(o => o.OrderDetails) // <--- Phải có dòng này mới sửa được bảng con
+                                      .FirstOrDefaultAsync(o => o.Tracking == code);
+
+            if (order == null)
+            {
+                throw new Exception($"[LỖI] Không tìm thấy đơn hàng với mã: {code}");
+            }
+
+            Console.WriteLine($"[DEBUG] Tìm thấy Order ID: {order.OrderId} | StatusOrder cũ: {order.StatusOrder}");
+
+            // === BƯỚC 4: Switch Case & Cập nhật ===
+            bool isChanged = false;
+
+            switch (status)
+            {
+                case "ready_to_pick": // QC Done / Chờ lấy hàng
+                    order.StatusOrder = 11;
+                    isChanged = true;
+                    break;
+
+                case "shipping":
+                case "picking": // Đang giao hàng
+                    order.StatusOrder = 13;
+
+                    // (Optional) Nên cập nhật cả Shipping ở đây cho đồng bộ
+                  //  order.ProductionStatus = "SHIPPING";
+                    if (order.OrderDetails != null)
+                    {
+                        foreach (var detail in order.OrderDetails)
+                        {
+                            detail.ProductionStatus = ProductionStatus.SHIPPING;
+                        }
+                    }
+                    isChanged = true;
+                    break;
+
+                case "shipped":
+                case "delivered": // Đã giao hàng thành công
+                                  // 1. Cập nhật trạng thái chung của Order
+                    order.StatusOrder = 14;
+                   // order.ProductionStatus = "SHIPPED"; // Cập nhật string hiển thị của Order cha
+
+                    // 2. Cập nhật trạng thái từng sản phẩm con (OrderDetail)
+                    if (order.OrderDetails != null)
+                    {
+                        foreach (var detail in order.OrderDetails)
+                        {
+                            // Gán Enum SHIPPED (Value = 13 trong Enum của bạn)
+                            detail.ProductionStatus = ProductionStatus.SHIPPED;
+                        }
+                    }
+
+                    isChanged = true;
+                    break;
+
+                default:
+                    Console.WriteLine($"[WARNING] Status '{status}' không khớp với case nào!");
+                    break;
+            }
+
+            // === BƯỚC 5: FORCE UPDATE ===
+            if (isChanged)
+            {
+                _context.Entry(order).State = EntityState.Modified;
+                Console.WriteLine($"[DEBUG] Đã đổi StatusOrder sang: {order.StatusOrder}. Chuẩn bị Save.");
+            }
+
+            // === BƯỚC 6: Lưu DB ===
+            var result = await _context.SaveChangesAsync();
+
+            // (Optional) Gửi SignalR cập nhật realtime cho FE ở đây nếu cần
+
             Console.WriteLine($"[DEBUG] SaveChanges thành công. Số dòng ảnh hưởng: {result}");
         }
     }

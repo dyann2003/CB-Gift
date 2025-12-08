@@ -71,10 +71,11 @@ namespace CB_Gift.Orders.Import
 
 
             RuleFor(x => x.Province)
-            .Cascade(CascadeMode.Stop)
-            .NotEmpty().WithMessage("Province là bắt buộc.")
-            .Must(p => p != null && cache.Provinces.Any(prov => string.Equals(NormalizeText(prov), NormalizeText(p))))
-            .WithMessage("Province không hợp lệ.");
+             .Cascade(CascadeMode.Stop)
+             .NotEmpty().WithMessage("Province là bắt buộc.")
+             // Thay vì dùng cache.Provinces.Any(...), ta dùng cache.FindProvinceId(...)
+             .Must(p => !string.IsNullOrEmpty(p) && cache.FindProvinceId(p).HasValue)
+             .WithMessage("Province không hợp lệ (Không tìm thấy trong hệ thống GHN).");
 
 
             // District/Ward are optional but if provided validate minimal existence by non-empty

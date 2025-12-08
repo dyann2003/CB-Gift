@@ -45,14 +45,23 @@ namespace CB_Gift.Controllers
             });
         }
 
-        [HttpGet("template")]
+        [HttpGet("download-template")]
         [Authorize]
-        public IActionResult Template()
+        public async Task<IActionResult> DownloadImportTemplate()
         {
-            var svc = HttpContext.RequestServices.GetService(typeof(IOrderImportService)) as IOrderImportService;
-            if (svc == null) return StatusCode(StatusCodes.Status500InternalServerError);
-            var bytes = svc.GenerateExcelTemplate();
-            return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "order-import-template.xlsx");
+            try
+            {
+                var fileContent = await _importService.GenerateExcelTemplateAsync();
+
+                string fileName = "Order_Import_Template.xlsx";
+                string contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+                return File(fileContent, contentType, fileName);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Template generation failed: " + ex.Message });
+            }
         }
     }
 }
