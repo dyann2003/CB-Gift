@@ -19,12 +19,13 @@ namespace CB_Gift.Services
             _mapper = mapper;
         }
 
-        // 🔹 Get all products
+        // 🔹 Get all products with status = 1
         public async Task<IEnumerable<ProductDto>> GetAllAsync()
         {
             var products = await _context.Products
                 .Include(p => p.Category)
                 .Include(p => p.ProductVariants)
+                .Where(p => p.Status == 1) // Thêm dòng này để lọc
                 .ToListAsync();
 
             return _mapper.Map<IEnumerable<ProductDto>>(products);
