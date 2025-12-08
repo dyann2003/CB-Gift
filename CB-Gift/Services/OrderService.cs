@@ -730,6 +730,11 @@ namespace CB_Gift.Services
             // Đảm bảo TotalCost không bị thay đổi trong hàm này
             // _context.Orders.Update(order); // Entity Framework sẽ tự động theo dõi thay đổi
 
+            if (order.StatusOrder == 19)
+            {
+                order.StatusOrder = 10;
+            }
+
             await _context.SaveChangesAsync();
 
             // Trả về Order DTO mới
