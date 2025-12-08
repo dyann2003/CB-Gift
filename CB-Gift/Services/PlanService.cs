@@ -309,7 +309,11 @@ namespace CB_Gift.Services
                 var planDetail = await _context.PlanDetails.FindAsync(planDetailId);
                 if (planDetail == null) return false;
 
-                var orderDetail = await _context.OrderDetails.FindAsync(planDetail.OrderDetailId);
+                var orderDetail = await _context.OrderDetails
+                    .Include(od => od.ProductVariant)
+                    .ThenInclude(pv => pv.Product)
+                    .FirstOrDefaultAsync(od => od.OrderDetailId == planDetail.OrderDetailId);
+
                 if (orderDetail == null) return false;
 
                 orderDetail.ProductionStatus = (ProductionStatus)newStatus;
@@ -331,6 +335,73 @@ namespace CB_Gift.Services
                 var minProductionStatus = (ProductionStatus)minProductionStatusValue;
 
                 order.StatusOrder = MapProductionStatusToOrderStatus(minProductionStatus);
+
+                string sellerMessage = "";
+                string sellerLink = $"/seller/orders/{order.OrderId}";
+
+                string orderDisplay = !string.IsNullOrEmpty(order.OrderCode) ? order.OrderCode : order.OrderId.ToString();
+
+                string productDisplay = !string.IsNullOrEmpty(orderDetail.ProductVariant?.Product?.ProductName)
+                    ? orderDetail.ProductVariant.Product.ProductName
+                    : orderDetail.ProductVariant?.Sku ?? "Sản phẩm không xác định";
+
+                if (newStatus == 6)
+                {
+                    sellerMessage = $"Đơn hàng #{orderDisplay} đang bắt sản xuất.";
+                }
+                else if (newStatus == 7)
+                {
+                    sellerMessage = $"Sản phẩm {productDisplay} của đơn hàng #{orderDisplay} đang được tiến hành sản xuất.";
+                }
+                else if (newStatus == 8)
+                {
+                    // Thông báo cho SELLER
+                    sellerMessage = $"Sản phẩm {productDisplay} của đơn hàng #{orderDisplay} đã sản xuất xong.";
+
+                    // Thông báo cho ALL QC
+                    try
+                    {
+                        // Lấy danh sách UserId của role QC
+                        var qcUsers = await _userManager.GetUsersInRoleAsync("QC");
+                        var qcIds = qcUsers.Select(u => u.Id).ToList();
+
+                        if (qcIds.Any())
+                        {
+                            string qcMessage = $"Yêu cầu kiểm tra: Sản phẩm {productDisplay} thuộc đơn #{orderDisplay} cần kiểm tra chất lượng.";
+                            string qcLink = "/qc/check-product"; // Đường dẫn tới trang duyệt QC
+
+                            foreach (var qcId in qcIds)
+                            {
+                                await _notificationService.CreateAndSendNotificationAsync(
+                                    qcId,
+                                    qcMessage,
+                                    qcLink
+                                );
+                            }
+
+                            _logger.LogInformation("Sent notifications to {Count} staff members.", qcIds.Count);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log lỗi gửi QC nhưng không chặn flow chính
+                        // Console.WriteLine("Lỗi gửi thông báo QC: " + ex.Message);
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(sellerMessage))
+                {
+                    var receiverId = order.SellerUserId.ToString();
+
+                    if (!string.IsNullOrEmpty(receiverId))
+                    {
+                        await _notificationService.CreateAndSendNotificationAsync(
+                            receiverId,
+                            sellerMessage,
+                            sellerLink
+                        );
+                    }
+                }
 
                 await _context.SaveChangesAsync();
                 if (transaction != null) await transaction.CommitAsync();
