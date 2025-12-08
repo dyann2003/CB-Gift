@@ -179,17 +179,6 @@ else
         provider.GetRequiredService<GhnShippingService>());
 }
 
-// ================== 6. CORS (Update thêm port Vite cho chắc) ==================
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowFrontend", policy =>
-    {
-        policy.WithOrigins("http://localhost:3000")
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials(); // Bắt buộc để Cookie hoạt động
-    });
-});
 // Đăng ký CloudinarySettings
 builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
 
