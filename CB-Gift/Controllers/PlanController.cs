@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace CB_Gift.Controllers
 {
-    [Authorize]  
+    [Authorize(Roles = "Staff,Manager")]
     [Route("api/[controller]")]
     [ApiController]
     public class PlanController : ControllerBase

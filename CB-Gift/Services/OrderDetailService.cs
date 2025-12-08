@@ -3,6 +3,8 @@ using CB_Gift.DTOs;
 using CB_Gift.Models;
 using CB_Gift.Models.Enums;
 using CB_Gift.Services.IService;
+using CloudinaryDotNet.Actions;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace CB_Gift.Services
@@ -10,10 +12,14 @@ namespace CB_Gift.Services
     public class OrderDetailService : IOrderDetailService
     {
         private readonly CBGiftDbContext _context;
+        private readonly UserManager<AppUser> _userManager;
+        private readonly INotificationService _notificationService;
 
-        public OrderDetailService(CBGiftDbContext context)
+        public OrderDetailService(CBGiftDbContext context, UserManager<AppUser> userManager, INotificationService notificationService)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
+            _userManager = userManager;
+            _notificationService = notificationService;
         }
 
         public async Task<object?> GetOrderDetailByIdAsync(int orderDetailId)
@@ -104,10 +110,48 @@ namespace CB_Gift.Services
             return await UpdateProductionStatusAsync(orderDetailId, 9, null, null);
         }
 
-        // ⭐ THAY ĐỔI: Triển khai hàm Reject mới
         public async Task<OrderDetail?> RejectOrderDetailAsync(int orderDetailId, QcRejectRequestDto request, string qcUserId)
         {
-            return await UpdateProductionStatusAsync(orderDetailId, 10, qcUserId, request.Reason);
+            // Status 10 = QC Fail / Rework
+            var updatedOrderDetail = await UpdateProductionStatusAsync(orderDetailId, 10, qcUserId, request.Reason);
+
+            if (updatedOrderDetail == null) return null;
+
+            try
+            {
+                var order = await _context.Orders.FindAsync(updatedOrderDetail.OrderId);
+
+                if (order != null)
+                {
+                    var staffUsers = await _userManager.GetUsersInRoleAsync("Staff");
+                    var staffIds = staffUsers.Select(u => u.Id).ToList();
+
+                    if (staffIds.Any())
+                    {
+                        // Dùng OrderCode nếu có, không thì dùng OrderId
+                        string orderDisplay = !string.IsNullOrEmpty(order.OrderCode) ? order.OrderCode : order.OrderId.ToString();
+
+                        string message = $"Sản phẩm trong đơn #{orderDisplay} cần sản xuất lại. Lý do: {request.Reason ?? "Không rõ"}";
+                        string link = "/staff/needs-production";
+
+                        foreach (var staffId in staffIds)
+                        {
+                            await _notificationService.CreateAndSendNotificationAsync(
+                                staffId,
+                                message,
+                                link
+                            );
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log lỗi notification nhưng KHÔNG chặn quy trình chính vì DB đã lưu thành công rồi
+                // _logger.LogError(ex, "Lỗi gửi thông báo Staff");
+            }
+
+            return updatedOrderDetail;
         }
 
         // ⭐ THAY ĐỔI: Nâng cấp hàm private này
