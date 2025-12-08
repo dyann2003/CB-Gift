@@ -437,9 +437,56 @@ namespace CB_Gift.Services
             }
         }
         // --- HÀM 3: GET DETAILS (Cho Frontend hiển thị Modal Review) ---
+        /*  public async Task<RefundDetailsDto> GetRefundRequestDetailsAsync(int refundId)
+          {
+              // Lấy Refund record hiện tại
+              var refund = await _context.Refunds
+                  .Include(r => r.Order)
+                  .Include(r => r.OrderDetail)
+                      .ThenInclude(od => od.ProductVariant)
+                          .ThenInclude(pv => pv.Product)
+                  .FirstOrDefaultAsync(r => r.RefundId == refundId);
+
+              if (refund == null) throw new KeyNotFoundException("Refund request not found.");
+
+              // Lấy tất cả Refund records liên quan đến Order gốc
+              var relatedRefunds = await _context.Refunds
+                  .Include(r => r.OrderDetail)
+                      .ThenInclude(od => od.ProductVariant.Product)
+                  .Where(r => r.OrderId == refund.OrderId)
+                  .ToListAsync();
+
+              // Map các items liên quan đến Order gốc
+              var items = relatedRefunds.Select(r => new RefundItemDetailsDto
+              {
+                  OrderDetailId = r.OrderDetailId ?? 0,
+                  ProductName = r.OrderDetail?.ProductVariant?.Product.ProductName ?? "N/A",
+                  OriginalPrice = r.OrderDetail?.Price ?? 0,
+                  RefundAmount = r.Amount,
+                  Sku = r.OrderDetail?.ProductVariant?.Sku ?? "N/A",
+                  Quantity = r.OrderDetail?.Quantity ?? 0
+              }).ToList();
+
+              // Map kết quả chính
+              return new RefundDetailsDto
+              {
+                  RefundId = refund.RefundId,
+                  OrderId = refund.OrderId,
+                  OrderCode = refund.Order?.OrderCode ?? "N/A",
+                  Status = refund.Status,
+                  TotalRequestedAmount = refund.Amount,
+                  Reason = refund.Reason,
+                  ProofUrl = refund.ProofUrl,
+                  StaffRejectionReason = refund.StaffRejectionReason,
+                  CreatedAt = refund.CreatedAt,
+                  ReviewedAt = refund.ReviewedAt,
+                  // Trả về tất cả các items liên quan đến Order gốc để Manager có cái nhìn tổng quan
+                  Items = items
+              };
+          }*/
         public async Task<RefundDetailsDto> GetRefundRequestDetailsAsync(int refundId)
         {
-            // Lấy Refund record hiện tại
+            // 1. Lấy Refund record hiện tại (làm mốc đối chiếu)
             var refund = await _context.Refunds
                 .Include(r => r.Order)
                 .Include(r => r.OrderDetail)
@@ -449,15 +496,24 @@ namespace CB_Gift.Services
 
             if (refund == null) throw new KeyNotFoundException("Refund request not found.");
 
-            // Lấy tất cả Refund records liên quan đến Order gốc
-            var relatedRefunds = await _context.Refunds
+            // 2. Logic QUAN TRỌNG: Tìm các anh em sinh đôi (cùng Order, cùng thời điểm tạo)
+            // Lưu ý: Dùng khoảng thời gian nhỏ (ví dụ +/- 2 giây) để an toàn
+            // phòng trường hợp Database lưu lệch vài mili giây giữa các dòng.
+
+            var timeBufferSeconds = 2;
+            var minTime = refund.CreatedAt.AddSeconds(-timeBufferSeconds);
+            var maxTime = refund.CreatedAt.AddSeconds(timeBufferSeconds);
+
+            var batchRefunds = await _context.Refunds
                 .Include(r => r.OrderDetail)
                     .ThenInclude(od => od.ProductVariant.Product)
-                .Where(r => r.OrderId == refund.OrderId)
+                .Where(r => r.OrderId == refund.OrderId // Cùng đơn hàng
+                            && r.CreatedAt >= minTime   // Trong khoảng thời gian tạo
+                            && r.CreatedAt <= maxTime)
                 .ToListAsync();
 
-            // Map các items liên quan đến Order gốc
-            var items = relatedRefunds.Select(r => new RefundItemDetailsDto
+            // 3. Map các items tìm được (Đây sẽ là danh sách các sản phẩm user chọn cùng 1 lúc)
+            var items = batchRefunds.Select(r => new RefundItemDetailsDto
             {
                 OrderDetailId = r.OrderDetailId ?? 0,
                 ProductName = r.OrderDetail?.ProductVariant?.Product.ProductName ?? "N/A",
@@ -467,20 +523,27 @@ namespace CB_Gift.Services
                 Quantity = r.OrderDetail?.Quantity ?? 0
             }).ToList();
 
-            // Map kết quả chính
+            // 4. Map kết quả chính
+            // Lấy thông tin chung từ bản ghi đầu tiên hoặc bản ghi hiện tại đều được
             return new RefundDetailsDto
             {
-                RefundId = refund.RefundId,
+                RefundId = refund.RefundId, // ID của item đang xem
                 OrderId = refund.OrderId,
                 OrderCode = refund.Order?.OrderCode ?? "N/A",
+
+                // Các thông tin chung của cả đợt hoàn tiền (giả sử lý do và bằng chứng giống nhau cho cả nhóm)
                 Status = refund.Status,
-                TotalRequestedAmount = refund.Amount,
+
+                // Tổng tiền = Tổng tiền của tất cả các item trong nhóm này cộng lại
+                TotalRequestedAmount = batchRefunds.Sum(r => r.Amount),
+
                 Reason = refund.Reason,
                 ProofUrl = refund.ProofUrl,
                 StaffRejectionReason = refund.StaffRejectionReason,
                 CreatedAt = refund.CreatedAt,
                 ReviewedAt = refund.ReviewedAt,
-                // Trả về tất cả các items liên quan đến Order gốc để Manager có cái nhìn tổng quan
+
+                // Danh sách item đã lọc chuẩn
                 Items = items
             };
         }
@@ -492,13 +555,13 @@ namespace CB_Gift.Services
                 .AnyAsync(r => r.RefundId == refundId && r.RequestedBySellerId == userId);
         }
         public async Task<PaginatedResult<RefundRequestListDto>> GetReviewRequestsPaginatedAsync(
-       string? staffId,
-       string? searchTerm,
-       string? filterType,
-       string? sellerIdFilter,
-       string? statusFilter, // <-- THAM SỐ MỚI
-       int page,
-       int pageSize)
+           string? staffId,
+           string? searchTerm,
+           string? filterType,
+           string? sellerIdFilter,
+           string? statusFilter, // <-- THAM SỐ MỚI
+           int page,
+           int pageSize)
         {
             // 1. TÌM KIẾM DỮ LIỆU GỐC VÀ ÁP DỤNG CÁC BỘ LỌC
             var query = _context.Refunds
@@ -552,38 +615,60 @@ namespace CB_Gift.Services
              // Lấy dữ liệu đã phân trang
              var paginatedRefunds = await paginatedQuery.ToListAsync();
 
-             // Do logic grouping là phức tạp và thường được áp dụng cho toàn bộ tập dữ liệu,
-             // Việc grouping trên tập dữ liệu đã phân trang (Take) có thể dẫn đến kết quả không chính xác
-             // (ví dụ: nhóm bị chia thành nhiều trang). 
-             // Tuy nhiên, nếu bạn muốn hiển thị 1 bản ghi/RefundId, ta chỉ cần map:
+            // Do logic grouping là phức tạp và thường được áp dụng cho toàn bộ tập dữ liệu,
+            // Việc grouping trên tập dữ liệu đã phân trang (Take) có thể dẫn đến kết quả không chính xác
+            // (ví dụ: nhóm bị chia thành nhiều trang). 
+            // Tuy nhiên, nếu bạn muốn hiển thị 1 bản ghi/RefundId, ta chỉ cần map:
 
-             // Khối code dưới đây MOCK logic Grouping lên dữ liệu đã được phân trang (Không lý tưởng, nhưng hoạt động)
-             var groupedRequests = paginatedRefunds
-                 .GroupBy(r => new { r.OrderId, r.Reason, r.ProofUrl })
-                 .Select((group, index) =>
-                 {
-                     var primaryItem = group.OrderByDescending(r => r.CreatedAt).First();
-                     bool isOrderLevel = group.Count() > 1 || primaryItem.OrderDetailId == null;
+            // Khối code dưới đây MOCK logic Grouping lên dữ liệu đã được phân trang (Không lý tưởng, nhưng hoạt động)
+            // 4. MAPPING (Thực hiện Grouping và Mapping DTO)
+            var groupedRequests = paginatedRefunds
+                .GroupBy(r => new { r.OrderId, r.Reason, r.ProofUrl })
+                .Select((group, index) =>
+                {
+                    var primaryItem = group.OrderByDescending(r => r.CreatedAt).First();
+                    bool isOrderLevel = group.Count() > 1 || primaryItem.OrderDetailId == null;
 
-                     return new RefundRequestListDto
-                     {
-                         // ... (Logic mapping chi tiết DTO giữ nguyên) ...
-                         GroupId = (page - 1) * pageSize + index + 1, // ID duy nhất cho frontend
-                         OrderCode = primaryItem.Order?.OrderCode ?? "N/A",
-                         Type = "REFUND",
-                         TargetLevel = isOrderLevel ? "ORDER-WIDE" : "DETAIL",
-                         Status = primaryItem.Status,
-                         TotalRequestedAmount = group.Sum(r => r.Amount),
-                         CountOfItems = group.Count(),
-                         PrimaryRefundId = primaryItem.RefundId,
-                         CreatedAt = primaryItem.CreatedAt
-                     };
-                 })
-                 .ToList();
+                    // --- LOGIC MỚI: Lấy danh sách tên sản phẩm ---
+                    // Lấy tất cả tên sản phẩm trong nhóm, loại bỏ trùng lặp
+                    var productNames = group
+                        .Select(x => x.OrderDetail?.ProductVariant?.Product?.ProductName ?? "Unknown Product")
+                        .Distinct()
+                        .ToList();
+
+                    // Nối chuỗi: "Sản phẩm A, Sản phẩm B"
+                    // Nếu quá dài có thể xử lý hiển thị số lượng: "Sản phẩm A + 2 sản phẩm khác" (tuỳ chọn)
+                    string productDisplay = string.Join(", ", productNames);
+                    if (productNames.Count > 2)
+                    {
+                        productDisplay = $"{productNames[0]} + {productNames.Count - 1} others";
+                    }
+                    // ---------------------------------------------
+
+                    return new RefundRequestListDto
+                    {
+                        GroupId = (page - 1) * pageSize + index + 1,
+                       // OrderId = primaryItem.OrderId, // Đã thêm dòng này (trước đó bạn thiếu gán OrderId)
+                        OrderCode = primaryItem.Order?.OrderCode ?? "N/A",
+
+                        // MAP DATA MỚI VÀO ĐÂY
+                        ProductName = productDisplay,
+                        ReasonSummary = group.Key.Reason ?? "N/A", // Lấy lý do từ Key của Group
+
+                        Type = "REFUND",
+                        TargetLevel = isOrderLevel ? "ORDER-WIDE" : "DETAIL",
+                        Status = primaryItem.Status,
+                        TotalRequestedAmount = group.Sum(r => r.Amount),
+                        CountOfItems = group.Count(),
+                        PrimaryRefundId = primaryItem.RefundId,
+                        CreatedAt = primaryItem.CreatedAt
+                    };
+                })
+                .ToList();
 
 
-             // 5. TRẢ VỀ PAGINATED RESULT
-             return new PaginatedResult<RefundRequestListDto>
+            // 5. TRẢ VỀ PAGINATED RESULT
+            return new PaginatedResult<RefundRequestListDto>
              {
                  Items = groupedRequests,
                  Total = totalCount,

@@ -73,5 +73,6 @@ namespace CB_Gift.Services.IService
         Task<OrderImportResult> ConfirmImportAsync(List<OrderImportRowDto> dtos, string sellerUserId);
         Task<OrderImportResult> ImportFromExcelAsync(IFormFile file, string sellerUserId);
         Task<OrderActivityDto?> GetOrderActivityTimelineAsync(int orderId);
+        Task<bool> CheckOrderCodeExistsAsync(string orderCode);
     }
 }

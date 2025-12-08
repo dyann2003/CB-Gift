@@ -62,10 +62,10 @@ namespace CB_Gift.Orders.Import
         {
             if (string.IsNullOrWhiteSpace(provinceName)) return false;
 
-            var input = provinceName.Trim();
+            // Gọi hàm thông minh trong Cache (đã bao gồm logic xử lý "TP.", "Tỉnh"...)
+            var provinceId = _cache.FindProvinceId(provinceName);
 
-            return _cache.Provinces.Any(p =>
-                string.Equals(p, input, StringComparison.OrdinalIgnoreCase));
+            return provinceId.HasValue; // Có ID => Hợp lệ
         }
 
         /// <summary>
