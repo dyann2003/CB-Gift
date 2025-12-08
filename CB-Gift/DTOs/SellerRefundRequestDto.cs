@@ -92,6 +92,7 @@ namespace CB_Gift.DTOs
         public int GroupId { get; set; }
         public int OrderId { get; set; }
         public string OrderCode { get; set; }
+        public string ProductName { get; set; }
         public string Type { get; set; } = "REFUND"; // Cho biết loại
         public string TargetLevel { get; set; } // "ORDER-WIDE" hoặc "DETAIL"
         public string Status { get; set; }

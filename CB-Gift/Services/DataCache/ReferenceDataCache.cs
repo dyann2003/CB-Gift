@@ -1,52 +1,111 @@
 ﻿using CB_Gift.Data;
+using CB_Gift.DTOs;
 using CB_Gift.Models;
+using CB_Gift.Services.IService;
 using Microsoft.EntityFrameworkCore;
+using System.Text.RegularExpressions;
 
 public class ReferenceDataCache
 {
     private readonly CBGiftDbContext _db;
+    private readonly ILocationService _locationService;
 
-    public ReferenceDataCache(CBGiftDbContext db)
+    // Cache tạm trong RAM (chỉ sống trong phạm vi 1 request Import)
+    private List<GhnProvince> _ghnProvinces = new();
+    private Dictionary<int, List<GhnDistrict>> _ghnDistricts = new(); // Key: ProvinceId
+    private Dictionary<int, List<GhnWard>> _ghnWards = new();         // Key: DistrictId
+
+    public ReferenceDataCache(CBGiftDbContext db, ILocationService locationService)
     {
         _db = db;
+        _locationService = locationService;
     }
 
-    // Lấy từ DB
     public List<Product> Products { get; private set; } = new();
     public List<ProductVariant> ProductVariants { get; private set; } = new();
 
-    // Dùng list in-memory, KHÔNG lấy từ DB
-    public List<string> Provinces { get; } = new()
-    {
-        "Hà Nội", "Hồ Chí Minh", "Đà Nẵng", "Hải Phòng", "Cần Thơ",
-        "An Giang", "Bà Rịa - Vũng Tàu", "Bắc Giang", "Bắc Kạn", "Bạc Liêu",
-        "Bắc Ninh", "Bến Tre", "Bình Định", "Bình Dương", "Bình Phước",
-        "Bình Thuận", "Cà Mau", "Cao Bằng", "Đắk Lắk", "Đắk Nông",
-        "Điện Biên", "Đồng Nai", "Đồng Tháp", "Gia Lai", "Hà Giang",
-        "Hà Nam", "Hà Tĩnh", "Hải Dương", "Hậu Giang", "Hòa Bình",
-        "Hưng Yên", "Khánh Hòa", "Kiên Giang", "Kon Tum", "Lai Châu",
-        "Lâm Đồng", "Lạng Sơn", "Lào Cai", "Long An", "Nam Định",
-        "Nghệ An", "Ninh Bình", "Ninh Thuận", "Phú Thọ", "Phú Yên",
-        "Quảng Bình", "Quảng Nam", "Quảng Ngãi", "Quảng Ninh", "Quảng Trị",
-        "Sóc Trăng", "Sơn La", "Tây Ninh", "Thái Bình", "Thái Nguyên",
-        "Thanh Hóa", "Thừa Thiên Huế", "Tiền Giang", "Trà Vinh",
-        "Tuyên Quang", "Vĩnh Long", "Vĩnh Phúc", "Yên Bái"
-    };
-
-    // Có thể để trống hoặc tự build sau
-    public List<string> Cities { get; } = new();
-
-    // Zipcode Việt Nam (ví dụ vài mã, hoặc để trống tùy bạn)
-    public List<string> PostalCodes { get; } = new()
-    {
-        "10000", "70000", "55000", "40000" // ví dụ
-    };
-
     public async Task LoadAsync()
     {
+        // 1. Load Data từ DB local
         Products = await _db.Products.ToListAsync();
         ProductVariants = await _db.ProductVariants.ToListAsync();
 
-        // KHÔNG gọi _db.Provinces / _db.Cities / _db.VietNamPostalCodes nữa
+        // 2. Load Provinces từ GHN (Load ngay từ đầu vì list này nhẹ)
+        if (!_ghnProvinces.Any())
+        {
+            var provinces = await _locationService.GetProvincesAsync();
+            _ghnProvinces = provinces.ToList();
+        }
+    }
+
+    // --- CÁC HÀM TÌM KIẾM ID TỪ TÊN (MAPPING LOGIC) ---
+
+    // 1. Tìm Province ID
+    public int? FindProvinceId(string provinceName)
+    {
+        if (string.IsNullOrWhiteSpace(provinceName)) return null;
+        var match = _ghnProvinces.FirstOrDefault(p => IsLocationMatch(p.ProvinceName, provinceName));
+        return match?.ProvinceID;
+    }
+
+    // 2. Tìm District ID (Cần ProvinceId cha)
+    public async Task<int?> FindDistrictIdAsync(int provinceId, string districtName)
+    {
+        if (string.IsNullOrWhiteSpace(districtName)) return null;
+
+        // Lazy load: Nếu chưa có quận của tỉnh này thì mới gọi API
+        if (!_ghnDistricts.ContainsKey(provinceId))
+        {
+            var districts = await _locationService.GetDistrictsAsync(provinceId);
+            _ghnDistricts[provinceId] = districts.ToList();
+        }
+
+        var match = _ghnDistricts[provinceId].FirstOrDefault(d => IsLocationMatch(d.DistrictName, districtName));
+        return match?.DistrictID;
+    }
+
+    // 3. Tìm Ward Code (Cần DistrictId cha)
+    public async Task<string?> FindWardCodeAsync(int districtId, string wardName)
+    {
+        if (string.IsNullOrWhiteSpace(wardName)) return null;
+
+        // Lazy load: Nếu chưa có phường của quận này thì mới gọi API
+        if (!_ghnWards.ContainsKey(districtId))
+        {
+            var wards = await _locationService.GetWardsAsync(districtId);
+            _ghnWards[districtId] = wards.ToList();
+        }
+
+        var match = _ghnWards[districtId].FirstOrDefault(w => IsLocationMatch(w.WardName, wardName));
+        return match?.WardCode;
+    }
+
+    // --- THUẬT TOÁN SO SÁNH CHUỖI ---
+    private bool IsLocationMatch(string ghnName, string inputName)
+    {
+        if (string.IsNullOrEmpty(ghnName) || string.IsNullOrEmpty(inputName)) return false;
+
+        string Normalize(string s)
+        {
+            // Chuyển về chữ thường, bỏ khoảng trắng thừa
+            s = s.ToLower().Trim();
+
+            // Bỏ dấu tiếng Việt (Optional - nếu muốn chính xác tuyệt đối thì bỏ đoạn này đi)
+            // s = RemoveSign4VietnameseString(s); 
+
+            // Loại bỏ các tiền tố hành chính để so sánh nội dung cốt lõi
+            string[] prefixes = { "tỉnh", "thành phố", "tp.", "tp ", "quận", "huyện", "thị xã", "phường", "xã", "thị trấn" };
+            foreach (var p in prefixes)
+            {
+                if (s.StartsWith(p))
+                {
+                    s = s.Substring(p.Length).Trim();
+                    break; // Chỉ bỏ tiền tố đầu tiên tìm thấy
+                }
+            }
+            return s;
+        }
+
+        return Normalize(ghnName) == Normalize(inputName);
     }
 }
