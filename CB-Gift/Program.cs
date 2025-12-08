@@ -20,7 +20,7 @@ using CB_Gift.Services.Reports;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ================== Controllers + Swagger ==================
+// ================== 1. Controllers + Swagger ==================
 builder.Services.AddControllers()
     .AddJsonOptions(x =>
         x.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles);
@@ -32,7 +32,7 @@ builder.Services.AddSwaggerGen(c =>
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "CBGift API", Version = "v1" });
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        Description = "JWT Authorization header. Nhập token vào đây (không cần gõ 'Bearer ')",
+        Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
         Name = "Authorization",
         In = ParameterLocation.Header,
         Type = SecuritySchemeType.Http,
@@ -50,16 +50,13 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// ================== DbContext ==================
-// Lấy chuỗi kết nối từ appsettings.json
+// ================== 2. DbContext ==================
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-
-//Dùng UseMySql
 builder.Services.AddDbContext<CBGiftDbContext>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString))
 );
 
-// ================== Identity ==================
+// ================== 3. Identity ==================
 builder.Services
     .AddIdentityCore<AppUser>(opt =>
     {
@@ -74,10 +71,9 @@ builder.Services
     .AddSignInManager()
     .AddDefaultTokenProviders();
 
-// Add AutoMapper
 builder.Services.AddAutoMapper(typeof(Program));
 
-// ================== JWT ==================
+// ================== 4. JWT (Quan trọng cho Cookie) ==================
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opt =>
@@ -92,27 +88,26 @@ builder.Services
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)),
-            ClockSkew = TimeSpan.Zero
+            ClockSkew = TimeSpan.Zero // Hết hạn là chặn ngay
         };
 
-        // đọc JWT từ cookie "access_token"
+        // Logic tự động lấy Token từ Cookie cho mỗi Request
         opt.Events = new JwtBearerEvents
         {
             OnMessageReceived = ctx =>
             {
-                // Lấy token từ query cho SignalR
+                // 1. Ưu tiên lấy từ Query String (cho SignalR)
                 var accessToken = ctx.Request.Query["access_token"];
-
                 var path = ctx.HttpContext.Request.Path;
+
                 if (!string.IsNullOrEmpty(accessToken) &&
                     path.StartsWithSegments("/notificationHub"))
                 {
                     ctx.Token = accessToken;
                 }
-
-                // Hoặc lấy từ cookie
-                if (ctx.Token == null &&
-                    ctx.Request.Cookies.TryGetValue("access_token", out var cookieToken))
+                // 2. Nếu không có query, lấy từ Cookie "access_token"
+                // Đây là chỗ giúp [Authorize] hoạt động mà không cần header Authorization
+                else if (ctx.Request.Cookies.TryGetValue("access_token", out var cookieToken))
                 {
                     ctx.Token = cookieToken;
                 }
@@ -122,33 +117,21 @@ builder.Services
         };
     });
 
-// ========= Cấu hình GHN =========
-// Lấy cấu hình GhnSettings
+// ================== 5. GHN Settings ==================
 var ghnSettings = builder.Configuration.GetSection("GhnSettings");
-
-// Lấy Token và BaseAddress
 var ghnToken = ghnSettings["Token"];
 var ghnProdBaseUrl = ghnSettings["ProdBaseAddress"];
-
 var ghnTokenDev = ghnSettings["TokenDev"];
 var ghnDevBaseUrl = ghnSettings["DevBaseAddress"];
 var ghnShopId = ghnSettings["ShopId"];
 
-// Kiểm tra null
 if (string.IsNullOrEmpty(ghnToken) || string.IsNullOrEmpty(ghnProdBaseUrl))
-{
     throw new InvalidOperationException("Lỗi cấu hình: GhnSettings:Token hoặc ProdBaseAddress chưa được đặt.");
-}
 if (string.IsNullOrEmpty(ghnTokenDev) || string.IsNullOrEmpty(ghnDevBaseUrl))
-{
     throw new InvalidOperationException("Lỗi cấu hình: GhnSettings:TokenDev hoặc DevBaseAddress chưa được đặt.");
-}
-// -------------------------
-
 
 builder.Services.AddAuthorization();
 
-// 1. Client cho môi trường PROD (Lấy Tỉnh/Huyện/Xã)
 builder.Services.AddHttpClient("GhnProdClient", client =>
 {
     client.BaseAddress = new Uri(ghnProdBaseUrl);
@@ -156,7 +139,6 @@ builder.Services.AddHttpClient("GhnProdClient", client =>
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
-// 2. Client cho môi trường DEV (Tạo đơn, Leadtime...)
 builder.Services.AddHttpClient("GhnDevClient", client =>
 {
     client.BaseAddress = new Uri(ghnDevBaseUrl);
@@ -164,9 +146,6 @@ builder.Services.AddHttpClient("GhnDevClient", client =>
     client.DefaultRequestHeaders.Add("ShopId", ghnShopId);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
-
-
-// ------------------------------------
 
 // ================== CORS (cho Next.js FE) ==================
 builder.Services.AddCors(options =>
@@ -187,32 +166,31 @@ builder.Services.AddCors(options =>
 // Luôn đăng ký Service thật vào container, vì thằng Demo cần gọi thằng này
 builder.Services.AddScoped<GhnShippingService>();
 
-// LOGIC CHUYỂN ĐỔI (SWITCH) DEMO/REAL CHO INTERFACE
-// Lấy cấu hình từ appsettings.json
 var useDemoMode = builder.Configuration.GetValue<bool>("GhnSettings:UseDemoMode");
-
 if (useDemoMode)
 {
     Console.WriteLine(">>> HỆ THỐNG ĐANG CHẠY CHẾ ĐỘ DEMO SHIPMENT <<<");
-    // Nếu bật Demo: Inject DemoShippingService khi ai đó gọi IShippingService
     builder.Services.AddScoped<IShippingService, DemoShippingService>();
 }
 else
 {
     Console.WriteLine(">>> HỆ THỐNG ĐANG CHẠY CHẾ ĐỘ REAL SHIPMENT <<<");
-    // Nếu tắt Demo: Trỏ IShippingService về GhnShippingService đã đăng ký ở trên
     builder.Services.AddScoped<IShippingService>(provider =>
         provider.GetRequiredService<GhnShippingService>());
 }
 
 // Đăng ký CloudinarySettings
-builder.Services.Configure<CloudinarySettings>(
-    builder.Configuration.GetSection("CloudinarySettings"));
+builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
 
-// ================== Custom services ==================
+// ================== 7. Register Services (DI) ==================
+// QUAN TRỌNG: Đăng ký JwtTokenService vào ITokenService
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+builder.Services.AddScoped<IManagementAccountService, ManagementAccountService>();
+
+// Các service nghiệp vụ khác
+builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IQrCodeService, QrCodeService>();
 builder.Services.AddScoped<IOrderDetailService, OrderDetailService>();
 builder.Services.AddScoped<IPlanService, PlanService>();
@@ -235,9 +213,8 @@ builder.Services.AddScoped<VNPayService>();
 builder.Services.AddScoped<PaymentGatewayFactory>();
 builder.Services.AddScoped<VnPayHelper>();
 builder.Services.AddScoped<ILocationService, GhnLocationService>();
-//builder.Services.AddScoped<IShippingService, GhnShippingService>();
 builder.Services.AddScoped<IGhnPrintService, GhnPrintService>();
-builder.Services.AddScoped<IManagementAccountService, ManagementAccountService>();
+
 builder.Services.AddSingleton<NotificationHub>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<OrderFactory>();
@@ -246,21 +223,19 @@ builder.Services.AddScoped<IValidator<OrderImportRowDto>, OrderImportRowValidato
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IOrderImportService, OrderImportService>();
 
-// --- Quartz ---
+// ================== 8. Quartz ==================
 builder.Services.AddQuartz(q =>
 {
-    // Job factory được DI tự động
     q.SchedulerId = "Scheduler-Core";
-
-    // Đăng ký Job
     var jobKey = new JobKey("groupOrdersJob");
     q.AddJob<GroupOrdersJob>(opts => opts.WithIdentity(jobKey));
+
     // Trigger hằng ngày 00:05
     q.AddTrigger(opts => opts
         .ForJob(jobKey)
         .WithIdentity("groupOrdersTrigger")
         .StartNow()
-        .WithSchedule(CronScheduleBuilder.DailyAtHourAndMinute(0, 5)) // chạy 00:05 hàng ngày
+        .WithSchedule(CronScheduleBuilder.DailyAtHourAndMinute(0, 5))
     );
     var invoiceJobKey = new JobKey("createMonthlyInvoicesJob");
     q.AddJob<CreateMonthlyInvoicesJob>(opts => opts.WithIdentity(invoiceJobKey));
@@ -274,16 +249,11 @@ builder.Services.AddQuartz(q =>
     // Hoặc Cron Expression: "0 5 0 10 * ?"
     );
 });
-
-// Quartz hosted service chạy cùng ứng dụng
-builder.Services.AddQuartzHostedService(options =>
-{
-    options.WaitForJobsToComplete = true;
-});
+builder.Services.AddQuartzHostedService(options => options.WaitForJobsToComplete = true);
 
 var app = builder.Build();
 
-// ================== Middleware ==================
+// ================== Middleware Pipeline ==================
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -292,31 +262,39 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-// bật CORS trước Authentication
+// 1. CORS (Phải trên cùng)
 app.UseCors("AllowFrontend");
 
+// 2. Auth (Xác thực User từ Cookie/Token)
 app.UseAuthentication();
+
+// 3. Authorization (Phân quyền)
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<NotificationHub>("/notificationHub");
 
-// Map Hub tới một endpoint
-// Client sẽ kết nối tới URL "/notificationHub"
-app.MapHub<CB_Gift.Hubs.NotificationHub>("/notificationHub");
-
-// ================== Seed Roles + User ==================
+// ================== Seed Data (Thêm Try-Catch để an toàn) ==================
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
-    await SeedRolesAsync(services);
-    await SeedAllDataAsync(services);
-    var cache = scope.ServiceProvider.GetRequiredService<ReferenceDataCache>();
-    await cache.LoadAsync();
+    try
+    {
+        await SeedRolesAsync(services);
+        await SeedAllDataAsync(services);
+    }
+    catch (Exception ex)
+    {
+        // Log lỗi nếu Seed data chết để không làm sập app thầm lặng
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Lỗi xảy ra khi Seeding dữ liệu.");
+    }
 }
 
 app.Run();
 
-// ================== Seed functions ==================
+// ================== Seed Functions ==================
+// ... (Phần Seed Functions giữ nguyên như của bạn) ...
 static async Task SeedRolesAsync(IServiceProvider serviceProvider)
 {
     var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
@@ -331,26 +309,21 @@ static async Task SeedRolesAsync(IServiceProvider serviceProvider)
     }
 }
 
- static async Task SeedAllDataAsync(IServiceProvider serviceProvider)
+static async Task SeedAllDataAsync(IServiceProvider serviceProvider)
 {
-    // 1. Lấy các service cần thiết
     var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     var userManager = serviceProvider.GetRequiredService<UserManager<AppUser>>();
 
-    // 2. Khởi tạo danh sách các Roles cần có
     string[] roleNames = { "Admin", "Seller", "Designer", "QC", "Staff", "Manager" };
 
     foreach (var roleName in roleNames)
     {
-        var roleExist = await roleManager.RoleExistsAsync(roleName);
-        if (!roleExist)
+        if (!await roleManager.RoleExistsAsync(roleName))
         {
-            // Tạo role mới nếu chưa tồn tại
             await roleManager.CreateAsync(new IdentityRole(roleName));
         }
     }
 
-    // 3. Khởi tạo danh sách Users cần seed (Email, Mật khẩu, Role)
     var usersToSeed = new List<(string Email, string Password, string Role)>
     {
         ("admin@example.com", "Admin@123", "Admin"),
@@ -361,10 +334,8 @@ static async Task SeedRolesAsync(IServiceProvider serviceProvider)
         ("manager@example.com", "Manager@123", "Manager")
     };
 
-    // 4. Vòng lặp để tạo User và gán Role tương ứng
     foreach (var userSpec in usersToSeed)
     {
-        // Kiểm tra xem user đã tồn tại chưa
         var user = await userManager.FindByEmailAsync(userSpec.Email);
         if (user == null)
         {
@@ -375,15 +346,11 @@ static async Task SeedRolesAsync(IServiceProvider serviceProvider)
                 EmailConfirmed = true
             };
 
-            // Tạo user mới với mật khẩu đã định
             var result = await userManager.CreateAsync(newUser, userSpec.Password);
-
             if (result.Succeeded)
             {
-                // Gán role cho user vừa tạo
                 await userManager.AddToRoleAsync(newUser, userSpec.Role);
             }
         }
     }
 }
-

@@ -1,10 +1,12 @@
 ﻿using CB_Gift.Services;
 using CB_Gift.Services.IService;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CB_Gift.Controllers
 {
+    [Authorize(Roles = "Staff,Manager")]
     [Route("api/[controller]")]
     [ApiController]
     public class PlanController : ControllerBase

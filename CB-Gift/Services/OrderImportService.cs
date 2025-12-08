@@ -6,6 +6,7 @@ using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using CB_Gift.DTOs;
 using CB_Gift.Services.IService;
+using DocumentFormat.OpenXml.InkML;
 
 namespace CB_Gift.Orders.Import
 {
@@ -31,34 +32,109 @@ namespace CB_Gift.Orders.Import
             _logger = logger;
         }
 
-        public byte[] GenerateExcelTemplate()
+        public async Task<byte[]> GenerateExcelTemplateAsync()
         {
+            // 1. LẤY DATA: Lấy danh sách SKU từ ProductVariant
+            // Điều kiện: Product cha có Status != 0 (Giả sử 0 là ẩn/xóa) và Sku không rỗng
+            var skuList = await _db.ProductVariants
+                .Include(pv => pv.Product) // Join sang bảng Product để check Status
+                .Where(pv => pv.Product.Status != 0 && !string.IsNullOrEmpty(pv.Sku))
+                .Select(pv => pv.Sku)
+                .Distinct() // Loại bỏ SKU trùng lặp (nếu có)
+                .OrderBy(s => s) // Sắp xếp A-Z cho dễ tìm
+                .ToListAsync();
+
             using var wb = new XLWorkbook();
+
+            // --- SHEET 1: GIAO DIỆN NGƯỜI DÙNG (OrdersTemplate) ---
             var ws = wb.Worksheets.Add("OrdersTemplate");
 
+            // Định nghĩa Header
             var headers = new[]
             {
-                "OrderCode","CustomerName","Phone","Email","Address","Province","District","Ward",
-                "Sku","Quantity","Accessory","Note","LinkImg","LinkThanksCard","LinkFileDesign"
+                "OrderCode",      // Col 1
+                "CustomerName",   // Col 2
+                "Phone",          // Col 3
+                "Email",          // Col 4
+                "Address",        // Col 5
+                "Province",       // Col 6
+                "District",       // Col 7
+                "Ward",           // Col 8
+                "Sku",            // Col 9  <-- Cột cần Dropdown
+                "Quantity",       // Col 10
+                "Accessory",      // Col 11
+                "Note",           // Col 12
+                "LinkImg",        // Col 13
+                "LinkThanksCard", // Col 14
+                "LinkFileDesign"  // Col 15
             };
 
-            for (int i = 0; i < headers.Length; i++) ws.Cell(1, i + 1).Value = headers[i];
+            // Điền Header vào dòng 1
+            for (int i = 0; i < headers.Length; i++)
+            {
+                ws.Cell(1, i + 1).Value = headers[i];
+            }
 
-            // Example row
-            ws.Cell(2, 1).Value = "ORDER-20251206-001";
-            ws.Cell(2, 2).Value = "Nguyen Van A";
-            ws.Cell(2, 3).Value = "0909123456";
-            ws.Cell(2, 4).Value = "a@example.com";
-            ws.Cell(2, 5).Value = "123 Le Loi";
-            ws.Cell(2, 6).Value = "Hồ Chí Minh";
-            ws.Cell(2, 7).Value = "Quận 1";
-            ws.Cell(2, 8).Value = "Phường Bến Nghé";
-            ws.Cell(2, 9).Value = "SKU-EX-001";
-            ws.Cell(2, 10).Value = 1;
+            // Format Header cho đẹp
+            var headerRange = ws.Range(1, 1, 1, headers.Length);
+            headerRange.Style.Font.Bold = true;
+            headerRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#FFD700"); // Màu vàng Gold
+            headerRange.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
 
-            ws.Row(1).Style.Font.Bold = true;
+            // Freeze dòng header để khi cuộn xuống vẫn thấy tiêu đề
             ws.SheetView.FreezeRows(1);
 
+
+            // --- SHEET 2: DỮ LIỆU NGUỒN CHO DROPDOWN (RefData) ---
+            // Tạo sheet mới để chứa danh sách SKU
+            var wsData = wb.Worksheets.Add("RefData");
+
+            if (skuList.Any())
+            {
+                // Đổ dữ liệu SKU vào cột A của sheet RefData
+                for (int i = 0; i < skuList.Count; i++)
+                {
+                    wsData.Cell(i + 1, 1).Value = skuList[i];
+                }
+
+                // --- CẤU HÌNH DATA VALIDATION (DROPDOWN) ---
+                // Cột Sku là cột số 9 (I) ở Sheet OrdersTemplate
+                int skuColumnIndex = 9;
+                int maxRows = 5000; // Áp dụng cho 5000 dòng đầu tiên
+
+                // Chọn vùng cần tạo dropdown (Từ dòng 2 đến 5000 tại cột 9)
+                var validationRange = ws.Range(2, skuColumnIndex, maxRows, skuColumnIndex);
+
+                // Công thức tham chiếu: =RefData!$A$1:$A${số_lượng_sku}
+                // Dùng tham chiếu range thay vì list string cứng để không bị giới hạn ký tự của Excel
+                var sourceRangeFormula = $"=RefData!$A$1:$A${skuList.Count}";
+
+                // Set Validation
+                validationRange.SetDataValidation().List(sourceRangeFormula, true);
+
+                // Thêm thông báo lỗi khi người dùng nhập sai SKU
+                var validation = validationRange.GetDataValidation();
+                validation.ErrorStyle = XLErrorStyle.Stop;
+                validation.ErrorTitle = "Sai mã SKU";
+                validation.ErrorMessage = "SKU này không tồn tại trong hệ thống. Vui lòng chọn từ danh sách.";
+                validation.InputTitle = "Chọn SKU";
+                validation.InputMessage = "Vui lòng chọn mã sản phẩm từ danh sách xổ xuống.";
+            }
+
+            // Ẩn sheet RefData đi để người dùng không sửa bậy
+            wsData.Visibility = XLWorksheetVisibility.Hidden;
+
+
+            // --- HOÀN THIỆN ---
+            // Tự động căn chỉnh độ rộng cột theo nội dung
+            ws.Columns().AdjustToContents();
+
+            // Set độ rộng cố định cho một số cột dài để nhìn đẹp hơn
+            ws.Column(5).Width = 30; // Address
+            ws.Column(9).Width = 20; // SKU
+            ws.Column(12).Width = 25; // Note
+
+            // Xuất file ra byte array
             using var ms = new MemoryStream();
             wb.SaveAs(ms);
             return ms.ToArray();

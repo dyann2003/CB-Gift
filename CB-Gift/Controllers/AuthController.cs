@@ -13,7 +13,9 @@ namespace CB_Gift.Controllers;
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
-    private const string AccessTokenCookieName = "access_token";
+    // Định nghĩa tên Cookie
+    private const string AccessCookie = "access_token";
+    private const string RefreshCookie = "refresh_token";
 
     private readonly SignInManager<AppUser> _signIn;
     private readonly UserManager<AppUser> _users;
@@ -44,47 +46,71 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> Login([FromBody] LoginDto dto)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
+
         var user = await _users.FindByNameAsync(dto.UserNameOrEmail)
                    ?? await _users.FindByEmailAsync(dto.UserNameOrEmail);
 
-        if (user is null)
-            return Unauthorized(new { message = "Email not found." });
+        if (user is null) return Unauthorized(new { message = "User not found." });
+        if (!user.IsActive) return Unauthorized(new { message = "Account deactivated." });
 
-        if (!user.IsActive)
-            return Unauthorized(new { message = "Your account has been deactivated." });
+        var result = await _signIn.CheckPasswordSignInAsync(user, dto.Password, lockoutOnFailure: false);
+        if (!result.Succeeded) return Unauthorized(new { message = "Invalid credentials." });
 
-        var ok = await _signIn.CheckPasswordSignInAsync(user, dto.Password, lockoutOnFailure: false);
-        if (!ok.Succeeded)
-            return Unauthorized(new { message = "Invalid credentials." });
+        // 1. Tạo Access Token
+        var accessToken = await _tokens.CreateTokenAsync(user);
 
-        var token = await _tokens.CreateTokenAsync(user);
+        // 2. Tạo Refresh Token (Gọi từ TokenService)
+        var refreshToken = await _tokens.GenerateRefreshTokenAsync(user.Id);
 
-        var minutes = int.Parse(_config["Jwt:ExpiresMinutes"] ?? "60");
-        var expires = DateTimeOffset.UtcNow.AddMinutes(minutes);
+        // 3. Lưu Cookie
+        SetTokenCookies(accessToken, refreshToken.Token);
 
-        Response.Cookies.Append(AccessTokenCookieName, token, new CookieOptions
+        return Ok(new AuthResponse(accessToken, user.UserName!, user.Email));
+    }
+
+    // POST: /api/auth/refresh-token
+    [HttpPost("refresh-token")]
+    [AllowAnonymous]
+    public async Task<IActionResult> RefreshToken()
+    {
+        var refreshToken = Request.Cookies[RefreshCookie];
+        if (string.IsNullOrEmpty(refreshToken))
+            return Unauthorized(new { message = "No refresh token provided." });
+
+        // 1. Validate Token (Gọi từ TokenService)
+        var result = await _tokens.ValidateRefreshTokenAsync(refreshToken);
+
+        if (!result.Success)
         {
-            HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.None, // Be và Fe khác domain thì None sẽ gửi được cookie từ Be qua Fe.
-            Expires = expires,
-            IsEssential = true
-        });
+            DeleteTokenCookies(); // Token không hợp lệ -> Xóa cookie
+            return Unauthorized(new { message = result.Message });
+        }
 
-        return Ok(new AuthResponse(token, user.UserName!, user.Email));
+        var user = result.Data;
+
+        // 2. Tạo cặp Token MỚI (Cơ chế Token Rotation)
+        var newAccessToken = await _tokens.CreateTokenAsync(user);
+        var newRefreshToken = await _tokens.GenerateRefreshTokenAsync(user.Id);
+
+        // 3. Cập nhật Cookie mới
+        SetTokenCookies(newAccessToken, newRefreshToken.Token);
+
+        return Ok(new { message = "Token refreshed" });
     }
 
     // POST: /api/auth/logout
     [Authorize]
     [HttpPost("logout")]
-    public IActionResult Logout()
+    public async Task<IActionResult> Logout()
     {
-        Response.Cookies.Delete(AccessTokenCookieName, new CookieOptions
+        var refreshToken = Request.Cookies[RefreshCookie];
+        if (!string.IsNullOrEmpty(refreshToken))
         {
-            Secure = true,
-            SameSite = SameSiteMode.None
-        });
+            // Thu hồi token trong database
+            await _tokens.RevokeRefreshTokenAsync(refreshToken);
+        }
 
+        DeleteTokenCookies();
         return Ok(new { message = "Logged out" });
     }
 
@@ -105,7 +131,16 @@ public class AuthController : ControllerBase
                 errors = rs.Errors.Select(e => new { e.Code, e.Description })
             });
 
-        return Ok(new { message = "Password changed." });
+        // --- FIX BUG BẢO MẬT: Đổi pass xong phải thu hồi token cũ ---
+        var refreshToken = Request.Cookies[RefreshCookie];
+        if (!string.IsNullOrEmpty(refreshToken))
+        {
+            await _tokens.RevokeRefreshTokenAsync(refreshToken);
+        }
+        DeleteTokenCookies(); // Xóa cookie để Frontend chuyển hướng về trang Login
+        // ------------------------------------------------------------
+
+        return Ok(new { message = "Password changed. Please login again." });
     }
 
     // POST: /api/Auth/register
@@ -116,10 +151,7 @@ public class AuthController : ControllerBase
         var result = await _accountService.RegisterAsync(request);
 
         if (!result.Success)
-        {
-            // Trả về JSON, không phải plain text
             return BadRequest(new { message = result.Message });
-        }
 
         return Ok(new { data = result.Data });
     }
@@ -130,82 +162,48 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
     {
         if (string.IsNullOrWhiteSpace(dto.Email))
-        {
             return BadRequest(new { message = "Please enter your email address." });
-        }
+
         var user = await _users.FindByNameAsync(dto.Email)
                    ?? await _users.FindByEmailAsync(dto.Email);
 
-        if (user is null)
-            return Unauthorized(new { message = "Email not found." });
+        if (user is null) return Unauthorized(new { message = "Email not found." });
+        if (!user.IsActive) return Unauthorized(new { message = "Your account has been deactivated." });
 
-        if (!user.IsActive)
-            return Unauthorized(new { message = "Your account has been deactivated." });
         var result = await _accountService.SendPasswordResetOtpAsync(dto);
-        if (!result.Success)
-        {
-            return BadRequest(new { message = result.Message });
-        }
-        // Success
+
+        if (!result.Success) return BadRequest(new { message = result.Message });
+
         return Ok(new { message = result.Message });
     }
 
-
-    // POST: /api/auth/reset-password
-    //[HttpPost("reset-password")]
-    //[AllowAnonymous]
-    //// Sử dụng DTO mới
-    //public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordWithOtpDto dto)
-    //{
-    //    if (!ModelState.IsValid) return BadRequest(ModelState);
-
-    //    // Tất cả logic đã được chuyển vào service
-    //    var result = await _accountService.ResetPasswordWithOtpAsync(dto);
-
-    //    if (!result.Success)
-    //    {
-    //        return BadRequest(new
-    //        {
-    //            message = result.Message,
-    //        });
-    //    }
-
-    //    return Ok(new { message = result.Message });
-    //}
-
-    // ✅ Bước 1: Verify OTP
+    // POST: /api/auth/verify-otp
     [HttpPost("verify-otp")]
     [AllowAnonymous]
     public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpDto dto)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+        if (!ModelState.IsValid) return BadRequest(ModelState);
 
         var result = await _accountService.VerifyOtpAsync(dto.Email, dto.Otp);
 
-        if (!result.Success)
-            return BadRequest(new { message = result.Message });
+        if (!result.Success) return BadRequest(new { message = result.Message });
 
         return Ok(new { message = result.Message });
     }
 
-
-    // ✅ Bước 2: Reset password sau khi verify thành công
+    // POST: /api/auth/reset-password-with-otp
     [HttpPost("reset-password-with-otp")]
     [AllowAnonymous]
     public async Task<IActionResult> ResetPasswordWithOtp([FromBody] ResetPasswordWithOtpDto dto)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+        if (!ModelState.IsValid) return BadRequest(ModelState);
 
         var result = await _accountService.ResetPasswordWithOtpAsync(dto);
 
-        if (!result.Success)
-            return BadRequest(new { message = result.Message });
+        if (!result.Success) return BadRequest(new { message = result.Message });
 
         return Ok(new { message = result.Message });
     }
-
 
     // GET: /api/auth/profile
     [Authorize]
@@ -225,9 +223,8 @@ public class AuthController : ControllerBase
             user.FullName
         });
     }
-    /// <summary>
-    /// Lấy danh sách tất cả các Seller trong hệ thống.
-    /// </summary> api/auth/all-sellers
+
+    // GET: /api/auth/all-sellers
     [Authorize(Roles = "Staff,Manager,QC")]
     [HttpGet("all-sellers")]
     public async Task<IActionResult> GetAllSellers()
@@ -239,14 +236,11 @@ public class AuthController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { message = "Đã xảy ra lỗi không mong muốn khi lấy danh sách seller.", error = ex.Message });
+            return StatusCode(500, new { message = "Lỗi lấy danh sách seller.", error = ex.Message });
         }
     }
 
-    /// <summary>
-    /// Lấy danh sách tất cả các Designer trong hệ thống.
-    /// </summary>
-    /// <returns>Danh sách designer gồm Id và FullName</returns>
+    // GET: /api/auth/all-designers
     [Authorize(Roles = "Staff,Manager")]
     [HttpGet("all-designers")]
     public async Task<IActionResult> GetAllDesigners()
@@ -254,7 +248,6 @@ public class AuthController : ControllerBase
         try
         {
             var designers = await _accountService.GetAllDesignersAsync();
-
             if (designers == null || !designers.Any())
                 return NotFound(new { message = "Không tìm thấy designer nào." });
 
@@ -262,30 +255,55 @@ public class AuthController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new
-            {
-                message = "Đã xảy ra lỗi không mong muốn khi lấy danh sách designer.",
-                error = ex.Message
-            });
+            return StatusCode(500, new { message = "Lỗi lấy danh sách designer.", error = ex.Message });
         }
     }
-    [HttpGet("status")] // check xem trạng thái của seller có hóa đơn nào quá hạn thanh toán không!
-    [Authorize(Roles = "Seller")] // Chỉ Seller mới gọi
+
+    // GET: /api/auth/status
+    [HttpGet("status")]
+    [Authorize(Roles = "Seller")]
     public async Task<IActionResult> GetAccountStatus()
     {
         var sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (string.IsNullOrEmpty(sellerId))
-        {
-            return Unauthorized();
-        }
+        if (string.IsNullOrEmpty(sellerId)) return Unauthorized();
 
-        // Gọi service để kiểm tra
         var statusCheck = await _invoiceService.CheckForOverdueInvoiceAsync(sellerId);
-
         return Ok(statusCheck);
     }
 
+    // --- HELPER METHODS (Private) ---
+    private void SetTokenCookies(string accessToken, string refreshToken)
+    {
+        var accessMinutes = int.Parse(_config["Jwt:ExpiresMinutes"] ?? "60");
 
+        var cookieOptions = new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true, // Quan trọng khi chạy HTTPS
+            SameSite = SameSiteMode.None,
+            IsEssential = true
+        };
 
+        // Access Token Cookie (Thời hạn ngắn)
+        var accessOpt = cookieOptions;
+        accessOpt.Expires = DateTime.UtcNow.AddMinutes(accessMinutes);
+        Response.Cookies.Append(AccessCookie, accessToken, accessOpt);
 
+        // Refresh Token Cookie (Thời hạn dài - 7 ngày)
+        var refreshOpt = new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.None,
+            Expires = DateTime.UtcNow.AddDays(7)
+        };
+        Response.Cookies.Append(RefreshCookie, refreshToken, refreshOpt);
+    }
+
+    private void DeleteTokenCookies()
+    {
+        var options = new CookieOptions { Secure = true, SameSite = SameSiteMode.None };
+        Response.Cookies.Delete(AccessCookie, options);
+        Response.Cookies.Delete(RefreshCookie, options);
+    }
 }
