@@ -1,11 +1,14 @@
-﻿using CB_Gift.DTOs;
+﻿using CB_Gift.Data;
+using CB_Gift.DTOs;
 using CB_Gift.Hubs;
 using CB_Gift.Models.Enums;
 using CB_Gift.Services;
 using CB_Gift.Services.IService;
+using ClosedXML.Excel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
 namespace CB_Gift.Controllers
@@ -20,17 +23,26 @@ namespace CB_Gift.Controllers
         private readonly IDesignerSellerService _designerSellerservice;
         private readonly IHubContext<NotificationHub> _hubContext; // <-- SignalR hub context
 
+        private readonly CBGiftDbContext _context;
+        private readonly ILogger<SellerController> _logger;
+
+        // Cập nhật constructor để inject IHubContext<NotificationHub>
         // Cập nhật constructor để inject IHubContext<NotificationHub>
         public SellerController(
-            IOrderService orderService,
-            IDesignerTaskService designerTaskService,
-            IDesignerSellerService designerSellerservice,
-            IHubContext<NotificationHub> hubContext)   // <-- thêm param
+        IOrderService orderService,
+        IDesignerTaskService designerTaskService,
+        IDesignerSellerService designerSellerservice,
+        IHubContext<NotificationHub> hubContext,
+        CBGiftDbContext context,                // <--- thêm
+        ILogger<SellerController> logger         // <--- thêm
+    )
         {
             _orderService = orderService;
             _designerTaskService = designerTaskService;
             _designerSellerservice = designerSellerservice;
             _hubContext = hubContext;
+            _context = context;                      // <--- gán
+            _logger = logger;                        // <--- gán
         }
 
         // ----------------------------------------------------------------------
@@ -76,6 +88,7 @@ namespace CB_Gift.Controllers
             var orderId = await _orderService.CreateOrderAsync(request, sellerId);
             return Ok(new { message = "Order created successfully.", orderId });
         }
+
 
 
         [HttpGet("{id}")]
@@ -396,6 +409,9 @@ namespace CB_Gift.Controllers
             }
         }
 
+        // ================================
+        // 📌 API GET STATS
+        // ================================
         [HttpGet("stats")]
         public async Task<IActionResult> GetMyOrderStats()
         {
@@ -405,6 +421,120 @@ namespace CB_Gift.Controllers
 
             var stats = await _orderService.GetOrderStatsForSellerAsync(sellerId);
             return Ok(stats);
+        }
+
+        [HttpGet("export")]
+        public async Task<IActionResult> ExportAllOrdersToExcel()
+        {
+            var sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(sellerId))
+                return Unauthorized();
+
+            try
+            {
+                // 🔹 Lấy toàn bộ đơn hàng của seller (join đầy đủ)
+                var orders = await _context.Orders
+                    .Include(o => o.OrderDetails)
+                        .ThenInclude(d => d.ProductVariant)
+                            .ThenInclude(v => v.Product)
+                    .Include(o => o.EndCustomer)
+                    .Include(o => o.StatusOrderNavigation)
+                    .Where(o => o.SellerUserId == sellerId)
+                    .OrderByDescending(o => o.OrderDate)
+                    .ToListAsync();
+
+                using var workbook = new XLWorkbook();
+                var ws = workbook.Worksheets.Add("All Orders");
+
+                // ✅ Header (đã thêm 4 cột mới)
+                string[] headers =
+                {
+            "Order ID", "Order Code", "Order Date", "Customer Name",
+            "Phone", "Email", "Address", "Status", "Total Cost",
+            "Note", "Product Name", "Quantity", "Price", "Production Status",
+            "LinkImg", "LinkThanksCard", "LinkFileDesign", "TimeCreated"
+        };
+
+                for (int i = 0; i < headers.Length; i++)
+                {
+                    ws.Cell(1, i + 1).Value = headers[i];
+                    ws.Cell(1, i + 1).Style.Font.Bold = true;
+                    ws.Cell(1, i + 1).Style.Fill.BackgroundColor = XLColor.LightGray;
+                }
+
+                int row = 2;
+                foreach (var order in orders)
+                {
+                    if (order.OrderDetails != null && order.OrderDetails.Any())
+                    {
+                        foreach (var detail in order.OrderDetails)
+                        {
+                            ws.Cell(row, 1).Value = order.OrderId;
+                            ws.Cell(row, 2).Value = order.OrderCode;
+                            ws.Cell(row, 3).Value = order.OrderDate.ToString("yyyy-MM-dd HH:mm");
+                            ws.Cell(row, 4).Value = order.EndCustomer?.Name ?? "";
+                            ws.Cell(row, 5).Value = order.EndCustomer?.Phone ?? "";
+                            ws.Cell(row, 6).Value = order.EndCustomer?.Email ?? "";
+                            ws.Cell(row, 7).Value = order.EndCustomer?.Address ?? "";
+                            ws.Cell(row, 8).Value = order.StatusOrderNavigation?.NameVi ?? "";
+                            ws.Cell(row, 9).Value = order.TotalCost ?? 0;
+                            ws.Cell(row, 10).Value = ""; // SellerNote (nếu có field thì thay)
+
+                            // ✅ Tên sản phẩm
+                            var productName =
+                                detail.ProductVariant?.Product?.ProductName ??
+                                detail.ProductVariant?.Sku ??
+                                "Unnamed Product";
+                            ws.Cell(row, 11).Value = productName;
+
+                            ws.Cell(row, 12).Value = detail.Quantity;
+                            ws.Cell(row, 13).Value = detail.Price ?? 0;
+                            ws.Cell(row, 14).Value = detail.ProductionStatus?.ToString() ?? "";
+
+                            // ✅ Thêm 4 field mới
+                            ws.Cell(row, 15).Value = detail.LinkImg ?? "";
+                            ws.Cell(row, 16).Value = detail.LinkThanksCard ?? "";
+                            ws.Cell(row, 17).Value = detail.LinkFileDesign ?? "";
+                            ws.Cell(row, 18).Value = detail.CreatedDate?.ToString("yyyy-MM-dd HH:mm") ?? "";
+
+                            row++;
+                        }
+                    }
+                    else
+                    {
+                        // Nếu đơn hàng không có chi tiết
+                        ws.Cell(row, 1).Value = order.OrderId;
+                        ws.Cell(row, 2).Value = order.OrderCode;
+                        ws.Cell(row, 3).Value = order.OrderDate.ToString("yyyy-MM-dd HH:mm");
+                        ws.Cell(row, 4).Value = order.EndCustomer?.Name ?? "";
+                        ws.Cell(row, 5).Value = order.EndCustomer?.Phone ?? "";
+                        ws.Cell(row, 6).Value = order.EndCustomer?.Email ?? "";
+                        ws.Cell(row, 7).Value = order.EndCustomer?.Address ?? "";
+                        ws.Cell(row, 8).Value = order.StatusOrderNavigation?.NameVi ?? "";
+                        ws.Cell(row, 9).Value = order.TotalCost ?? 0;
+                        ws.Cell(row, 10).Value = "";
+                        row++;
+                    }
+                }
+
+                // ✅ Định dạng đẹp
+                ws.Columns().AdjustToContents();
+                ws.SheetView.FreezeRows(1);
+
+                using var ms = new MemoryStream();
+                workbook.SaveAs(ms);
+                ms.Position = 0;
+
+                var fileName = $"AllOrders_{DateTime.Now:yyyy-MM-dd_HH-mm}.xlsx";
+                return File(ms.ToArray(),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    fileName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "ExportAllOrdersToExcel failed");
+                return StatusCode(500, "Error exporting all orders");
+            }
         }
 
 

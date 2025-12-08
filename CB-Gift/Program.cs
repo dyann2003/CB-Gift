@@ -2,9 +2,13 @@
 using CB_Gift.DTOs;
 using CB_Gift.Hubs;
 using CB_Gift.Jobs;
+using CB_Gift.Orders.Import;
 using CB_Gift.Services;
 using CB_Gift.Services.Email;
 using CB_Gift.Services.IService;
+using FluentValidation;
+using CB_Gift.Services.Payments;
+using CB_Gift.Utils;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -12,6 +16,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Quartz;
 using System.Text;
+using CB_Gift.Services.Reports;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -142,6 +147,23 @@ builder.Services.AddHttpClient("GhnDevClient", client =>
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
+// ================== CORS (cho Next.js FE) ==================
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        // THÊM CÁC DOMAIN CỦA VERCEL VÀO ĐÂY
+        policy.WithOrigins(
+            "http://localhost:3000",
+            "https://cb-gift-fe-sby6-mazut4syf-bachquangles-projects.vercel.app", // Domain Preview 
+            "https://cb-gift-fe-sby6.vercel.app" // Domain Production 
+        )
+             .AllowAnyHeader()
+             .AllowAnyMethod()
+             .AllowCredentials(); // SignalR
+    });
+});
+// Luôn đăng ký Service thật vào container, vì thằng Demo cần gọi thằng này
 builder.Services.AddScoped<GhnShippingService>();
 
 var useDemoMode = builder.Configuration.GetValue<bool>("GhnSettings:UseDemoMode");
@@ -162,14 +184,13 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        // Thêm localhost:5173 phòng trường hợp bạn dùng Vite thay vì Next.js
-        policy.WithOrigins("http://localhost:3000", "http://localhost:5173")
+        policy.WithOrigins("http://localhost:3000")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials(); // Bắt buộc để Cookie hoạt động
     });
 });
-
+// Đăng ký CloudinarySettings
 builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
 
 // ================== 7. Register Services (DI) ==================
@@ -197,10 +218,21 @@ builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ICancellationService, CancellationService>();
 builder.Services.AddScoped<IRefundService, RefundService>();
 builder.Services.AddScoped<IReprintService, ReprintService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<PayOSService>();
+builder.Services.AddScoped<VNPayService>();
+builder.Services.AddScoped<PaymentGatewayFactory>();
+builder.Services.AddScoped<VnPayHelper>();
 builder.Services.AddScoped<ILocationService, GhnLocationService>();
 builder.Services.AddScoped<IGhnPrintService, GhnPrintService>();
 
 builder.Services.AddSingleton<NotificationHub>();
+builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<OrderFactory>();
+builder.Services.AddScoped<ReferenceDataCache>();
+builder.Services.AddScoped<IValidator<OrderImportRowDto>, OrderImportRowValidator>();
+builder.Services.AddScoped<IReportService, ReportService>();
+builder.Services.AddScoped<IOrderImportService, OrderImportService>();
 
 // ================== 8. Quartz ==================
 builder.Services.AddQuartz(q =>
@@ -209,11 +241,23 @@ builder.Services.AddQuartz(q =>
     var jobKey = new JobKey("groupOrdersJob");
     q.AddJob<GroupOrdersJob>(opts => opts.WithIdentity(jobKey));
 
+    // Trigger hằng ngày 00:05
     q.AddTrigger(opts => opts
         .ForJob(jobKey)
         .WithIdentity("groupOrdersTrigger")
         .StartNow()
         .WithSchedule(CronScheduleBuilder.DailyAtHourAndMinute(0, 5))
+    );
+    var invoiceJobKey = new JobKey("createMonthlyInvoicesJob");
+    q.AddJob<CreateMonthlyInvoicesJob>(opts => opts.WithIdentity(invoiceJobKey));
+    // 2. Trigger chạy vào ngày 10 hàng tháng, lúc 00:05
+    q.AddTrigger(opts => opts
+        .ForJob(invoiceJobKey)
+        .WithIdentity("monthlyInvoiceTrigger")
+        .StartNow()
+        // Sử dụng builder để đặt lịch: Ngày 10, Giờ 0 (12 AM), Phút 5
+        .WithSchedule(CronScheduleBuilder.MonthlyOnDayAndHourAndMinute(10, 0, 5))
+    // Hoặc Cron Expression: "0 5 0 10 * ?"
     );
 });
 builder.Services.AddQuartzHostedService(options => options.WaitForJobsToComplete = true);

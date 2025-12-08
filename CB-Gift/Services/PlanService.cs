@@ -353,7 +353,7 @@ namespace CB_Gift.Services
                 // Trạng thái chung:
                 ProductionStatus.DRAFT => 1,
                 ProductionStatus.CREATED => 2,
-                ProductionStatus.HOLD => 16,
+                ProductionStatus.HOLD_RF => 16,
                 ProductionStatus.HOLD_RP => 17,
                 ProductionStatus.REFUND => 18,
 

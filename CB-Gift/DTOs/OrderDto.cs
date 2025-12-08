@@ -49,6 +49,7 @@ namespace CB_Gift.DTOs
         public string? StatusOderName { get; set; }
         public string? Reason { get; set; } // lý do Cancel, lý do Refund
         public string? RejectionReason { get; set; } // lý do không được đồng ý
+        public string? ProofUrl { get; set; }
         public int? LatestRefundId { get; set; }
         public bool? IsRefundPending { get; set; }
         public decimal? RefundAmount { get; set; }
@@ -64,7 +65,9 @@ namespace CB_Gift.DTOs
         public int OrderDetailID { get; set; }
         public int ProductVariantID { get; set; }
         public string Size { get; set; }
+        public string Layer { get; set; }
         public string ProductName { get; set; }
+        public string Sku { get; set; }
         public int Quantity { get; set; }
         public decimal? Price { get; set; }
         public ProductionStatus? ProductionStatus { get; set; }
@@ -73,6 +76,7 @@ namespace CB_Gift.DTOs
         public string LinkThanksCard { get; set; }
 
         public string AssignedDesignerUserId { get; set; }
+        public DateTime AssignedAt { get; set; }
 
         public string LinkFileDesign { get; set; }
 
@@ -177,6 +181,9 @@ namespace CB_Gift.DTOs
         public string? ShipState { get; set; }
         public string? ShipCity { get; set; }
         public string? ShipCountry { get; set; }
+        public int? ToProvinceId { get; set; }  // <-- THÊM TRƯỜNG NÀY
+        public int? ToDistrictId { get; set; }  // <-- THÊM TRƯỜNG NÀY
+        public string? ToWardCode { get; set; } // <-- THÊM TRƯỜNG NÀY
     }
     public class OrderCoreUpdateRequest
     {
@@ -185,6 +192,13 @@ namespace CB_Gift.DTOs
         public string? Tracking { get; set; }
         public string? ProductionStatus { get; set; }
         public string? PaymentStatus { get; set; }
+
+        public int? ToProvinceId { get; set; }  // <--- THÊM
+        public int? ToDistrictId { get; set; }  // <--- THÊM
+        public string? ToWardCode { get; set; } // <--- THÊM
+
+        public decimal? TotalCost { get; set; }
+
     }
     public class OrderDetailUpdateRequest
     {
@@ -205,5 +219,48 @@ namespace CB_Gift.DTOs
         public EndCustomerUpdateRequest CustomerInfo { get; set; }
         public OrderCoreUpdateRequest OrderUpdate { get; set; } 
         public List<OrderDetailUpdateRequest> OrderDetailsUpdate { get; set; }
+    }
+
+    // Trong file UpdateAddressRequest.cs (hoặc DTOs/UpdateAddressRequest.cs)
+
+    public class UpdateAddressRequest
+    {
+        // Các trường tên/thông tin liên hệ mà FE đang gửi
+        public string Name { get; set; }
+        public string Phone { get; set; }
+
+        // ✅ THÊM CÁC TRƯỜNG BỊ THIẾU
+        public string Email { get; set; }     // <-- Bị thiếu
+        public string Address { get; set; }   // <-- Bị thiếu
+        public string Address1 { get; set; }
+
+        // Tên địa lý
+        public string? ProvinceName { get; set; }
+        public string? DistrictName { get; set; }
+        public string? WardName { get; set; }
+
+        // ID địa lý (Cho bảng Order)
+        public int? ToProvinceId { get; set; }
+        public int? ToDistrictId { get; set; }
+        public string? ToWardCode { get; set; }
+    }
+
+    public class OrderActivityDto
+    {
+        // Dữ liệu cơ bản cho timeline
+        public DateTime? CreationDate { get; set; }
+        public DateTime? OrderDate { get; set; } // Ngày confirmed
+
+        // --- Danh sách YÊU CẦU REFUND đã tổng hợp ---
+        // Sử dụng RefundDetailsDto (chứa CreatedAt, ReviewedAt, Status, Items)
+        public List<RefundDetailsDto> AllRefunds { get; set; } = new List<RefundDetailsDto>();
+
+        // --- Danh sách YÊU CẦU REPRINT đã tổng hợp ---
+        // Sử dụng ReprintDetailsDto (chứa RequestDate, Status, RequestedItems)
+        public List<ReprintDetailsDto> AllReprints { get; set; } = new List<ReprintDetailsDto>();
+
+        // Dữ liệu cho Order Detail (cần thiết để lấy tên sản phẩm cho mô tả Reprint/Refund nếu không dùng AllReprints/AllRefunds)
+        // Tuy nhiên, vì bạn đã dùng AllRefunds/AllReprints, trường này chỉ cần thiết nếu bạn muốn kiểm tra dữ liệu Order Detail cơ bản.
+        // Tôi sẽ giữ nó ở dạng List ID để làm nhẹ DTO nhất có thể, hoặc bỏ qua nếu không cần.
     }
 }

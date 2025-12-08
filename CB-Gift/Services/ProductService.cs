@@ -3,6 +3,7 @@ using CB_Gift.Data;
 using CB_Gift.DTOs;
 using CB_Gift.Models;
 using CB_Gift.Services.IService;
+using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 
 namespace CB_Gift.Services
@@ -18,12 +19,13 @@ namespace CB_Gift.Services
             _mapper = mapper;
         }
 
-        // 🔹 Get all products
+        // 🔹 Get all products with status = 1
         public async Task<IEnumerable<ProductDto>> GetAllAsync()
         {
             var products = await _context.Products
                 .Include(p => p.Category)
                 .Include(p => p.ProductVariants)
+                .Where(p => p.Status == 1) // Thêm dòng này để lọc
                 .ToListAsync();
 
             return _mapper.Map<IEnumerable<ProductDto>>(products);
@@ -259,6 +261,298 @@ namespace CB_Gift.Services
 
             return (products.Count, updated);
         }
+
+        public async Task<(IEnumerable<ProductDto> products, int total)>
+   GetFilteredAndPagedProductsAsync(
+       string? searchTerm,
+       int? status,
+       string? sortColumn,
+       string? sortDirection,
+       int page,
+       int pageSize)
+        {
+            var query = _context.Products
+                .Include(p => p.Category)
+                .Include(p => p.ProductVariants)
+                .Include(p => p.Tags)
+                .AsNoTracking()
+                .AsQueryable();
+
+            // 🔍 Filter Status
+            if (status.HasValue)
+            {
+                query = query.Where(p => p.Status == status.Value);
+            }
+
+            // 🔍 Search
+            if (!string.IsNullOrEmpty(searchTerm))
+            {
+                searchTerm = searchTerm.ToLower();
+
+                query = query.Where(p =>
+                    p.ProductName.ToLower().Contains(searchTerm) ||
+                    (p.Category != null && p.Category.CategoryName.ToLower().Contains(searchTerm)) ||
+                    p.Tags.Any(t => t.TagName.ToLower().Contains(searchTerm) ||
+                                    t.TagCode.ToLower().Contains(searchTerm))
+                );
+            }
+
+            // 🔍 Sort
+            query = sortColumn?.ToLower() switch
+            {
+                "name" => sortDirection == "asc"
+                    ? query.OrderBy(p => p.ProductName)
+                    : query.OrderByDescending(p => p.ProductName),
+
+                "price" => sortDirection == "asc"
+                    ? query.OrderBy(p => p.ProductVariants.Min(v => (decimal?)v.TotalCost))
+                    : query.OrderByDescending(p => p.ProductVariants.Min(v => (decimal?)v.TotalCost)),
+
+                "category" => sortDirection == "asc"
+                    ? query.OrderBy(p => p.Category.CategoryName)
+                    : query.OrderByDescending(p => p.Category.CategoryName),
+
+                _ => query.OrderByDescending(p => p.ProductId)
+            };
+
+            // 📌 Total for pagination
+            var total = await query.CountAsync();
+
+            // 📌 Pagination
+            var result = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            // Mapping to ProductDto
+            var mapped = _mapper.Map<IEnumerable<ProductDto>>(result);
+
+            return (mapped, total);
+        }
+
+        public async Task<(int total, List<ProductDto> products)> FilterProductsAsync(
+    string? searchTerm,
+    string? category,
+    int? status,
+    int page,
+    int pageSize)
+        {
+            var query = _context.Products
+                .Include(p => p.Category)
+                .Include(p => p.ProductVariants)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                query = query.Where(p =>
+                    p.ProductName.Contains(searchTerm) ||
+                    (p.ProductCode != null && p.ProductCode.Contains(searchTerm)) ||
+                    (p.Describe != null && p.Describe.Contains(searchTerm))
+                );
+            }
+
+            if (!string.IsNullOrWhiteSpace(category))
+            {
+                query = query.Where(p => p.Category.CategoryName == category);
+            }
+
+            if (status.HasValue)
+            {
+                query = query.Where(p => p.Status == status);
+            }
+
+            var total = await query.CountAsync();
+
+            var list = await query
+                .OrderByDescending(p => p.ProductId)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(p => new ProductDto
+                {
+                    ProductId = p.ProductId,
+                    ProductName = p.ProductName,
+                    ProductCode = p.ProductCode,
+                    CategoryId = p.CategoryId,
+                    CategoryName = p.Category.CategoryName,
+                    Describe = p.Describe,
+                    ItemLink = p.ItemLink,
+                    Template = p.Template,
+                    Status = p.Status,
+                    Variants = p.ProductVariants.Select(v => new ProductVariantDto
+                    {
+                        ProductVariantId = v.ProductVariantId,
+                        LengthCm = v.LengthCm,
+                        HeightCm = v.HeightCm,
+                        WidthCm = v.WidthCm,
+                        WeightGram = v.WeightGram,
+                        ShipCost = v.ShipCost,
+                        BaseCost = v.BaseCost,
+                        ThicknessMm = v.ThicknessMm,
+                        SizeInch = v.SizeInch,
+                        Layer = v.Layer,
+                        CustomShape = v.CustomShape,
+                        Sku = v.Sku,
+                        ExtraShipping = v.ExtraShipping,
+                        TotalCost = v.TotalCost
+                    }).ToList()
+                })
+                .ToListAsync();
+
+            return (total, list);
+        }
+
+        // 🟢 THÊM: Phương thức tìm ProductId và Variants từ ProductVariantId
+        public async Task<ProductDto?> GetProductByVariantIdAsync(int productVariantId)
+        {
+            // 1. Tìm ProductVariant dựa trên ID
+            var productVariant = await _context.ProductVariants
+                .Include(v => v.Product) // Tải thông tin Product cha (navigation property)
+                .ThenInclude(p => p.ProductVariants) // Tải tất cả các Variants của Product cha
+                .FirstOrDefaultAsync(v => v.ProductVariantId == productVariantId);
+
+            if (productVariant == null || productVariant.Product == null)
+            {
+                return null; // Không tìm thấy variant hoặc product cha
+            }
+
+            // 2. Map Product cha sang DTO. (Nó sẽ tự động chứa ProductId và mảng Variants đầy đủ)
+            return _mapper.Map<ProductDto>(productVariant.Product);
+        }
+        public async Task<byte[]> ExportProductMasterDataAsync()
+        {
+            // 1. Lấy dữ liệu
+            var products = await _context.Products
+                .Include(p => p.ProductVariants)
+                .Include(p => p.Category)
+                .Where(p => p.Status != 0)
+                .OrderBy(p => p.ProductName)
+                .ToListAsync();
+
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Product Master Data");
+
+            // 2. Header
+            var headers = new[]
+            {
+                "Category", "Product Name", "Product Code", "Item Link", "Description", "Template Link", // Cột 1-6 (Sẽ Merge)
+                "Variant SKU", "Size (Inch)", "Layer/Shape", "Thickness (mm)", // Cột 7-10
+                "Base Cost", "Ship Cost", "Extra Shipping", // Cột 11-13
+                "Weight (g)", "Length (cm)", "Width (cm)", "Height (cm)" // Cột 14-17
+            };
+
+            for (int i = 0; i < headers.Length; i++)
+            {
+                worksheet.Cell(1, i + 1).Value = headers[i];
+            }
+
+            var headerRange = worksheet.Range(1, 1, 1, headers.Length);
+            headerRange.Style.Font.Bold = true;
+            headerRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#4F81BD");
+            headerRange.Style.Font.FontColor = XLColor.White;
+            headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            headerRange.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+            // 3. Đổ dữ liệu & Merge
+            int currentRow = 2;
+
+            foreach (var product in products)
+            {
+                string catName = product.Category?.CategoryName ?? "";
+                int variantCount = product.ProductVariants?.Count ?? 0;
+
+                // --- TRƯỜNG HỢP 1: KHÔNG CÓ VARIANT ---
+                if (variantCount == 0)
+                {
+                    FillProductInfo(worksheet, currentRow, catName, product);
+                    worksheet.Cell(currentRow, 7).Value = "NO_VARIANT";
+                    currentRow++;
+                    continue;
+                }
+
+                // --- TRƯỜNG HỢP 2: CÓ VARIANT (XỬ LÝ MERGE) ---
+
+                // A. Điền thông tin Product vào dòng đầu tiên của nhóm
+                FillProductInfo(worksheet, currentRow, catName, product);
+
+                // B. Nếu có nhiều hơn 1 variant -> Thực hiện Merge các cột Product (1 -> 6)
+                if (variantCount > 1)
+                {
+                    int endRow = currentRow + variantCount - 1;
+
+                    // Merge cột 1 đến cột 6
+                    for (int col = 1; col <= 6; col++)
+                    {
+                        var rangeToMerge = worksheet.Range(currentRow, col, endRow, col);
+                        rangeToMerge.Merge();
+
+                        // Căn giữa theo chiều dọc để nhìn đẹp hơn
+                        rangeToMerge.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                    }
+                }
+                else
+                {
+                    // Nếu chỉ có 1 variant thì không merge, nhưng vẫn căn giữa cho đẹp
+                    worksheet.Range(currentRow, 1, currentRow, 6).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                }
+
+                // C. Loop điền thông tin chi tiết Variant (Các cột 7 trở đi)
+                foreach (var variant in product.ProductVariants)
+                {
+                    // Lưu ý: Không điền lại cột 1-6 nữa vì đã merge hoặc điền ở dòng đầu rồi
+
+                    worksheet.Cell(currentRow, 7).Value = variant.Sku;
+                    worksheet.Cell(currentRow, 8).Value = variant.SizeInch;
+
+                    string layerInfo = variant.Layer;
+                    if (!string.IsNullOrEmpty(variant.CustomShape)) layerInfo += $" - {variant.CustomShape}";
+                    worksheet.Cell(currentRow, 9).Value = layerInfo;
+
+                    worksheet.Cell(currentRow, 10).Value = variant.ThicknessMm;
+
+                    worksheet.Cell(currentRow, 11).Value = variant.BaseCost;
+                    worksheet.Cell(currentRow, 12).Value = variant.ShipCost;
+                    worksheet.Cell(currentRow, 13).Value = variant.ExtraShipping;
+
+                    worksheet.Cell(currentRow, 14).Value = variant.WeightGram;
+                    worksheet.Cell(currentRow, 15).Value = variant.LengthCm;
+                    worksheet.Cell(currentRow, 16).Value = variant.WidthCm;
+                    worksheet.Cell(currentRow, 17).Value = variant.HeightCm;
+
+                    // Xuống dòng tiếp theo
+                    currentRow++;
+                }
+            }
+
+            // 4. Format Layout
+            worksheet.Columns().AdjustToContents();
+
+            // Giới hạn độ rộng và wrap text cho các cột dài
+            worksheet.Column(4).Width = 30; // Item Link
+            worksheet.Column(5).Width = 40; // Description
+            worksheet.Column(5).Style.Alignment.WrapText = true; // Xuống dòng cho Description
+            worksheet.Column(6).Width = 30; // Template
+
+            // Thêm viền (Border) cho toàn bộ bảng dữ liệu để dễ nhìn các ô đã merge
+            var dataRange = worksheet.Range(1, 1, currentRow - 1, 17);
+            dataRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+            dataRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            return stream.ToArray();
+        }
+
+        private void FillProductInfo(IXLWorksheet ws, int row, string catName, Product p)
+        {
+            ws.Cell(row, 1).Value = catName;
+            ws.Cell(row, 2).Value = p.ProductName;
+            ws.Cell(row, 3).Value = p.ProductCode;
+            ws.Cell(row, 4).Value = p.ItemLink;
+            ws.Cell(row, 5).Value = p.Describe;
+            ws.Cell(row, 6).Value = p.Template;
+        }
+
+
     }
    
 }

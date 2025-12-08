@@ -53,7 +53,7 @@ namespace CB_Gift.Services
             }
 
             // 5. Tạo URL QR Code
-            string frontendUrl = $"http://localhost:3000/qc/order-detail/{orderDetailId}";
+            string frontendUrl = $"https://cb-gift-fe-sby6.vercel.app/qc/order-detail/{orderDetailId}";
             string qrUrl = $"https://api.qrserver.com/v1/create-qr-code/?size=400x400&data={System.Net.WebUtility.UrlEncode(frontendUrl)}";
             string orderCode = detail.Order.OrderCode + "_" + totalItems + "IT_" + itemIndex;
             return new

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
 import StaffSidebar from "@/components/layout/staff/sidebar";
 import StaffHeader from "@/components/layout/staff/header";
 import { Layers } from "lucide-react"; // Import thêm icon cho nút mới
@@ -118,7 +117,9 @@ export default function NeedsProductionPage() {
 
       try {
         const response = await fetch(
-          `${apiClient.defaults.baseURL}/api/plan/staff-view?${params.toString()}`
+          `${
+            apiClient.defaults.baseURL
+          }/api/plan/staff-view?${params.toString()}`
         );
         if (!response.ok)
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -150,13 +151,13 @@ export default function NeedsProductionPage() {
       }
 
       // Nếu thành công
-      alert("Các đơn hàng đã được gom thành công!");
+      alert("Orders have been grouped successfully!");
 
       // Kích hoạt useEffect để tải lại dữ liệu mới nhất
       setUpdateTrigger((prev) => prev + 1);
     } catch (error) {
       console.error("Failed to group submitted orders:", error);
-      alert(`Lỗi khi gom đơn: ${error.message}`);
+      alert(`Error grouping orders: ${error.message}`);
     } finally {
       setIsGrouping(false); // Dừng loading dù thành công hay thất bại
     }
@@ -185,6 +186,14 @@ export default function NeedsProductionPage() {
     }
   };
 
+  const handleMarkProduced = async (detail) => {
+    await handleUpdateStatus(detail.planDetailId, 8);
+  };
+
+  const handleReproduction = async (detail) => {
+    await handleUpdateStatus(detail.planDetailId, 7);
+  };
+
   const getUniqueCategories = () => {
     const categories = productionData.map((item) => ({
       id: item.categoryId,
@@ -200,7 +209,7 @@ export default function NeedsProductionPage() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <StaffHeader />
 
-        <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
+        <main className="flex-1 overflow-y-auto bg-blue-50 p-6">
           <div className="max-w-7xl mx-auto">
             <div className="mb-8">
               <div className="bg-white p-4 sm:p-6 rounded-lg border-2 border-blue-200 shadow-sm">
@@ -230,9 +239,9 @@ export default function NeedsProductionPage() {
             </div>
 
             {/* Filters */}
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-8 flex items-center flex-wrap gap-4">
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-blue-100 mb-8 flex items-center flex-wrap gap-4">
               <FilterIcon />
-              <h3 className="text-md font-semibold text-gray-700 mr-4">
+              <h3 className="text-md font-semibold text-slate-700 mr-4">
                 Filters:
               </h3>
 
@@ -243,7 +252,7 @@ export default function NeedsProductionPage() {
                     e.target.value ? Number.parseInt(e.target.value) : null
                   )
                 }
-                className="bg-gray-100 border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                className="bg-blue-50 border border-blue-100 rounded-md shadow-sm p-2 text-sm text-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="">All Product Types</option>
                 {getUniqueCategories().map((cat) => (
@@ -257,14 +266,14 @@ export default function NeedsProductionPage() {
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="bg-gray-100 border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                className="bg-blue-50 border border-blue-100 rounded-md shadow-sm p-2 text-sm text-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
               <button
                 onClick={() => {
                   setSelectedCategory(null);
                   setSelectedDate("");
                 }}
-                className="text-sm text-blue-600 hover:underline ml-auto pr-2"
+                className="text-sm text-blue-600 hover:text-blue-800 hover:underline ml-auto pr-2"
               >
                 Clear Filters
               </button>
@@ -273,23 +282,23 @@ export default function NeedsProductionPage() {
             {/* Content Area */}
             <div className="space-y-8">
               {isLoading ? (
-                <div className="text-center py-10 bg-white rounded-lg shadow-md">
-                  <p className="text-gray-500">Loading...</p>
+                <div className="text-center py-10 bg-white rounded-lg shadow-md border border-blue-100">
+                  <p className="text-slate-500">Loading...</p>
                 </div>
               ) : error ? (
-                <div className="text-center py-10 bg-white rounded-lg shadow-md">
+                <div className="text-center py-10 bg-white rounded-lg shadow-md border border-blue-100">
                   <p className="text-red-500 font-semibold">{error}</p>
                 </div>
               ) : productionData.length === 0 ? (
-                <div className="text-center py-10 bg-white rounded-lg shadow-md">
-                  <p className="text-gray-500">No orders found.</p>
+                <div className="text-center py-10 bg-white rounded-lg shadow-md border border-blue-100">
+                  <p className="text-slate-500">No orders found.</p>
                 </div>
               ) : (
                 productionData.map((category) => (
                   <div key={category.categoryId}>
-                    <h2 className="text-2xl font-bold text-gray-700">
+                    <h2 className="text-2xl font-bold text-slate-800">
                       {category.categoryName}
-                      <span className="text-lg font-medium text-gray-500 ml-2">
+                      <span className="text-lg font-medium text-slate-600 ml-2">
                         ({category.totalItems} orders)
                       </span>
                     </h2>
@@ -297,10 +306,10 @@ export default function NeedsProductionPage() {
                       {category.dateGroups.map((dateGroup) => (
                         <div
                           key={dateGroup.groupDate}
-                          className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200"
+                          className="bg-white rounded-xl shadow-md overflow-hidden border border-blue-100"
                         >
-                          <div className="bg-yellow-300 p-3">
-                            <h3 className="font-bold text-yellow-800">
+                          <div className="bg-slate-200 p-3">
+                            <h3 className="font-bold text-slate-900">
                               {new Date(dateGroup.groupDate).toLocaleDateString(
                                 "en-US",
                                 {
@@ -316,68 +325,71 @@ export default function NeedsProductionPage() {
                           </div>
                           <div className="overflow-x-auto">
                             <table className="min-w-full text-sm">
-                              <thead className="bg-gray-50">
+                              <thead className="bg-blue-50">
                                 <tr>
-                                  <th className="p-3 text-left font-semibold text-gray-600 w-12">
+                                  <th className="p-3 text-left font-semibold text-slate-700 w-12">
                                     #
                                   </th>
-                                  <th className="p-3 text-left font-semibold text-gray-600 w-24">
+                                  <th className="p-3 text-left font-semibold text-slate-700 w-24">
                                     Image
                                   </th>
-                                  <th className="p-3 text-left font-semibold text-gray-600">
+                                  <th className="p-3 text-left font-semibold text-slate-700">
                                     Name
                                   </th>
-                                  <th className="p-3 text-center font-semibold text-gray-600">
+                                  <th className="p-3 text-center font-semibold text-slate-700">
                                     Quantity
                                   </th>
-                                  <th className="p-3 text-left font-semibold text-gray-600">
+                                  <th className="p-3 text-left font-semibold text-slate-700">
                                     Note
                                   </th>
-                                  <th
-                                    className="p-3 text-center font-semibold text-gray-600"
-                                    colSpan="4"
-                                  >
+                                  <th className="p-3 text-center font-semibold text-slate-700">
                                     Documents
                                   </th>
-                                  <th className="p-3 text-left font-semibold text-gray-600">
+                                  <th className="p-3 text-left font-semibold text-slate-700">
                                     Status
                                   </th>
-                                  <th className="p-3 text-left font-semibold text-gray-600">
+                                  <th className="p-3 text-left font-semibold text-slate-700">
                                     Action
                                   </th>
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-gray-200">
+                              <tbody className="divide-y divide-blue-100">
                                 {dateGroup.details.map((detail, index) => (
                                   <tr
                                     key={detail.planDetailId}
-                                    className="hover:bg-gray-50"
+                                    className="hover:bg-blue-50 transition-colors"
                                   >
-                                    <td className="p-3 text-center text-gray-500">
+                                    <td className="p-3 text-center text-slate-500">
                                       {index + 1}
                                     </td>
                                     <td className="p-3">
                                       <img
                                         src={
                                           detail.imageUrl ||
-                                          "https://placehold.co/100x100/e2e8f0/adb5bd?text=N/A"
+                                          "https://placehold.co/100x100/e2e8f0/adb5bd?text=N/A" ||
+                                          "/placeholder.svg" ||
+                                          "/placeholder.svg" ||
+                                          "/placeholder.svg" ||
+                                          "/placeholder.svg" ||
+                                          "/placeholder.svg" ||
+                                          "/placeholder.svg"
                                         }
                                         alt={detail.customerName}
-                                        className="w-16 h-16 object-cover rounded-md border"
+                                        className="w-16 h-16 object-cover rounded-md border border-blue-100"
                                       />
                                     </td>
                                     <td className="p-3">
-                                      <div className="font-bold text-gray-800">
+                                      <div className="font-bold text-slate-800">
                                         {detail.customerName}
                                       </div>
-                                      <div className="text-xs text-gray-500">
+                                      <div className="text-xs text-slate-500">
                                         {detail.orderCode}
                                       </div>
                                     </td>
-                                    <td className="p-3 text-center font-medium text-gray-700">
+                                    <td className="p-3 text-center font-medium text-slate-700">
                                       {detail.quantity}
                                     </td>
-                                    <td className="p-3 text-gray-600 max-w-xs">
+                                    <td className="p-3 text-slate-600 max-w-xs">
                                       {/* Hiển thị Note (nếu có) */}
                                       {detail.noteOrEngravingContent ? (
                                         <div
@@ -387,7 +399,7 @@ export default function NeedsProductionPage() {
                                           {detail.noteOrEngravingContent}
                                         </div>
                                       ) : (
-                                        <span className="text-gray-400 italic">
+                                        <span className="text-slate-400 italic">
                                           N/A
                                         </span>
                                       )}
@@ -403,65 +415,55 @@ export default function NeedsProductionPage() {
                                         </div>
                                       )}
                                     </td>
-                                    <td className="p-3 text-center">
-                                      <a
-                                        href={detail.productionFileUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 hover:underline disabled:opacity-50"
-                                      >
-                                        <DownloadIcon /> Download File
-                                      </a>
-                                    </td>
-                                    <td className="p-3 text-center">
-                                      <a
-                                        href={detail.thankYouCardUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-2 text-green-600 hover:text-green-800 hover:underline"
-                                      >
-                                        <CardIcon /> Download Card
-                                      </a>
-                                    </td>
-                                    <td className="p-3 text-center">
-                                      <a
-                                        href="#"
-                                        className="inline-flex items-center gap-2 text-purple-600 hover:text-purple-800 hover:underline"
-                                      >
-                                        <LabelIcon /> Print Label
-                                      </a>
-                                    </td>
-                                    <td className="p-3 text-center">
-                                      <Link
-                                        href={`/staff/qr-code/${detail.orderDetailId}`}
-                                        className="inline-flex items-center gap-2 text-orange-600 hover:text-orange-800 hover:underline"
-                                      >
-                                        <QrCodeIcon /> View QR
-                                      </Link>
+                                    <td className="p-3">
+                                      <div className="flex flex-wrap gap-2 justify-center">
+                                        <a
+                                          href={detail.productionFileUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline text-xs"
+                                        >
+                                          <DownloadIcon /> File
+                                        </a>
+                                        <a
+                                          href={detail.thankYouCardUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="inline-flex items-center gap-1 text-green-600 hover:text-green-800 hover:underline text-xs"
+                                        >
+                                          <CardIcon /> Card
+                                        </a>
+                                        <button className="inline-flex items-center gap-1 text-purple-600 hover:text-purple-800 text-xs">
+                                          <LabelIcon /> Label
+                                        </button>
+                                        <button className="inline-flex items-center gap-1 text-orange-600 hover:text-orange-800 text-xs">
+                                          <QrCodeIcon /> QR
+                                        </button>
+                                      </div>
                                     </td>
                                     <td className="p-3">
                                       {detail.statusOrder === 6 && (
-                                        <span className="inline-flex items-center bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                                          <span className="w-2 h-2 me-1 bg-gray-500 rounded-full"></span>
-                                          Chờ sản xuất
+                                        <span className="inline-flex items-center bg-slate-100 text-slate-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                                          <span className="w-2 h-2 me-1 bg-slate-500 rounded-full"></span>
+                                          Waiting for Production
                                         </span>
                                       )}
                                       {detail.statusOrder === 11 && (
-                                        <span className="inline-flex items-center bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                                        <span className="inline-flex items-center bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
                                           <span className="w-2 h-2 me-1 bg-red-500 rounded-full"></span>
-                                          Sản xuất lỗi
+                                          Production Failed
                                         </span>
                                       )}
                                       {detail.statusOrder === 7 && (
-                                        <span className="inline-flex items-center bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                                          <span className="w-2 h-2 me-1 bg-yellow-500 rounded-full"></span>
-                                          Đang sản xuất
+                                        <span className="inline-flex items-center bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                                          <span className="w-2 h-2 me-1 bg-blue-500 rounded-full"></span>
+                                          Production In Progress
                                         </span>
                                       )}
                                       {detail.statusOrder === 8 && (
-                                        <span className="inline-flex items-center bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                                        <span className="inline-flex items-center bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
                                           <span className="w-2 h-2 me-1 bg-green-500 rounded-full"></span>
-                                          Đã hoàn thành
+                                          Completed
                                         </span>
                                       )}
                                     </td>
@@ -474,35 +476,29 @@ export default function NeedsProductionPage() {
                                               7
                                             )
                                           }
-                                          className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition"
+                                          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition font-medium text-sm"
                                         >
-                                          Bắt đầu sản xuất
+                                          Start Production
                                         </button>
                                       )}
                                       {detail.statusOrder === 11 && (
                                         <button
                                           onClick={() =>
-                                            handleUpdateStatus(
-                                              detail.planDetailId,
-                                              7
-                                            )
+                                            handleReproduction(detail)
                                           }
-                                          className="bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition"
+                                          className="bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition font-medium text-sm"
                                         >
-                                          Sản xuất lại
+                                          Reproduce
                                         </button>
                                       )}
                                       {detail.statusOrder === 7 && (
                                         <button
                                           onClick={() =>
-                                            handleUpdateStatus(
-                                              detail.planDetailId,
-                                              8
-                                            )
+                                            handleMarkProduced(detail)
                                           }
-                                          className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition"
+                                          className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition font-medium text-sm"
                                         >
-                                          Hoàn thành
+                                          Mark as Produced
                                         </button>
                                       )}
                                     </td>
