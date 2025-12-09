@@ -44,7 +44,6 @@ namespace CB_Gift.Services
 
             bool alreadyPending = await _context.Refunds.AnyAsync(
                 r => r.OrderId == orderId && r.Status == "Pending");
-
             if (alreadyPending)
                 throw new InvalidOperationException("Đơn hàng này đã có một yêu cầu hoàn tiền đang chờ xử lý.");
 
@@ -209,23 +208,39 @@ namespace CB_Gift.Services
         public async Task RequestRefundAsync(RefundRequestDto request, string sellerId)
         {
             if (request.Items == null || !request.Items.Any())
-                throw new ArgumentException("Yêu cầu hoàn tiền phải chọn ít nhất một chi tiết sản phẩm.");
+                throw new ArgumentException("Refund requests must include at least one product detail.");
 
-            // 1. TÌM ORDER GỐC (chỉ để xác thực và PaymentStatus)
+            // 1. FIND ORIGINAL ORDER (for validation + PaymentStatus)
             var order = await _context.Orders
                 .Include(o => o.OrderDetails)
                 .FirstOrDefaultAsync(o => o.OrderId == request.OrderId && o.SellerUserId == sellerId);
 
             if (order == null)
-                throw new KeyNotFoundException($"Không tìm thấy đơn hàng ID: {request.OrderId} hoặc bạn không có quyền truy cập.");
+                throw new KeyNotFoundException($"Order ID: {request.OrderId} not found or you do not have access permission.");
 
             if (order.PaymentStatus != "Paid")
-                throw new InvalidOperationException("Chỉ có thể yêu cầu hoàn tiền cho đơn hàng đã được thanh toán.");
+                throw new InvalidOperationException("Refund requests are only allowed for orders that have been paid.");
+
+            // 🔥 NEW: CHECK DELIVERED & ≤ 3 DAYS
+            var shippedLog = await _context.GhnTrackingLogs
+                .Where(g => g.OrderCode == order.Tracking && g.Status == "delivered")
+                .OrderByDescending(g => g.UpdatedDate)
+                .FirstOrDefaultAsync();
+
+            if (shippedLog == null)
+                throw new InvalidOperationException(
+                    $"Order {order.OrderCode} does not have 'delivered' status from GHN → refund request cannot be submitted.");
+
+            var daysSinceDelivered = (DateTime.Now - shippedLog.UpdatedDate).TotalDays;
+
+            if (daysSinceDelivered > 3)
+                throw new InvalidOperationException(
+                    $"Order {order.OrderCode} was delivered {Math.Floor(daysSinceDelivered)} days ago. Refund requests are only allowed within 3 days.");
 
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // 2. LẶP QUA CÁC ITEMS VÀ TẠO NHIỀU BẢN GHI REFUND
+                // 2. LOOP ITEMS AND CREATE MULTIPLE REFUND RECORDS
                 var newRefunds = new List<Refund>();
                 decimal totalRequestedAmount = 0;
 
@@ -234,24 +249,35 @@ namespace CB_Gift.Services
                     var orderDetail = order.OrderDetails.FirstOrDefault(od => od.OrderDetailId == itemRequest.OrderDetailId);
 
                     if (orderDetail == null)
-                        throw new KeyNotFoundException($"Không tìm thấy chi tiết sản phẩm ID: {itemRequest.OrderDetailId} trong đơn hàng.");
-                    //set orderdetail = HOLF_RF
-                    orderDetail.ProductionStatus = Models.Enums.ProductionStatus.HOLD_RF;
-                    if (itemRequest.RequestedAmount <= 0)
-                        throw new ArgumentException($"Số tiền hoàn lại cho sản phẩm {itemRequest.OrderDetailId} phải lớn hơn 0.");
+                        throw new KeyNotFoundException($"Product detail ID: {itemRequest.OrderDetailId} not found in this order.");
 
-                    // KIỂM TRA TRÙNG LẶP YÊU CẦU PENDING CHO CHI TIẾT NÀY
+                    // Set OrderDetail to HOLD_RF
+                    orderDetail.ProductionStatus = Models.Enums.ProductionStatus.HOLD_RF;
+
+                    if (itemRequest.RequestedAmount <= 0)
+                        throw new ArgumentException($"Refund amount for product {itemRequest.OrderDetailId} must be greater than 0.");
+
+                    // CHECK EXISTING PENDING REFUND
                     bool alreadyPending = await _context.Refunds.AnyAsync(
                         r => r.OrderDetailId == itemRequest.OrderDetailId && r.Status == "Pending");
 
                     if (alreadyPending)
-                        throw new InvalidOperationException($"Chi tiết sản phẩm ID: {itemRequest.OrderDetailId} đã có yêu cầu hoàn tiền đang chờ.");
+                        throw new InvalidOperationException(
+                            $"Product detail ID: {itemRequest.OrderDetailId} already has a pending refund request.");
 
-                    // TẠO RECORD REFUND MỚI (Cấp OrderDetail)
+                    // ❗ NEW: CHECK PENDING REPRINT
+                    bool hasReprintPending = await _context.Reprints.AnyAsync(
+                        rp => rp.OriginalOrderDetailId == itemRequest.OrderDetailId && rp.Status == "Pending");
+
+                    if (hasReprintPending)
+                        throw new InvalidOperationException(
+                            $"Product detail ID: {itemRequest.OrderDetailId} currently has a pending reprint request. Refund request cannot proceed.");
+
+                    // CREATE NEW REFUND RECORD
                     var newRefund = new Refund
                     {
-                        OrderId = request.OrderId, // Liên kết với Order gốc
-                        OrderDetailId = itemRequest.OrderDetailId, // Khóa ngoại cụ thể
+                        OrderId = request.OrderId,
+                        OrderDetailId = itemRequest.OrderDetailId,
                         RequestedBySellerId = sellerId,
                         Amount = itemRequest.RequestedAmount,
                         Reason = request.Reason,
@@ -259,24 +285,22 @@ namespace CB_Gift.Services
                         Status = "Pending",
                         CreatedAt = DateTime.UtcNow
                     };
+
                     newRefunds.Add(newRefund);
                     totalRequestedAmount += itemRequest.RequestedAmount;
                 }
 
                 _context.Refunds.AddRange(newRefunds);
 
-                // 3. CẬP NHẬT TRẠNG THÁI ORDER GỐC
-                order.StatusOrder = 16; // 16 = HOLD_RF 
+                // 3. UPDATE MAIN ORDER STATUS
+                order.StatusOrder = 16; // 16 = HOLD_RF
 
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                // 4. GỬI THÔNG BÁO (SignalR/Email)
-                // ... (Logic SignalR tương tự như cũ) ...
-                // 4. GỬI THÔNG BÁO (SignalR/Notification)
+                // 4. SEND NOTIFICATION (SignalR/Notification)
                 try
                 {
-                    // Gửi thông báo đến Staff dashboards (SignalR)
                     await _hubContext.Clients.Group("StaffNotifications").SendAsync(
                         "NewRefundRequest",
                         new
@@ -288,25 +312,27 @@ namespace CB_Gift.Services
                         }
                     );
 
-                    // Thêm notification vào DB cho Staff
                     await _notificationService.CreateAndSendNotificationAsync(
-                        "StaffGroup", // Gửi tới nhóm Staff
-                        $"Yêu cầu hoàn tiền mới cho Order #{order.OrderCode} ({newRefunds.Count} items). Tổng: {totalRequestedAmount:N0}đ",
-                        $"/manager/refund-reprint-review" // Đường dẫn xem yêu cầu
+                        "StaffGroup",
+                        $"New refund request for Order #{order.OrderCode} ({newRefunds.Count} items). Total: {totalRequestedAmount:N0}đ",
+                        $"/manager/refund-reprint-review"
                     );
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho RequestRefundAsync (OrderID: {OrderId})", request.OrderId);
+                    _logger.LogError(ex,
+                        "Error sending SignalR notifications in RequestRefundAsync (OrderID: {OrderId})",
+                        request.OrderId);
                 }
             }
             catch (Exception ex)
             {
                 transaction.Rollback();
-                _logger.LogError(ex, "Lỗi khi yêu cầu hoàn tiền cho Order {OrderId}", request.OrderId);
+                _logger.LogError(ex, "Error processing refund request for Order {OrderId}", request.OrderId);
                 throw;
             }
         }
+
         // --- HÀM DUYỆT YÊU CẦU HOÀN TIỀN (Review Refund) --- hàm logic mới
         public async Task ReviewRefundAsync(int refundId, ReviewRefundDto request, string staffId)
         {

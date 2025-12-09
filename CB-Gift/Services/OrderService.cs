@@ -178,52 +178,51 @@ namespace CB_Gift.Services
             .ToListAsync();
         }
 
-        public async Task<OrderWithDetailsDto?> GetOrderDetailAsync(int orderId, string sellerUserId)
+        public async Task<OrderWithDetailsDto?> GetOrderDetailAsync(
+           int orderId,
+           string userId,
+           List<string> roles)
         {
             var query = _context.Orders
                 .Include(o => o.OrderDetails)
-                .Include(o => o.EndCustomer) // Thêm Include để lấy thông tin khách hàng đầy đủ
+                .Include(o => o.EndCustomer)
                 .Include(o => o.StatusOrderNavigation)
-                 .Include(o => o.OrderDetails) // Lấy details
-                    .ThenInclude(od => od.ProductVariant) // Lấy ProductVariant
+                .Include(o => o.OrderDetails)
+                    .ThenInclude(od => od.ProductVariant)
                 .Where(o => o.OrderId == orderId);
 
-            if (!string.IsNullOrEmpty(sellerUserId))
+            // --- AUTHORIZATION LOGIC ---
+            var adminRoles = new[] { "Manager", "QC", "Staff", "Designer" };
+
+            if (!roles.Any(r => adminRoles.Contains(r)))
             {
-                query = query.Where(o => o.SellerUserId == sellerUserId);
+                // USER LÀ SELLER → CHỈ XEM ĐƠN CỦA CHÍNH MÌNH
+                query = query.Where(o => o.SellerUserId == userId);
             }
 
-
-            // Map trực tiếp sang DTO gồm cả collection Details
             var dto = await query
-            .ProjectTo<OrderWithDetailsDto>(_mapper.ConfigurationProvider)
-            .FirstOrDefaultAsync();
-            // Nếu không tìm thấy đơn (hoặc không thuộc về seller này), trả về null luôn
-            if (dto == null) return null;
+                .ProjectTo<OrderWithDetailsDto>(_mapper.ConfigurationProvider)
+                .FirstOrDefaultAsync();
 
-            // 3. 👇 BỔ SUNG: Truy vấn thủ công bảng Refunds và CancellationRequests
-            // (Copy logic từ GetManagerOrderDetailAsync sang)
+            if (dto == null)
+                return null;
 
+            // Truy vấn refund
             var latestRefund = await _context.Refunds
                 .Where(r => r.OrderId == orderId)
                 .OrderByDescending(r => r.CreatedAt)
                 .FirstOrDefaultAsync();
 
-
-            // 4. 👇 BỔ SUNG: Điền dữ liệu vào DTO
-
-            // --- Ưu tiên 1: Xử lý Hoàn tiền (Refund) ---
             if (latestRefund != null)
             {
                 dto.LatestRefundId = latestRefund.RefundId;
                 dto.IsRefundPending = (latestRefund.Status == "Pending");
                 dto.RefundAmount = latestRefund.Amount;
-
-                // Lấy lý do và bằng chứng
-                dto.Reason = latestRefund.Reason; // Lý do Seller gửi
-                dto.RejectionReason = latestRefund.StaffRejectionReason; // Lý do Staff từ chối
-                dto.ProofUrl = latestRefund.ProofUrl; // Link bằng chứng
+                dto.Reason = latestRefund.Reason;
+                dto.RejectionReason = latestRefund.StaffRejectionReason;
+                dto.ProofUrl = latestRefund.ProofUrl;
             }
+
             return dto;
         }
 
@@ -2005,6 +2004,7 @@ namespace CB_Gift.Services
                     OrderCode = o.OrderCode,
                     CreationDate = o.CreationDate,
                     OrderDate = o.OrderDate,
+                    Tracking = o.Tracking,
                     // Đảm bảo lấy OrderDetailID đúng cách
                     OrderDetailIds = o.OrderDetails.Select(od => od.OrderDetailId).ToList()
                 })
@@ -2017,6 +2017,14 @@ namespace CB_Gift.Services
                 CreationDate = orderData.CreationDate,
                 OrderDate = orderData.OrderDate
             };
+            // 🔍 Thêm phần lấy log shipped
+            var shippedLog = await _context.GhnTrackingLogs
+                .Where(x => x.OrderCode == orderData.Tracking)
+                .Where(x => x.Status.ToLower() == "delivered")
+                .OrderByDescending(x => x.UpdatedDate)
+                .FirstOrDefaultAsync();
+
+            orderActivityDto.ShippedDate = shippedLog?.UpdatedDate;
 
             var allRefunds = await _context.Refunds
             // Phải Include OrderDetail để lấy thông tin sản phẩm (ProductName, Sku, Price)
