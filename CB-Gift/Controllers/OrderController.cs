@@ -63,13 +63,39 @@ namespace CB_Gift.Controllers
         //    var orders = await _orderService.GetAllOrders();
         //    return Ok(orders);
         //}
-
-
+        [Authorize]
         [HttpGet("{orderId}")]
         public async Task<IActionResult> GetOrderWithDetails(int orderId)
         {
-            var order = await _orderService.GetOrderDetailAsync(orderId, null);
-            if (order == null) return NotFound("Order not found");
+            // 1. Lấy UserId: Ưu tiên lấy theo chuẩn ClaimTypes.NameIdentifier
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            // Fallback: Nếu null, thử lấy theo key "sub" (trường hợp JWT chưa được map tự động)
+            if (string.IsNullOrEmpty(userId))
+            {
+                userId = User.FindFirst("sub")?.Value;
+            }
+
+            // 2. Lấy Roles: Ưu tiên lấy theo ClaimTypes.Role
+            var roles = User.FindAll(ClaimTypes.Role).Select(r => r.Value).ToList();
+
+            // Fallback: Nếu danh sách rỗng, thử lấy theo key "role" thường
+            if (roles == null || !roles.Any())
+            {
+                roles = User.FindAll("role").Select(r => r.Value).ToList();
+            }
+
+            // (Debug - Tạm thời): Bạn có thể log ra console để kiểm tra xem server nhận được gì
+            // Console.WriteLine($"Debug Check: OrderId={orderId}, UserId={userId}, Roles={string.Join(",", roles)}");
+
+            // 3. Gọi Service
+            var order = await _orderService.GetOrderDetailAsync(orderId, userId, roles);
+
+            if (order == null)
+            {
+                // Trả về message rõ ràng hơn chút để FE dễ debug
+                return NotFound(new { message = "Order not found or access denied." });
+            }
 
             return Ok(order);
         }
@@ -124,6 +150,7 @@ namespace CB_Gift.Controllers
         // Trong SellerController.cs
 
         [HttpPut("update-order/{id}")]
+        [Authorize(Roles = "Seller")]
         public async Task<IActionResult> UpdateOrder(int id, [FromBody] OrderUpdateDto request)
         {
             try
@@ -150,6 +177,7 @@ namespace CB_Gift.Controllers
         //edit address 
 
         [HttpPut("update-address/{orderId}")]
+        [Authorize(Roles = "Seller")]
         public async Task<IActionResult> UpdateAddress(int orderId, [FromBody] UpdateAddressRequest request)
         {
             try
@@ -170,6 +198,7 @@ namespace CB_Gift.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Seller")]
         public async Task<IActionResult> DeleteOrder(int id)
         {
             try

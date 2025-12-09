@@ -90,7 +90,7 @@ namespace CB_Gift.Controllers
         }
 
 
-
+/*
         [HttpGet("{id}")]
         public async Task<IActionResult> GetOrderDetail(int id)
         {
@@ -99,7 +99,7 @@ namespace CB_Gift.Controllers
             var result = await _orderService.GetOrderDetailAsync(id, sellerId);
             return result == null ? NotFound() : Ok(result);
         }
-
+*/
 
         [HttpPost("{orderId}/details")]
         public async Task<IActionResult> AddOrderDetail(int orderId, [FromBody] OrderDetailCreateRequest request)
