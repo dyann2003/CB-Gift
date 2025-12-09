@@ -170,8 +170,7 @@ namespace CB_Gift.Services
                 {
                     query = query.Where(pd => pd.OrderDetail.ProductionStatus == ProductionStatus.READY_PROD
                                            || pd.OrderDetail.ProductionStatus == ProductionStatus.IN_PROD
-                                           || pd.OrderDetail.ProductionStatus == ProductionStatus.QC_FAIL
-                                           || pd.OrderDetail.ProductionStatus == ProductionStatus.PROD_REWORK);
+                                           || pd.OrderDetail.ProductionStatus == ProductionStatus.QC_FAIL);
                 }
                 else
                 {
