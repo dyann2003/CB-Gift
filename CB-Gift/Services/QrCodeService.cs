@@ -63,7 +63,7 @@ namespace CB_Gift.Services
                 ProductName = detail.ProductVariant?.Product?.ProductName ?? "",
                 detail.Quantity,
                 QrCodeUrl = qrUrl,
-
+                LinkDesign = detail.LinkFileDesign,
                 // Trả về 2 giá trị đã tính toán theo logic mới
                 TotalItems = totalItems, // Tổng số lượng sản phẩm vật lý
                 ItemIndex = itemIndex    // Số thứ tự bắt đầu của detail này (dựa trên tích lũy quantity)
