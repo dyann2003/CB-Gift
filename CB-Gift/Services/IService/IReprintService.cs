@@ -7,7 +7,7 @@ namespace CB_Gift.Services.IService
     public interface IReprintService
     {
         // User submit reprint request
-        Task SubmitReprintAsync(ReprintSubmitDto dto);
+        //Task SubmitReprintAsync(ReprintSubmitDto dto);
 
         // Manager approve reprint
         Task ApproveReprintAsync(ReprintManagerDto dto, string managerId);

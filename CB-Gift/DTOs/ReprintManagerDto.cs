@@ -11,7 +11,8 @@ namespace CB_Gift.DTOs
          public string ManagerUserId { get; set; }*/
 
         // Lý do Manager từ chối 
-        public string? RejectReason { get; set; }
+        [Required]
+        public string RejectReason { get; set; }
     }
     public class ReprintItemDto
     {

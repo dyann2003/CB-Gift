@@ -19,15 +19,15 @@ namespace CB_Gift.Controllers
         }
 
         // User submit reprint request
-        [HttpPost("submit")]
-        public async Task<IActionResult> SubmitReprint([FromBody] ReprintSubmitDto dto)
-        {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+        //[HttpPost("submit")]
+        //public async Task<IActionResult> SubmitReprint([FromBody] ReprintSubmitDto dto)
+        //{
+        //    if (!ModelState.IsValid)
+        //        return BadRequest(ModelState);
 
-            await _reprintService.SubmitReprintAsync(dto);
-            return Ok(new { message = "Reprint request submitted successfully." });
-        }
+        //    await _reprintService.SubmitReprintAsync(dto);
+        //    return Ok(new { message = "Reprint request submitted successfully." });
+        //}
 
         // Manager approve
         [HttpPost("approve")]
@@ -56,6 +56,7 @@ namespace CB_Gift.Controllers
             await _reprintService.RejectReprintAsync(dto,managerId);
             return Ok(new { message = "Reprint request rejected and order restored to previous status." });
         }
+
         [HttpPost("request")]
         [Authorize(Roles = "Seller")]
         public async Task<IActionResult> RequestReprint([FromBody] SellerReprintRequestDto request)
