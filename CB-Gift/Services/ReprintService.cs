@@ -42,67 +42,80 @@ namespace CB_Gift.Services
         }
 
         // 1️ USER SUBMIT REPRINT REQUEST
-        public async Task SubmitReprintAsync(ReprintSubmitDto dto)
-        {
-            var orderDetail = await _context.OrderDetails
-                .Include(od => od.Order)
-                .FirstOrDefaultAsync(od => od.OrderDetailId == dto.OriginalOrderDetailId);
+        //public async Task SubmitReprintAsync(ReprintSubmitDto dto)
+        //{
+        //    var orderDetail = await _context.OrderDetails
+        //        .Include(od => od.Order)
+        //        .FirstOrDefaultAsync(od => od.OrderDetailId == dto.OriginalOrderDetailId);
 
-            if (orderDetail == null)
-                throw new Exception("OrderDetail not found.");
+        //    if (orderDetail == null)
+        //        throw new Exception("OrderDetail not found.");
 
-            // Đặt order vào trạng thái chờ xử lý reprint
-            orderDetail.Order.StatusOrder = 17;
-            orderDetail.ProductionStatus = ProductionStatus.HOLD_RP;
+        //    var order = orderDetail.Order;
+        //    if (order == null)
+        //        throw new Exception("Order information is missing for this detail.");
 
-            // Tạo record Reprint
-            var reprint = new Reprint
-            {
-                OriginalOrderDetailId = dto.OriginalOrderDetailId,
-                Reason = dto.Reason,
-                RequestedBy = dto.RequestedByUserId,
-                RequestDate = DateTime.Now,
-                Processed = false,
-                Status = "Pending",
-                ProofUrl = dto.ProofUrl
-            };
+        //    if (order.PaymentStatus == "Unpaid") 
+        //        throw new Exception("Cannot request reprint for unpaid orders.");
 
-            _context.Reprints.Add(reprint);
-            await _context.SaveChangesAsync();
+        //    var reprintExists = await _context.Reprints
+        //        .AnyAsync(r => r.OriginalOrderDetailId == dto.OriginalOrderDetailId && r.Status == "Pending" || r.Status == "Approve");
+        //    if (reprintExists)
+        //        throw new Exception("A pending reprint request already exists for this order detail.");
 
-            // GỬI THÔNG BÁO CHO TẤT CẢ MANAGER
-            // BƯỚC 1: Lấy danh sách Manager
-            var managers = await _userManager.GetUsersInRoleAsync("Manager");
+        //    var refundExists = await _context.Refunds
+        //        .AnyAsync(r => r.OrderDetailId == dto.OriginalOrderDetailId);
+        //    if (refundExists)
+        //        throw new Exception("A pending refund request already exists for this order detail.");
 
-            // Lấy list ID (Nếu Project dùng Guid thì nhớ convert, nếu string thì giữ nguyên)
-            var managerIds = managers.Select(u => u.Id).ToList();
+        //    // Đặt order vào trạng thái chờ xử lý reprint
+        //    orderDetail.Order.StatusOrder = 17;
+        //    orderDetail.ProductionStatus = ProductionStatus.HOLD_RP;
 
-            // BƯỚC 2: Gửi thông báo tuần tự (Sequential)
-            // KHÔNG dùng List<Task> và Task.WhenAll để tránh xung đột DbContext
-            if (managerIds.Any())
-            {
-                foreach (var mgrId in managerIds)
-                {
-                    try
-                    {
-                        // Dùng await trực tiếp để xử lý xong người này mới đến người kia
-                        await _notificationService.CreateAndSendNotificationAsync(
-                            mgrId.ToString(), // Chuyển sang string nếu mgrId là Guid
-                            $"Yêu cầu in lại MỚI từ đơn hàng #{orderDetail.Order.OrderCode}. Lý do: {dto.Reason}",
-                            $"/manager/reprint" // Link tới trang quản lý
-                        );
-                    }
-                    catch (Exception ex)
-                    {
-                        // Log lỗi nếu gửi cho 1 manager bị fail, để không ảnh hưởng các manager còn lại
-                        _logger.LogError($"Lỗi gửi thông báo cho manager {mgrId}: {ex.Message}");
-                    }
-                }
-            }
-        }
+        //    // Tạo record Reprint
+        //    var reprint = new Reprint
+        //    {
+        //        OriginalOrderDetailId = dto.OriginalOrderDetailId,
+        //        Reason = dto.Reason,
+        //        RequestedBy = dto.RequestedByUserId,
+        //        RequestDate = DateTime.Now,
+        //        Processed = false,
+        //        Status = "Pending",
+        //        ProofUrl = dto.ProofUrl
+        //    };
+
+        //    _context.Reprints.Add(reprint);
+        //    await _context.SaveChangesAsync();
+
+        //    // GỬI THÔNG BÁO CHO TẤT CẢ MANAGER
+        //    var managers = await _userManager.GetUsersInRoleAsync("Manager");
+
+        //    var managerIds = managers.Select(u => u.Id).ToList();
+
+        //    if (managerIds.Any())
+        //    {
+        //        foreach (var mgrId in managerIds)
+        //        {
+        //            try
+        //            {
+        //                // Dùng await trực tiếp để xử lý xong người này mới đến người kia
+        //                await _notificationService.CreateAndSendNotificationAsync(
+        //                    mgrId.ToString(),
+        //                    $"Yêu cầu in lại MỚI từ đơn hàng #{orderDetail.Order.OrderCode}. Lý do: {dto.Reason}",
+        //                    $"/manager/refund-reprint-review"
+        //                );
+        //            }
+        //            catch (Exception ex)
+        //            {
+        //                // Log lỗi nếu gửi cho 1 manager bị fail, để không ảnh hưởng các manager còn lại
+        //                _logger.LogError($"Lỗi gửi thông báo cho manager {mgrId}: {ex.Message}");
+        //            }
+        //        }
+        //    }
+        //}
 
         // 2️ MANAGER APPROVE
-        public async Task ApproveReprintAsync(ReprintManagerDto dto,string managerId)
+        public async Task ApproveReprintAsync(ReprintManagerDto dto, string managerId)
         {
             // 1. Kiểm tra input
             if (dto.OriginalOrderDetailIds == null || !dto.OriginalOrderDetailIds.Any())
@@ -118,7 +131,7 @@ namespace CB_Gift.Services
             if (!listOrderDetails.Any())
                 throw new Exception("Không tìm thấy sản phẩm nào trong hệ thống.");
 
-            // 3. VALIDATION QUAN TRỌNG
+            // 3. VALIDATION
             var firstOrderId = listOrderDetails.First().OrderId;
             if (listOrderDetails.Any(od => od.OrderId != firstOrderId))
             {
@@ -127,17 +140,27 @@ namespace CB_Gift.Services
 
             var originalOrder = listOrderDetails.First().Order;
 
-            // 4. Lấy danh sách yêu cầu Reprint tương ứng để update trạng thái
+            // 4. Update trạng thái Reprint thành Approved
             var listReprints = await _context.Reprints
                 .Where(r => dto.OriginalOrderDetailIds.Contains(r.OriginalOrderDetailId))
                 .ToListAsync();
 
-            // Update trạng thái Reprint thành Approved
             foreach (var reprint in listReprints)
             {
                 reprint.ManagerAcceptedBy = managerId;
                 reprint.Processed = true;
                 reprint.Status = "Approved";
+            }
+
+            string baseOrderCode = originalOrder.OrderCode;
+            string newOrderCode = baseOrderCode + "_RE";
+
+            // Kiểm tra trong DB xem mã _RE đã tồn tại chưa để tăng số (RE2, RE3...)
+            int reprintCount = 1;
+            while (await _context.Orders.AnyAsync(o => o.OrderCode == newOrderCode))
+            {
+                reprintCount++;
+                newOrderCode = $"{baseOrderCode}_RE{reprintCount}";
             }
 
             // 5. Chuẩn bị danh sách sản phẩm cho đơn mới
@@ -163,7 +186,7 @@ namespace CB_Gift.Services
                 });
             }
 
-            // 6. Build Order mới
+            // 6. Build Order mới với NEW ORDER CODE
             var makeOrderDto = new MakeOrderDto
             {
                 CustomerInfo = new EndCustomerCreateRequest
@@ -181,15 +204,16 @@ namespace CB_Gift.Services
                 OrderCreate = new OrderCreateRequest
                 {
                     CostScan = 0,
-                    OrderCode = originalOrder.OrderCode,
+                    OrderCode = newOrderCode,
                     ToDistrictId = originalOrder.ToDistrictId,
                     ToProvinceId = originalOrder.ToProvinceId,
                     ToWardCode = originalOrder.ToWardCode,
                     ProductionStatus = "Reprint",
-                    PaymentStatus = "PAID",
+                    PaymentStatus = "Paid",
                     ActiveTTS = originalOrder.ActiveTts,
                     Tracking = string.Empty,
-                    TotalCost = 0
+                    TotalCost = 0,
+                    StatusOrder = 8
                 },
                 OrderDetails = newDetailsList
             };
@@ -197,75 +221,67 @@ namespace CB_Gift.Services
             // 7. Gọi Service tạo đơn
             string sellerId = originalOrder.SellerUserId;
 
-            var created = await _orderService.MakeOrder(makeOrderDto, sellerId);
-
-            // 8. Cập nhật mã đơn hàng _RE và trạng thái đơn gốc
-            var newOrder = await _context.Orders
+            var createdOrderDto = await _orderService.MakeOrder(makeOrderDto, sellerId);
+            var newOrderEntity = await _context.Orders
                 .Include(o => o.OrderDetails)
-                .FirstOrDefaultAsync(o => o.OrderId == created.OrderId);
+                .FirstOrDefaultAsync(o => o.OrderId == createdOrderDto.OrderId);
 
-            if (newOrder != null)
+            if (newOrderEntity != null)
             {
-                string oldCode = originalOrder.OrderCode;
-                int index = oldCode.LastIndexOf("_RE");
+                newOrderEntity.StatusOrder = 7;
+                newOrderEntity.TotalCost = 0;          // Đảm bảo tổng tiền = 0
+                newOrderEntity.PaymentStatus = "Paid"; // Đảm bảo đã thanh toán
+                newOrderEntity.ProductionStatus = "Reprint";
 
-                if (index == -1) newOrder.OrderCode = oldCode + "_RE";
-                else
+                // 2. Cập nhật chi tiết từng sản phẩm (OrderDetail)
+                if (newOrderEntity.OrderDetails != null)
                 {
-                    string suffixStr = oldCode.Substring(index + 3);
-                    if (string.IsNullOrEmpty(suffixStr)) newOrder.OrderCode = oldCode + "2";
-                    else if (int.TryParse(suffixStr, out int version))
-                    {
-                        string baseCode = oldCode.Substring(0, index);
-                        newOrder.OrderCode = $"{baseCode}_RE{version + 1}";
-                    }
-                    else newOrder.OrderCode = oldCode + "_RE";
-                }
-
-                newOrder.StatusOrder = 8;
-                newOrder.ProductionStatus = "Reprint";
-                newOrder.PaymentStatus = "Paid";
-                newOrder.ActiveTts = originalOrder.ActiveTts;
-                newOrder.TotalCost = 0;
-                newOrder.ToDistrictId = originalOrder.ToDistrictId;
-                newOrder.ToProvinceId = originalOrder.ToProvinceId;
-                newOrder.ToWardCode = originalOrder.ToWardCode;
-
-                if (newOrder.OrderDetails != null)
-                {
-                    foreach (var detail in newOrder.OrderDetails)
+                    foreach (var detail in newOrderEntity.OrderDetails)
                     {
                         detail.Price = 0;
-                        detail.ProductionStatus = ProductionStatus.CREATED;
+                        detail.ProductionStatus = ProductionStatus.READY_PROD;
                     }
                 }
             }
-
-            // Cập nhật trạng thái đơn gốc
+            // 8. Cập nhật trạng thái đơn gốc
             originalOrder.StatusOrder = 15;
 
+            // Cập nhật trạng thái các item trong đơn gốc
+            foreach (var item in listOrderDetails)
+            {
+                item.ProductionStatus = ProductionStatus.PROD_REWORK;
+            }
+
             await _context.SaveChangesAsync();
+
             // ✨ GỬI THÔNG BÁO CHẤP NHẬN ✨
             try
             {
-                string newOrderCode = created.OrderCode; // Giả sử created là OrderDto trả về từ MakeOrder
-
                 // Gửi thông báo (chuông) cho Seller
                 await _notificationService.CreateAndSendNotificationAsync(
                     sellerId,
-                    $"Yêu cầu In lại cho Order #{originalOrder.OrderCode} đã được CHẤP NHẬN. Đơn In lại mới: #{newOrderCode}",
-                    $"/seller/orders/{created.OrderId}" // Link đến đơn mới
+                    $"Yêu cầu In lại đơn #{originalOrder.OrderCode} đã được DUYỆT. Đơn mới: #{newOrderCode}",
+                    $"/seller/order-view/{createdOrderDto.OrderId}"
                 );
 
                 // Gửi cập nhật trạng thái real-time
-                await _hubContext.Clients.User(sellerId).SendAsync( // Hoặc Clients.Group($"order_{originalOrder.OrderId}")
-                    "ReprintStatusChanged",
-                    new { orderId = originalOrder.OrderId, newStatus = "Approved", newOrderId = created.OrderId }
-                );
+                if (_hubContext != null)
+                {
+                    await _hubContext.Clients.User(sellerId).SendAsync(
+                        "ReprintStatusChanged",
+                        new
+                        {
+                            originalOrderId = originalOrder.OrderId,
+                            newStatus = "Approved",
+                            newOrderId = createdOrderDto.OrderId,
+                            newOrderCode = newOrderCode
+                        }
+                    );
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho ApproveReprintAsync (Order ID: {OrderId})", originalOrder.OrderId);
+                _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho ApproveReprintAsync");
             }
         }
 
@@ -274,6 +290,9 @@ namespace CB_Gift.Services
         {
             if (dto.OriginalOrderDetailIds == null || !dto.OriginalOrderDetailIds.Any())
                 throw new Exception("Danh sách sản phẩm trống.");
+
+            if (string.IsNullOrEmpty(dto.RejectReason))
+                throw new Exception("Lý do từ chối không được để trống.");
 
             // 1. Lấy danh sách yêu cầu Reprint cần từ chối
             var listReprints = await _context.Reprints
@@ -297,17 +316,14 @@ namespace CB_Gift.Services
             foreach (var reprint in listReprints)
             {
                 reprint.Processed = true;
-                reprint.ManagerAcceptedBy = managerId; // Lấy từ DTO
+                reprint.ManagerAcceptedBy = managerId;
                 reprint.Status = "Rejected"; //Set trạng thái từ chối
                 reprint.StaffRejectionReason = dto.RejectReason;
 
                 if (reprint.OriginalOrderDetail != null)
                 {
-                    // GIẢ ĐỊNH 1: Sử dụng giá trị số 9 (Dựa trên PRODUCTION_STATUS_MAP phổ biến)
                     reprint.OriginalOrderDetail.ProductionStatus = ProductionStatus.QC_DONE;
 
-                    // HOẶC (Nếu bạn dùng Enum ProductionStatus):
-                    // reprint.OriginalOrderDetail.ProductionStatus = (int)ProductionStatus.QC_DONE; 
                 }
                 // 3. Khôi phục trạng thái đơn hàng gốc (Nếu cần)
                 if (reprint.OriginalOrderDetail?.Order != null)
@@ -412,6 +428,14 @@ namespace CB_Gift.Services
             if (order == null)
                 throw new KeyNotFoundException($"Không tìm thấy đơn hàng ID: {request.OrderId} hoặc bạn không có quyền truy cập.");
 
+            if (order.PaymentStatus == "Unpaid")
+                throw new InvalidOperationException("Không thể tạo yêu cầu sản xuất lại khi chưa thanh toán.");
+
+            foreach (var item in request.SelectedItems)
+            {
+                
+            }
+
             // 2. TẠO CÁC BẢN GHI REPRINT VÀ XÁC THỰC
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
@@ -424,11 +448,16 @@ namespace CB_Gift.Services
                         throw new KeyNotFoundException($"Không tìm thấy chi tiết sản phẩm ID: {itemRequest.OriginalOrderDetailId} trong đơn hàng.");
 
                     // Kiểm tra yêu cầu PENDING trùng lặp (tránh Seller spam request)
-                    bool alreadyPending = await _context.Reprints.AnyAsync(
-                        r => r.OriginalOrderDetailId == itemRequest.OriginalOrderDetailId && r.Status == "Pending");
+                    var reprintExists = await _context.Reprints.AnyAsync(
+                        r => r.OriginalOrderDetailId == itemRequest.OriginalOrderDetailId && r.Status == "Pending" || r.Status == "Approved");
 
-                    if (alreadyPending)
-                        throw new InvalidOperationException($"Chi tiết sản phẩm ID: {itemRequest.OriginalOrderDetailId} đã có yêu cầu in lại đang chờ.");
+                    if (reprintExists)
+                        throw new InvalidOperationException($"Chi tiết sản phẩm ID: {itemRequest.OriginalOrderDetailId} đã có yêu cầu in lại trước đó.");
+
+                    var refundExists = await _context.Refunds
+                   .AnyAsync(r => r.OrderDetailId == itemRequest.OriginalOrderDetailId);
+                    if (refundExists)
+                        throw new InvalidOperationException($"Chi tiết sản phẩm ID: {itemRequest.OriginalOrderDetailId} đã có yêu cầu hoàn tiền.");
 
                     // 🎯 CẬP NHẬT TRẠNG THÁI CHO ORDERDETAIL
                     // OrderDetail có trường ProductionStatus và bạn có enum/string "HOLD_RP"
@@ -474,7 +503,7 @@ namespace CB_Gift.Services
                     await _notificationService.CreateAndSendNotificationAsync(
                         "StaffGroup", // Gửi tới nhóm Staff/Manager
                         $"Yêu cầu In lại mới cho Order #{order.OrderCode}.",
-                        $"/manager/reprint-review/{request.OrderId}" // Đường dẫn xem yêu cầu
+                        $"/manager/refund-reprint-review" // Đường dẫn xem yêu cầu
                     );
                 }
                 catch (Exception ex)
