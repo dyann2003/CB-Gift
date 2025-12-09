@@ -420,23 +420,39 @@ namespace CB_Gift.Services
 
         public async Task RequestReprintAsync(SellerReprintRequestDto request, string sellerId)
         {
-            // 1. TÌM ORDER GỐC (chỉ để xác thực và lấy chi tiết)
+            // 1. FIND ORIGINAL ORDER (for validation & details)
             var order = await _context.Orders
                 .Include(o => o.OrderDetails)
                 .FirstOrDefaultAsync(o => o.OrderId == request.OrderId && o.SellerUserId == sellerId);
 
             if (order == null)
-                throw new KeyNotFoundException($"Không tìm thấy đơn hàng ID: {request.OrderId} hoặc bạn không có quyền truy cập.");
+                throw new KeyNotFoundException($"Order ID {request.OrderId} not found or you do not have permission to access it.");
 
             if (order.PaymentStatus == "Unpaid")
-                throw new InvalidOperationException("Không thể tạo yêu cầu sản xuất lại khi chưa thanh toán.");
+                throw new InvalidOperationException("Cannot request reprint before the order is paid.");
+
+            // 🔥 ADDED: CHECK DELIVERED STATUS AND ≤ 3 DAYS
+            var shippedLog = await _context.GhnTrackingLogs
+                .Where(g => g.OrderCode == order.Tracking && g.Status == "delivered")
+                .OrderByDescending(g => g.UpdatedDate)
+                .FirstOrDefaultAsync();
+
+            if (shippedLog == null)
+                throw new InvalidOperationException(
+                    $"Order {order.OrderCode} does not have a 'delivered' status from GHN → reprint request is not allowed.");
+
+            var daysSinceDelivered = (DateTime.Now - shippedLog.UpdatedDate).TotalDays;
+
+            if (daysSinceDelivered > 3)
+                throw new InvalidOperationException(
+                    $"Order {order.OrderCode} was delivered {Math.Floor(daysSinceDelivered)} days ago. Reprint is only allowed within 3 days.");
 
             foreach (var item in request.SelectedItems)
             {
-                
+
             }
 
-            // 2. TẠO CÁC BẢN GHI REPRINT VÀ XÁC THỰC
+            // 2. CREATE REPRINT RECORDS & VALIDATE
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
@@ -445,166 +461,163 @@ namespace CB_Gift.Services
                     var orderDetail = order.OrderDetails.FirstOrDefault(od => od.OrderDetailId == itemRequest.OriginalOrderDetailId);
 
                     if (orderDetail == null)
-                        throw new KeyNotFoundException($"Không tìm thấy chi tiết sản phẩm ID: {itemRequest.OriginalOrderDetailId} trong đơn hàng.");
+                        throw new KeyNotFoundException($"OrderDetail ID {itemRequest.OriginalOrderDetailId} not found in this order.");
 
-                    // Kiểm tra yêu cầu PENDING trùng lặp (tránh Seller spam request)
+                    // Prevent duplicate pending/approved reprint requests
                     var reprintExists = await _context.Reprints.AnyAsync(
-                        r => r.OriginalOrderDetailId == itemRequest.OriginalOrderDetailId && r.Status == "Pending" || r.Status == "Approved");
+                        r => r.OriginalOrderDetailId == itemRequest.OriginalOrderDetailId &&
+                        (r.Status == "Pending" || r.Status == "Approved"));
 
                     if (reprintExists)
-                        throw new InvalidOperationException($"Chi tiết sản phẩm ID: {itemRequest.OriginalOrderDetailId} đã có yêu cầu in lại trước đó.");
+                        throw new InvalidOperationException($"OrderDetail ID {itemRequest.OriginalOrderDetailId} already has an existing reprint request.");
 
                     var refundExists = await _context.Refunds
-                   .AnyAsync(r => r.OrderDetailId == itemRequest.OriginalOrderDetailId);
+                        .AnyAsync(r => r.OrderDetailId == itemRequest.OriginalOrderDetailId);
+
                     if (refundExists)
-                        throw new InvalidOperationException($"Chi tiết sản phẩm ID: {itemRequest.OriginalOrderDetailId} đã có yêu cầu hoàn tiền.");
+                        throw new InvalidOperationException($"OrderDetail ID {itemRequest.OriginalOrderDetailId} already has a refund request.");
 
-                    // 🎯 CẬP NHẬT TRẠNG THÁI CHO ORDERDETAIL
-                    // OrderDetail có trường ProductionStatus và bạn có enum/string "HOLD_RP"
-                    orderDetail.ProductionStatus = Models.Enums.ProductionStatus.HOLD_RP; // HOẶC string "HOLD_RP" nếu bạn dùng string
+                    // Update OrderDetail production status
+                    orderDetail.ProductionStatus = Models.Enums.ProductionStatus.HOLD_RP;
 
-                    // Tạo record Reprint cho TỪNG item
+                    // Create reprint record
                     var reprint = new Reprint
                     {
                         OriginalOrderDetailId = itemRequest.OriginalOrderDetailId,
-                        Reason = request.Reason, // Lý do chi tiết
+                        Reason = request.Reason,
                         RequestedBy = sellerId,
                         Status = "Pending",
-                        ProofUrl = request.ProofUrl, // URL file thiết kế/bằng chứng
+                        ProofUrl = request.ProofUrl,
                         RequestDate = DateTime.Now
                     };
 
                     _context.Reprints.Add(reprint);
                 }
 
-                // 3. CHUYỂN TRẠNG THÁI ORDER GỐC sang HOLD_RP (17 - Reprints Pending)
-                // Đây là trạng thái cấp Order, nên nó là một trạng thái chung cho toàn bộ đơn hàng.
+                // 3. UPDATE ORDER STATUS → HOLD_RP (17)
                 order.StatusOrder = 17;
 
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                // 4. ✨ GỬI THÔNG BÁO (SignalR/Notification) ✨
+                // 4. SEND NOTIFICATION (SignalR)
                 try
                 {
-                    // Gửi thông báo đến Staff dashboards (SignalR)
                     await _hubContext.Clients.Group("StaffNotifications").SendAsync(
                         "NewReprintRequest",
                         new
                         {
                             orderId = request.OrderId,
                             orderCode = order.OrderCode,
-                           // itemCount = newReprintCount,
                             sellerId = sellerId
                         }
                     );
 
-                    // Thêm notification vào DB cho Staff/Manager
                     await _notificationService.CreateAndSendNotificationAsync(
-                        "StaffGroup", // Gửi tới nhóm Staff/Manager
-                        $"Yêu cầu In lại mới cho Order #{order.OrderCode}.",
-                        $"/manager/refund-reprint-review" // Đường dẫn xem yêu cầu
+                        "StaffGroup",
+                        $"New reprint request for Order #{order.OrderCode}.",
+                        $"/manager/refund-reprint-review"
                     );
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho RequestReprintAsync (OrderID: {OrderId})", request.OrderId);
+                    _logger.LogError(ex, "Error sending SignalR notification for RequestReprintAsync (OrderID: {OrderId})", request.OrderId);
                 }
             }
             catch (Exception ex)
             {
                 transaction.Rollback();
-                // Ghi log lỗi
-                throw new Exception($"Lỗi khi tạo yêu cầu in lại: {ex.Message}");
+                throw new Exception($"Failed to create reprint request: {ex.Message}");
             }
         }
-         /*public async Task<PaginatedResult<ReprintRequestListDto>> GetReviewReprintRequestsPaginatedAsync(
-         string? staffId, // Dùng để xác thực (nếu cần)
-         string? searchTerm,
-         string? filterType,
-         string? sellerIdFilter, // Reprint.RequestedBy tương đương
-         string? statusFilter,
-         int page,
-         int pageSize)
-         {
-             // 1. TÌM KIẾM DỮ LIỆU GỐC VÀ ÁP DỤNG CÁC BỘ LỌC
-             // Lấy các bản ghi Reprint
-             var query = _context.Reprints
-             .Include(r => r.OriginalOrderDetail)
-                 .ThenInclude(od => od.Order)
-             .Include(r => r.OriginalOrderDetail)
-                 .ThenInclude(od => od.ProductVariant)
-                     .ThenInclude(pv => pv.Product)
-             .AsQueryable();
 
-             // 1.0. Lọc theo Trạng thái (Status Filter) <-- LOGIC LỌC MỚI
-             if (!string.IsNullOrEmpty(statusFilter) && statusFilter.ToLower() != "all")
-             {
-                 var status = statusFilter.Trim().ToLower();
+        /*public async Task<PaginatedResult<ReprintRequestListDto>> GetReviewReprintRequestsPaginatedAsync(
+        string? staffId, // Dùng để xác thực (nếu cần)
+        string? searchTerm,
+        string? filterType,
+        string? sellerIdFilter, // Reprint.RequestedBy tương đương
+        string? statusFilter,
+        int page,
+        int pageSize)
+        {
+            // 1. TÌM KIẾM DỮ LIỆU GỐC VÀ ÁP DỤNG CÁC BỘ LỌC
+            // Lấy các bản ghi Reprint
+            var query = _context.Reprints
+            .Include(r => r.OriginalOrderDetail)
+                .ThenInclude(od => od.Order)
+            .Include(r => r.OriginalOrderDetail)
+                .ThenInclude(od => od.ProductVariant)
+                    .ThenInclude(pv => pv.Product)
+            .AsQueryable();
 
-                 if (status == "pending" || status == "approved" || status == "rejected")
-                 {
-                     query = query.Where(r => r.Status.ToLower() == status);
-                 }
-             }
-             else // Mặc định hiển thị tất cả các trạng thái có thể Review
-             {
-                 query = query.Where(r => r.Status == "Pending" || r.Status == "Approved" || r.Status == "Rejected");
-             }
+            // 1.0. Lọc theo Trạng thái (Status Filter) <-- LOGIC LỌC MỚI
+            if (!string.IsNullOrEmpty(statusFilter) && statusFilter.ToLower() != "all")
+            {
+                var status = statusFilter.Trim().ToLower();
 
-             // 1.2. Tìm kiếm (Search Term)
-             if (!string.IsNullOrEmpty(searchTerm))
-             {
-                 var term = searchTerm.ToLower();
-                 query = query.Where(r =>
-                     r.OriginalOrderDetail!.Order!.OrderCode.ToLower().Contains(term) || // Phải đảm bảo Order không null
-                     r.Reason.ToLower().Contains(term));
-             }
+                if (status == "pending" || status == "approved" || status == "rejected")
+                {
+                    query = query.Where(r => r.Status.ToLower() == status);
+                }
+            }
+            else // Mặc định hiển thị tất cả các trạng thái có thể Review
+            {
+                query = query.Where(r => r.Status == "Pending" || r.Status == "Approved" || r.Status == "Rejected");
+            }
 
-             // 1.3. Lọc theo Seller (RequestedBy)
-             if (!string.IsNullOrEmpty(sellerIdFilter))
-             {
-                 query = query.Where(r => r.RequestedBy == sellerIdFilter);
-             }
+            // 1.2. Tìm kiếm (Search Term)
+            if (!string.IsNullOrEmpty(searchTerm))
+            {
+                var term = searchTerm.ToLower();
+                query = query.Where(r =>
+                    r.OriginalOrderDetail!.Order!.OrderCode.ToLower().Contains(term) || // Phải đảm bảo Order không null
+                    r.Reason.ToLower().Contains(term));
+            }
 
-             // 2. TÍNH TỔNG SỐ LƯỢNG (trước khi phân trang)
-             var totalCount = await query.CountAsync();
+            // 1.3. Lọc theo Seller (RequestedBy)
+            if (!string.IsNullOrEmpty(sellerIdFilter))
+            {
+                query = query.Where(r => r.RequestedBy == sellerIdFilter);
+            }
 
-             // 3. THỰC HIỆN PHÂN TRANG (SKIP & TAKE)
-             var paginatedReprint = await query
-                 .OrderByDescending(r => r.RequestDate) // Sắp xếp theo ngày yêu cầu
-                 .Skip((page - 1) * pageSize)
-                 .Take(pageSize)
-                 .ToListAsync();
+            // 2. TÍNH TỔNG SỐ LƯỢNG (trước khi phân trang)
+            var totalCount = await query.CountAsync();
 
-             // 4. MAPPING DTO
-             // Với Reprint, ta có thể không cần grouping phức tạp như Refund vì nó thường là 1:1 với OrderDetail
-             var mappedRequests = paginatedReprint
-                 .Select((item, index) => new ReprintRequestListDto
-                 {
-                     GroupId = (page - 1) * pageSize + index + 1, // ID duy nhất cho frontend
-                     OrderId = item.OriginalOrderDetail!.OrderId,
-                     OrderCode = item.OriginalOrderDetail.Order?.OrderCode ?? "N/A",
-                     Type = "REPRINT",
-                     TargetLevel = "DETAIL",
-                     Status = item.Status,
-                     ReasonSummary = item.Reason,
-                     OriginalOrderDetailId = item.OriginalOrderDetailId,
-                     ProductName = item.OriginalOrderDetail.ProductVariant?.Product?.ProductName ?? "N/A",
-                     PrimaryReprintId = item.Id,
-                     CreatedAt = item.RequestDate
-                 })
-                 .ToList();
+            // 3. THỰC HIỆN PHÂN TRANG (SKIP & TAKE)
+            var paginatedReprint = await query
+                .OrderByDescending(r => r.RequestDate) // Sắp xếp theo ngày yêu cầu
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
 
-             // 5. TRẢ VỀ PAGINATED RESULT
-             return new PaginatedResult<ReprintRequestListDto>
-             {
-                 Items = mappedRequests,
-                 Total = totalCount,
-                 Page = page,
-                 PageSize = pageSize
-             };
-         } */
+            // 4. MAPPING DTO
+            // Với Reprint, ta có thể không cần grouping phức tạp như Refund vì nó thường là 1:1 với OrderDetail
+            var mappedRequests = paginatedReprint
+                .Select((item, index) => new ReprintRequestListDto
+                {
+                    GroupId = (page - 1) * pageSize + index + 1, // ID duy nhất cho frontend
+                    OrderId = item.OriginalOrderDetail!.OrderId,
+                    OrderCode = item.OriginalOrderDetail.Order?.OrderCode ?? "N/A",
+                    Type = "REPRINT",
+                    TargetLevel = "DETAIL",
+                    Status = item.Status,
+                    ReasonSummary = item.Reason,
+                    OriginalOrderDetailId = item.OriginalOrderDetailId,
+                    ProductName = item.OriginalOrderDetail.ProductVariant?.Product?.ProductName ?? "N/A",
+                    PrimaryReprintId = item.Id,
+                    CreatedAt = item.RequestDate
+                })
+                .ToList();
+
+            // 5. TRẢ VỀ PAGINATED RESULT
+            return new PaginatedResult<ReprintRequestListDto>
+            {
+                Items = mappedRequests,
+                Total = totalCount,
+                Page = page,
+                PageSize = pageSize
+            };
+        } */
 
         public async Task<PaginatedResult<ReprintRequestListDto>> GetReviewReprintRequestsPaginatedAsync(
         string? staffId,
