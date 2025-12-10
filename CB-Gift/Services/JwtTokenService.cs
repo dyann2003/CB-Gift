@@ -106,5 +106,25 @@ namespace CB_Gift.Services
                 await _context.SaveChangesAsync();
             }
         }
+        public async Task RevokeAllRefreshTokensAsync(string userId)
+        {
+            // Tìm tất cả token của user này mà chưa bị hủy và chưa hết hạn
+            var activeTokens = await _context.RefreshTokens
+                .Where(x => x.UserId == userId && x.Revoked == null && x.Expires > DateTime.UtcNow)
+                .ToListAsync();
+
+            if (activeTokens.Any())
+            {
+                var now = DateTime.UtcNow;
+                foreach (var token in activeTokens)
+                {
+                    token.Revoked = now; // Đánh dấu đã hủy
+                }
+
+                // Update một lần
+                _context.RefreshTokens.UpdateRange(activeTokens);
+                await _context.SaveChangesAsync();
+            }
+        }
     }
 }

@@ -10,5 +10,6 @@ namespace CB_Gift.Services.Email
         Task<RefreshToken> GenerateRefreshTokenAsync(string userId);
         Task<ServiceResult<AppUser>> ValidateRefreshTokenAsync(string token);
         Task RevokeRefreshTokenAsync(string token, string ipAddress = null);
+        Task RevokeAllRefreshTokensAsync(string userId);
     }
 }

@@ -125,7 +125,7 @@ public class AuthController : ControllerBase
         return Ok(new { message = "Logged out" });
     }
 
-    // POST: /api/auth/change-password
+    /*// POST: /api/auth/change-password
     [Authorize]
     [HttpPost("change-password")]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
@@ -150,6 +150,33 @@ public class AuthController : ControllerBase
         DeleteTokenCookies(); 
 
         return Ok(new { message = "Password changed. Please login again." });
+    }*/
+    // POST: /api/auth/change-password
+    [Authorize]
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        var user = await _users.GetUserAsync(User);
+        if (user is null) return Unauthorized();
+
+        var rs = await _users.ChangePasswordAsync(user, dto.CurrentPassword, dto.NewPassword);
+        if (!rs.Succeeded)
+            return BadRequest(new
+            {
+                message = "Change password failed",
+                errors = rs.Errors.Select(e => new { e.Code, e.Description })
+            });
+
+        // --- SỬA ĐOẠN NÀY ---
+        // Thay vì chỉ xóa token hiện tại, ta xóa TẤT CẢ token của user này trong DB
+        // Điều này khiến máy B khi hết hạn Access Token sẽ không thể Refresh được nữa -> Buộc login lại
+        await _tokens.RevokeAllRefreshTokensAsync(user.Id);
+
+        // Xóa cookie ở máy hiện tại (máy A)
+        DeleteTokenCookies();
+
+        return Ok(new { message = "Password changed. All devices have been logged out." });
     }
 
     // POST: /api/Auth/register
@@ -231,6 +258,23 @@ public class AuthController : ControllerBase
             user.IsActive,
             user.FullName
         });
+    }
+    // PUT: /api/auth/profile
+    [Authorize]
+    [HttpPut("profile")]
+    public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileDto dto)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        // Lấy ID từ token
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId)) return Unauthorized();
+
+        var result = await _accountService.UpdateProfileAsync(userId, dto);
+
+        if (!result.Success) return BadRequest(new { message = result.Message });
+
+        return Ok(new { message = result.Message });
     }
 
     // GET: /api/auth/all-sellers
