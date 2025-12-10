@@ -762,7 +762,7 @@ public class InvoiceService : IInvoiceService
                 // - Thanh toán một phần (CÔNG NỢ)
                 invoice.Status = "PartiallyPaid";
                 // Cộng thêm 15 ngày vào hạn thanh toán (DueDate)
-                invoice.DueDate = invoice.DueDate.AddDays(1);
+                invoice.DueDate = invoice.DueDate.AddDays(15);
                 historyNote = $" (DueDate extended to {invoice.DueDate:dd/MM/yyyy})";
                 log.ProcessingStatus = "Processed_Partial";
             }

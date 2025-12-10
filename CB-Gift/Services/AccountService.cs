@@ -287,6 +287,43 @@ namespace CB_Gift.Services
             }).ToList();
         }
 
+        public async Task<ServiceResult<bool>> UpdateProfileAsync(string userId, UpdateProfileDto dto)
+        {
+            // 1. Tìm user
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+            {
+                return new ServiceResult<bool>
+                {
+                    Success = false,
+                    Message = "User not found."
+                };
+            }
+
+            // 2. Cập nhật thông tin
+            user.FullName = dto.FullName;
+            user.PhoneNumber = dto.PhoneNumber;
+
+            // 3. Lưu vào DB
+            var result = await _userManager.UpdateAsync(user);
+
+            if (!result.Succeeded)
+            {
+                var errors = string.Join("; ", result.Errors.Select(e => e.Description));
+                return new ServiceResult<bool>
+                {
+                    Success = false,
+                    Message = $"Update failed: {errors}"
+                };
+            }
+
+            return new ServiceResult<bool>
+            {
+                Success = true,
+                Message = "Profile updated successfully.",
+                Data = true
+            };
+        }
 
 
 
