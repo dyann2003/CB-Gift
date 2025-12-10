@@ -10,6 +10,7 @@ using FluentValidation;
 using CB_Gift.Services.Payments;
 using CB_Gift.Utils;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -42,9 +43,7 @@ builder.Services.AddSwaggerGen(c =>
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
-            new OpenApiSecurityScheme {
-                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
-            },
+            new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } },
             Array.Empty<string>()
         }
     });
@@ -56,7 +55,7 @@ builder.Services.AddDbContext<CBGiftDbContext>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString))
 );
 
-// ================== 3. Identity ==================
+// ================== 3. Identity & Cookie Config ==================
 builder.Services
     .AddIdentityCore<AppUser>(opt =>
     {
@@ -71,9 +70,20 @@ builder.Services
     .AddSignInManager()
     .AddDefaultTokenProviders();
 
+// Cấu hình Cookie cho Identity để chạy được Cross-Domain (Vercel -> DigitalOcean)
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.Cookie.SameSite = SameSiteMode.None; // Cho phép cookie đi qua domain khác
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // Bắt buộc phải có HTTPS (DigitalOcean cung cấp)
+    options.Cookie.HttpOnly = true;              // Bảo mật
+    options.Cookie.Name = ".CBGift.Auth";        // Đặt tên cho dễ nhận diện
+    options.ExpireTimeSpan = TimeSpan.FromDays(7);
+    options.SlidingExpiration = true;
+});
+
 builder.Services.AddAutoMapper(typeof(Program));
 
-// ================== 4. JWT (Quan trọng cho Cookie) ==================
+// ================== 4. JWT Authentication ==================
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opt =>
@@ -86,32 +96,26 @@ builder.Services
             ValidateIssuerSigningKey = true,
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)),
-            ClockSkew = TimeSpan.Zero // Hết hạn là chặn ngay
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)),
+            ClockSkew = TimeSpan.Zero
         };
 
-        // Logic tự động lấy Token từ Cookie cho mỗi Request
+        // Logic tự động lấy Token từ Cookie hoặc Query (cho SignalR)
         opt.Events = new JwtBearerEvents
         {
             OnMessageReceived = ctx =>
             {
-                // 1. Ưu tiên lấy từ Query String (cho SignalR)
                 var accessToken = ctx.Request.Query["access_token"];
                 var path = ctx.HttpContext.Request.Path;
 
-                if (!string.IsNullOrEmpty(accessToken) &&
-                    path.StartsWithSegments("/notificationHub"))
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/notificationHub"))
                 {
                     ctx.Token = accessToken;
                 }
-                // 2. Nếu không có query, lấy từ Cookie "access_token"
-                // Đây là chỗ giúp [Authorize] hoạt động mà không cần header Authorization
                 else if (ctx.Request.Cookies.TryGetValue("access_token", out var cookieToken))
                 {
                     ctx.Token = cookieToken;
                 }
-
                 return Task.CompletedTask;
             }
         };
@@ -125,10 +129,9 @@ var ghnTokenDev = ghnSettings["TokenDev"];
 var ghnDevBaseUrl = ghnSettings["DevBaseAddress"];
 var ghnShopId = ghnSettings["ShopId"];
 
+// Validation GHN Config
 if (string.IsNullOrEmpty(ghnToken) || string.IsNullOrEmpty(ghnProdBaseUrl))
     throw new InvalidOperationException("Lỗi cấu hình: GhnSettings:Token hoặc ProdBaseAddress chưa được đặt.");
-if (string.IsNullOrEmpty(ghnTokenDev) || string.IsNullOrEmpty(ghnDevBaseUrl))
-    throw new InvalidOperationException("Lỗi cấu hình: GhnSettings:TokenDev hoặc DevBaseAddress chưa được đặt.");
 
 builder.Services.AddAuthorization();
 
@@ -147,23 +150,24 @@ builder.Services.AddHttpClient("GhnDevClient", client =>
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
-// ================== CORS (cho Next.js FE) ==================
+// ================== 6. CORS (Cấu hình domain Vercel) ==================
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        // THÊM CÁC DOMAIN CỦA VERCEL VÀO ĐÂY
         policy.WithOrigins(
             "http://localhost:3000",
-            "https://cb-gift-fe-sby6-mazut4syf-bachquangles-projects.vercel.app", // Domain Preview 
-            "https://cb-gift-fe-sby6.vercel.app" // Domain Production 
+            "http://localhost:5173", // Vite Local
+            "https://cb-gift-fe-sby6-mazut4syf-bachquangles-projects.vercel.app",
+            "https://cb-gift-fe-sby6.vercel.app"
         )
-             .AllowAnyHeader()
-             .AllowAnyMethod()
-             .AllowCredentials(); // SignalR
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials(); // Bắt buộc để nhận Cookie/Token
     });
 });
-// Luôn đăng ký Service thật vào container, vì thằng Demo cần gọi thằng này
+
+// ================== 7. Register Services (DI) ==================
 builder.Services.AddScoped<GhnShippingService>();
 
 var useDemoMode = builder.Configuration.GetValue<bool>("GhnSettings:UseDemoMode");
@@ -175,21 +179,15 @@ if (useDemoMode)
 else
 {
     Console.WriteLine(">>> HỆ THỐNG ĐANG CHẠY CHẾ ĐỘ REAL SHIPMENT <<<");
-    builder.Services.AddScoped<IShippingService>(provider =>
-        provider.GetRequiredService<GhnShippingService>());
+    builder.Services.AddScoped<IShippingService>(provider => provider.GetRequiredService<GhnShippingService>());
 }
 
-// Đăng ký CloudinarySettings
 builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
 
-// ================== 7. Register Services (DI) ==================
-// QUAN TRỌNG: Đăng ký JwtTokenService vào ITokenService
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<IManagementAccountService, ManagementAccountService>();
-
-// Các service nghiệp vụ khác
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IQrCodeService, QrCodeService>();
 builder.Services.AddScoped<IOrderDetailService, OrderDetailService>();
@@ -214,9 +212,7 @@ builder.Services.AddScoped<PaymentGatewayFactory>();
 builder.Services.AddScoped<VnPayHelper>();
 builder.Services.AddScoped<ILocationService, GhnLocationService>();
 builder.Services.AddScoped<IGhnPrintService, GhnPrintService>();
-
 builder.Services.AddSingleton<NotificationHub>();
-builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<OrderFactory>();
 builder.Services.AddScoped<ReferenceDataCache>();
 builder.Services.AddScoped<IValidator<OrderImportRowDto>, OrderImportRowValidator>();
@@ -230,51 +226,64 @@ builder.Services.AddQuartz(q =>
     var jobKey = new JobKey("groupOrdersJob");
     q.AddJob<GroupOrdersJob>(opts => opts.WithIdentity(jobKey));
 
-    // Trigger hằng ngày 00:05
     q.AddTrigger(opts => opts
         .ForJob(jobKey)
         .WithIdentity("groupOrdersTrigger")
         .StartNow()
         .WithSchedule(CronScheduleBuilder.DailyAtHourAndMinute(0, 5))
     );
+
     var invoiceJobKey = new JobKey("createMonthlyInvoicesJob");
     q.AddJob<CreateMonthlyInvoicesJob>(opts => opts.WithIdentity(invoiceJobKey));
-    // 2. Trigger chạy vào ngày 10 hàng tháng, lúc 00:05
     q.AddTrigger(opts => opts
         .ForJob(invoiceJobKey)
         .WithIdentity("monthlyInvoiceTrigger")
         .StartNow()
-        // Sử dụng builder để đặt lịch: Ngày 10, Giờ 0 (12 AM), Phút 5
         .WithSchedule(CronScheduleBuilder.MonthlyOnDayAndHourAndMinute(10, 0, 5))
-    // Hoặc Cron Expression: "0 5 0 10 * ?"
     );
 });
 builder.Services.AddQuartzHostedService(options => options.WaitForJobsToComplete = true);
 
+// Cấu hình nhận diện Header từ Proxy của Digital Ocean
+// Nếu không có đoạn này, App sẽ nghĩ nó đang chạy HTTP thường -> Cookie Secure bị hủy -> Lỗi 401
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    // Xóa giới hạn known networks/proxies để chấp nhận từ DO Load Balancer
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 var app = builder.Build();
 
 // ================== Middleware Pipeline ==================
+
+// Phải đặt đầu tiên hoặc ngay sau Build
+app.UseForwardedHeaders();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+else
+{
+    // Trên Production nên dùng cái này để ép HTTPS nếu muốn
+    app.UseHsts();
+}
 
 app.UseHttpsRedirection();
 
-// 1. CORS (Phải trên cùng)
+// Thứ tự Middleware chuẩn: ForwardedHeaders -> CORS -> Auth -> Logic
 app.UseCors("AllowFrontend");
 
-// 2. Auth (Xác thực User từ Cookie/Token)
 app.UseAuthentication();
-
-// 3. Authorization (Phân quyền)
 app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<NotificationHub>("/notificationHub");
 
-// ================== Seed Data (Thêm Try-Catch để an toàn) ==================
+// ================== Seed Data ==================
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
@@ -285,7 +294,6 @@ using (var scope = app.Services.CreateScope())
     }
     catch (Exception ex)
     {
-        // Log lỗi nếu Seed data chết để không làm sập app thầm lặng
         var logger = services.GetRequiredService<ILogger<Program>>();
         logger.LogError(ex, "Lỗi xảy ra khi Seeding dữ liệu.");
     }
@@ -294,7 +302,6 @@ using (var scope = app.Services.CreateScope())
 app.Run();
 
 // ================== Seed Functions ==================
-// ... (Phần Seed Functions giữ nguyên như của bạn) ...
 static async Task SeedRolesAsync(IServiceProvider serviceProvider)
 {
     var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
