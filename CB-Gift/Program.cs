@@ -105,17 +105,37 @@ builder.Services
         {
             OnMessageReceived = ctx =>
             {
-                var accessToken = ctx.Request.Query["access_token"];
-                var path = ctx.HttpContext.Request.Path;
+                // ================== CƠ CHẾ HYBRID ==================
 
-                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/notificationHub"))
+                // 1. Ưu tiên cao nhất: Lấy Token từ Header (Dành cho Mobile App / Postman)
+                // Mobile gửi lên dạng: "Authorization: Bearer eyJhbGci..."
+                string authorization = ctx.Request.Headers["Authorization"];
+                if (!string.IsNullOrEmpty(authorization) && authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
                 {
-                    ctx.Token = accessToken;
+                    ctx.Token = authorization.Substring("Bearer ".Length).Trim();
                 }
+
+                // 2. Ưu tiên nhì: Lấy từ Query String (Dành cho SignalR - NotificationHub)
+                // SignalR không gửi Header được khi kết nối WebSocket ban đầu
+                else if (!string.IsNullOrEmpty(ctx.Request.Query["access_token"]))
+                {
+                    var accessToken = ctx.Request.Query["access_token"];
+                    var path = ctx.HttpContext.Request.Path;
+
+                    // Chỉ chấp nhận token qua Query nếu đường dẫn là Hub
+                    if (!string.IsNullOrEmpty(path) && path.StartsWithSegments("/notificationHub"))
+                    {
+                        ctx.Token = accessToken;
+                    }
+                }
+
+                // 3. Ưu tiên cuối: Lấy từ Cookie (Dành cho Web Desktop / Next.js)
+                // Nếu không có Header, không có Query -> Tự động tìm trong Cookie
                 else if (ctx.Request.Cookies.TryGetValue("access_token", out var cookieToken))
                 {
                     ctx.Token = cookieToken;
                 }
+
                 return Task.CompletedTask;
             }
         };
