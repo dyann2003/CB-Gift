@@ -13,6 +13,6 @@ namespace CB_Gift.Services.Email
 
         Task<IEnumerable<DesignerDto>> GetAllDesignersAsync();
 
-
+        Task<ServiceResult<bool>> UpdateProfileAsync(string userId, UpdateProfileDto dto);
     }
 }
