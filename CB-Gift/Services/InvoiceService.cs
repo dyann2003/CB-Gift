@@ -735,7 +735,7 @@ public class InvoiceService : IInvoiceService
 
             // 5. CẬP NHẬT INVOICE (CỘNG DỒN) (Giữ nguyên)
             invoice.AmountPaid += payment.Amount;
-
+            string historyNote = ""; // Biến để lưu thêm ghi chú vào lịch
             // 6. KIỂM TRA VÀ CẬP NHẬT TRẠNG THÁI INVOICE (Giữ nguyên)
             if (invoice.AmountPaid >= invoice.TotalAmount)
             {
@@ -761,6 +761,9 @@ public class InvoiceService : IInvoiceService
             {
                 // - Thanh toán một phần (CÔNG NỢ)
                 invoice.Status = "PartiallyPaid";
+                // Cộng thêm 15 ngày vào hạn thanh toán (DueDate)
+                invoice.DueDate = invoice.DueDate.AddDays(1);
+                historyNote = $" (DueDate extended to {invoice.DueDate:dd/MM/yyyy})";
                 log.ProcessingStatus = "Processed_Partial";
             }
 
@@ -768,7 +771,7 @@ public class InvoiceService : IInvoiceService
             {
                 InvoiceId = invoice.InvoiceId,
                 // [THAY ĐỔI] Dùng tên cổng động
-                Action = $"Payment {payment.Amount:C0} received via {gatewayName}. (PaymentID: {payment.PaymentId})",
+                Action = $"Payment {payment.Amount:N0} received via {gatewayName}. (PaymentID: {payment.PaymentId}){historyNote}",
                 UserId = null
             });
 
