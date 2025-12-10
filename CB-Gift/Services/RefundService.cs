@@ -222,7 +222,7 @@ namespace CB_Gift.Services
                 throw new InvalidOperationException("Refund requests are only allowed for orders that have been paid.");
 
             // 🔥 NEW: CHECK DELIVERED & ≤ 3 DAYS
-            var shippedLog = await _context.GhnTrackingLogs
+           /* var shippedLog = await _context.GhnTrackingLogs
                 .Where(g => g.OrderCode == order.Tracking && g.Status == "delivered")
                 .OrderByDescending(g => g.UpdatedDate)
                 .FirstOrDefaultAsync();
@@ -235,8 +235,57 @@ namespace CB_Gift.Services
 
             if (daysSinceDelivered > 3)
                 throw new InvalidOperationException(
-                    $"Order {order.OrderCode} was delivered {Math.Floor(daysSinceDelivered)} days ago. Refund requests are only allowed within 3 days.");
+                    $"Order {order.OrderCode} was delivered {Math.Floor(daysSinceDelivered)} days ago. Refund requests are only allowed within 3 days.");*/
 
+            // Tìm Invoice chứa Order này để kiểm tra trạng thái tổng thể
+            var invoiceInfo = await _context.InvoiceItems
+                .Where(ii => ii.OrderId == order.OrderId)
+                .Select(ii => new
+                {
+                    ii.Invoice.InvoiceId,
+                    ii.Invoice.InvoiceNumber,
+                    ii.Invoice.Status,          // Quan trọng: Check trạng thái Invoice (Paid/PartiallyPaid/Issued)
+                    ii.Invoice.TotalAmount,
+                    ii.Invoice.AmountPaid,
+                    // Lấy danh sách ngày thanh toán thành công để tính mốc 3 ngày
+                    Payments = ii.Invoice.Payments
+                                .Where(p => p.Status == "Completed" || p.Status == "Paid") // Điều chỉnh theo status thực tế trong bảng Payment của bạn
+                                .OrderByDescending(p => p.PaymentDate)
+                                .Select(p => p.PaymentDate)
+                                .ToList()
+                })
+                .FirstOrDefaultAsync();
+
+            if (invoiceInfo == null)
+            {
+                // Trường hợp hiếm: Order đã tạo nhưng chưa được add vào Invoice nào
+                throw new InvalidOperationException($"Order {order.OrderCode} has not been added to any Invoice yet.");
+            }
+
+            // 4. CHECK INVOICE FULLY PAID
+            // Bắt buộc Invoice phải có trạng thái là "Paid"
+            if (invoiceInfo.Status != "Paid")
+            {
+                throw new InvalidOperationException(
+                    $"Refund denied. The invoice {invoiceInfo.InvoiceNumber} containing this order is currently '{invoiceInfo.Status}' (Paid: {invoiceInfo.AmountPaid:N0}/{invoiceInfo.TotalAmount:N0}). Full payment is required before requesting a refund.");
+            }
+
+            // 5. CHECK PAYMENT DATE <= 3 DAYS
+            // Logic: Tính từ lần thanh toán cuối cùng hoàn tất Invoice đó
+            if (!invoiceInfo.Payments.Any())
+            {
+                // Invoice set là Paid nhưng không tìm thấy log payment (có thể do set tay DB hoặc lỗi logic thanh toán)
+                throw new InvalidOperationException("Invoice is marked as Paid but no payment transaction record found.");
+            }
+
+            var lastPaymentDate = invoiceInfo.Payments.First();
+            var daysSincePayment = (DateTime.UtcNow - lastPaymentDate).TotalDays;
+
+            if (daysSincePayment > 3)
+            {
+                throw new InvalidOperationException(
+                    $"Refund request denied. The invoice was fully paid on {lastPaymentDate:dd/MM/yyyy} ({Math.Floor(daysSincePayment)} days ago). Requests are only allowed within 3 days of full payment.");
+            }
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
