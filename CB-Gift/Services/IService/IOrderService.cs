@@ -33,10 +33,11 @@ namespace CB_Gift.Services.IService
         Task<List<OrderWithDetailsDto>> GetAllOrders();
         Task<List<OrderDto>> GetOrdersForSellerAsync(string sellerUserId);
         Task<List<OrderWithDetailsDto>> GetOrdersAndOrderDetailForSellerAsync(string sellerUserId);
-        Task<OrderWithDetailsDto?> GetOrderDetailAsync(
+        Task<OrderWithDetailsDto?> GetOrderDetailAsync1(
           int orderId,
           string userId,
           List<string> roles);
+        Task<OrderWithDetailsDto?> GetOrderDetailAsync(int orderId, string sellerUserId);
 
         Task<EndCustomer> CreateCustomerAsync(EndCustomerCreateRequest request);
         Task<int> CreateOrderAsync(OrderCreateRequest request, string sellerUserId);
