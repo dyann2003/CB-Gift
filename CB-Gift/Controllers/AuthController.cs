@@ -2,6 +2,7 @@
 using CB_Gift.DTOs;
 using CB_Gift.Services.Email;
 using CB_Gift.Services.IService;
+using DocumentFormat.OpenXml.Office2016.Excel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -65,15 +66,21 @@ public class AuthController : ControllerBase
         // 3. Lưu Cookie
         SetTokenCookies(accessToken, refreshToken.Token);
 
-        return Ok(new AuthResponse(accessToken, user.UserName!, user.Email));
+        return Ok(new
+        {
+            AccessToken = accessToken,
+            RefreshToken = refreshToken.Token,
+            UserName = user.UserName,
+            Email = user.Email
+        });
     }
 
     // POST: /api/auth/refresh-token
     [HttpPost("refresh-token")]
     [AllowAnonymous]
-    public async Task<IActionResult> RefreshToken()
+    public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
     {
-        var refreshToken = Request.Cookies[RefreshCookie];
+        var refreshToken = request?.RefreshToken ?? Request.Cookies["refreshToken"];
         if (string.IsNullOrEmpty(refreshToken))
             return Unauthorized(new { message = "No refresh token provided." });
 
@@ -95,7 +102,11 @@ public class AuthController : ControllerBase
         // 3. Cập nhật Cookie mới
         SetTokenCookies(newAccessToken, newRefreshToken.Token);
 
-        return Ok(new { message = "Token refreshed" });
+        return Ok(new
+        {
+            accessToken = newAccessToken,
+            refreshToken = newRefreshToken.Token
+        });
     }
 
     // POST: /api/auth/logout
@@ -131,14 +142,12 @@ public class AuthController : ControllerBase
                 errors = rs.Errors.Select(e => new { e.Code, e.Description })
             });
 
-        // --- FIX BUG BẢO MẬT: Đổi pass xong phải thu hồi token cũ ---
         var refreshToken = Request.Cookies[RefreshCookie];
         if (!string.IsNullOrEmpty(refreshToken))
         {
             await _tokens.RevokeRefreshTokenAsync(refreshToken);
         }
-        DeleteTokenCookies(); // Xóa cookie để Frontend chuyển hướng về trang Login
-        // ------------------------------------------------------------
+        DeleteTokenCookies(); 
 
         return Ok(new { message = "Password changed. Please login again." });
     }
