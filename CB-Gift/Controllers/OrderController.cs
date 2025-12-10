@@ -89,7 +89,7 @@ namespace CB_Gift.Controllers
             // Console.WriteLine($"Debug Check: OrderId={orderId}, UserId={userId}, Roles={string.Join(",", roles)}");
 
             // 3. Gọi Service
-            var order = await _orderService.GetOrderDetailAsync(orderId, userId, roles);
+            var order = await _orderService.GetOrderDetailAsync1(orderId, userId, roles);
 
             if (order == null)
             {

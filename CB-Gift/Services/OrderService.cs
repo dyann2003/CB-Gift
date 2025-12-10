@@ -177,8 +177,55 @@ namespace CB_Gift.Services
              .ProjectTo<OrderWithDetailsDto>(_mapper.ConfigurationProvider)
             .ToListAsync();
         }
+        public async Task<OrderWithDetailsDto?> GetOrderDetailAsync(int orderId, string sellerUserId)
+        {
+            var query = _context.Orders
+                .Include(o => o.OrderDetails)
+                .Include(o => o.EndCustomer) // Thêm Include để lấy thông tin khách hàng đầy đủ
+                .Include(o => o.StatusOrderNavigation)
+                 .Include(o => o.OrderDetails) // Lấy details
+                    .ThenInclude(od => od.ProductVariant) // Lấy ProductVariant
+                .Where(o => o.OrderId == orderId);
 
-        public async Task<OrderWithDetailsDto?> GetOrderDetailAsync(
+            if (!string.IsNullOrEmpty(sellerUserId))
+            {
+                query = query.Where(o => o.SellerUserId == sellerUserId);
+            }
+
+
+            // Map trực tiếp sang DTO gồm cả collection Details
+            var dto = await query
+            .ProjectTo<OrderWithDetailsDto>(_mapper.ConfigurationProvider)
+            .FirstOrDefaultAsync();
+            // Nếu không tìm thấy đơn (hoặc không thuộc về seller này), trả về null luôn
+            if (dto == null) return null;
+
+            // 3. 👇 BỔ SUNG: Truy vấn thủ công bảng Refunds và CancellationRequests
+            // (Copy logic từ GetManagerOrderDetailAsync sang)
+
+            var latestRefund = await _context.Refunds
+                .Where(r => r.OrderId == orderId)
+                .OrderByDescending(r => r.CreatedAt)
+                .FirstOrDefaultAsync();
+
+
+            // 4. 👇 BỔ SUNG: Điền dữ liệu vào DTO
+
+            // --- Ưu tiên 1: Xử lý Hoàn tiền (Refund) ---
+            if (latestRefund != null)
+            {
+                dto.LatestRefundId = latestRefund.RefundId;
+                dto.IsRefundPending = (latestRefund.Status == "Pending");
+                dto.RefundAmount = latestRefund.Amount;
+
+                // Lấy lý do và bằng chứng
+                dto.Reason = latestRefund.Reason; // Lý do Seller gửi
+                dto.RejectionReason = latestRefund.StaffRejectionReason; // Lý do Staff từ chối
+                dto.ProofUrl = latestRefund.ProofUrl; // Link bằng chứng
+            }
+            return dto;
+        }
+        public async Task<OrderWithDetailsDto?> GetOrderDetailAsync1(
            int orderId,
            string userId,
            List<string> roles)
