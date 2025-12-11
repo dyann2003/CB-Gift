@@ -83,7 +83,30 @@ namespace CB_Gift.Orders.Import
 
             // Freeze dòng header để khi cuộn xuống vẫn thấy tiêu đề
             ws.SheetView.FreezeRows(1);
+            // --- BỔ SUNG: DÒNG DỮ LIỆU MẪU (SAMPLE DATA) ---
+            int sampleRowIndex = 2;
+            var sampleSku = skuList.FirstOrDefault() ?? "SAMPLE-SKU-001"; // Lấy SKU thật đầu tiên làm mẫu
 
+            ws.Cell(sampleRowIndex, 1).Value = "ORD-DEMO-001";          // OrderCode
+            ws.Cell(sampleRowIndex, 2).Value = "Nguyễn Văn A";          // CustomerName
+            ws.Cell(sampleRowIndex, 3).Value = "0987654321";            // Phone (nên để format Text)
+            ws.Cell(sampleRowIndex, 3).Style.NumberFormat.Format = "@"; // Ép kiểu Text cho cột Phone
+            ws.Cell(sampleRowIndex, 4).Value = "nguyenvana@gmail.com";  // Email
+            ws.Cell(sampleRowIndex, 5).Value = "123 Đường Láng";        // Address
+            ws.Cell(sampleRowIndex, 6).Value = "Hà Nội";                // Province
+            ws.Cell(sampleRowIndex, 7).Value = "Đống Đa";               // District
+            ws.Cell(sampleRowIndex, 8).Value = "Láng Thượng";           // Ward
+            ws.Cell(sampleRowIndex, 9).Value = sampleSku;               // Sku (Lấy từ List thật)
+            ws.Cell(sampleRowIndex, 10).Value = 2;                      // Quantity
+            ws.Cell(sampleRowIndex, 11).Value = "Hộp quà, Thiệp";       // Accessory
+            ws.Cell(sampleRowIndex, 12).Value = "Giao giờ hành chính";  // Note
+            ws.Cell(sampleRowIndex, 13).Value = "https://link.com/img1.jpg"; // LinkImg
+            ws.Cell(sampleRowIndex, 14).Value = "https://link.com/img1.jpg"; // LinkThanksCard
+            ws.Cell(sampleRowIndex, 15).Value = "https://link.com/img1.jpg"; // LinkFileDesign
+
+            // Format màu chữ xám cho dòng sample để người dùng biết là ví dụ
+            ws.Row(sampleRowIndex).Style.Font.FontColor = XLColor.DarkGray;
+            ws.Row(sampleRowIndex).Style.Font.Italic = true;
 
             // --- SHEET 2: DỮ LIỆU NGUỒN CHO DROPDOWN (RefData) ---
             // Tạo sheet mới để chứa danh sách SKU
