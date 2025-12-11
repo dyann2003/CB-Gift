@@ -29,6 +29,18 @@ public class ManagementAccountService : IManagementAccountService
         // 1) Base query
         var users = _db.Users.AsNoTracking().AsQueryable();
 
+        // =========================================================================
+        // [FIX] LOẠI BỎ ROLE "Manager" KHỎI DANH SÁCH
+        // Logic: Lọc những user MÀ KHÔNG CÓ (Any) bản ghi UserRole nào trỏ tới Role "Manager"
+        // =========================================================================
+        users = from u in users
+                where !(from ur in _db.UserRoles
+                        join r in _db.Roles on ur.RoleId equals r.Id
+                        where ur.UserId == u.Id && r.Name == "Manager"
+                        select 1).Any()
+                select u;
+        // =========================================================================
+
         // 2) Search
         if (!string.IsNullOrWhiteSpace(q.Search))
         {
@@ -63,7 +75,7 @@ public class ManagementAccountService : IManagementAccountService
             ("email", _) => users.OrderByDescending(u => u.Email),
             ("fullname", "asc") => users.OrderBy(u => u.FullName),
             ("fullname", _) => users.OrderByDescending(u => u.FullName),
-            // AppUser không có CreatedAt -> tạm theo Id (chuỗi tăng không đảm bảo thời gian, nhưng ổn tạm)
+            // AppUser không có CreatedAt -> tạm theo Id
             ("createdat", "asc") => users.OrderBy(u => u.Id),
             _ => users.OrderByDescending(u => u.Id)
         };
@@ -111,7 +123,6 @@ public class ManagementAccountService : IManagementAccountService
             TotalItems = total
         };
     }
-
 
     public async Task<UserDetailDto?> GetByIdAsync(string userId)
     {

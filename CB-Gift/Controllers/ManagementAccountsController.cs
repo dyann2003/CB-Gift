@@ -1,5 +1,6 @@
 ﻿// File: CB_Gift/Controllers/ManagementAccountsController.cs
 using CB_Gift.DTOs;
+using CB_Gift.Services.Email;
 using CB_Gift.Services.IService;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,10 +13,13 @@ namespace CB_Gift.Controllers;
 public class ManagementAccountsController : ControllerBase
 {
     private readonly IManagementAccountService _svc;
+    private readonly ITokenService _tokens;
 
-    public ManagementAccountsController(IManagementAccountService svc)
+
+    public ManagementAccountsController(IManagementAccountService svc, ITokenService tokens)
     {
         _svc = svc;
+        _tokens = tokens;
     }
 
     [HttpGet]
@@ -40,14 +44,24 @@ public class ManagementAccountsController : ControllerBase
     public async Task<IActionResult> Update([FromBody] UpdateUserDto dto)
     {
         var res = await _svc.UpdateAsync(dto);
-        return !res.Success ? BadRequest(res) : Ok(res);
+        if (!res.Success)
+        {
+            BadRequest(res);
+        }
+        await _tokens.RevokeAllRefreshTokensAsync(dto.Id);
+        return Ok(res);
     }
 
     [HttpPut("roles")]
     public async Task<IActionResult> SetRoles([FromBody] SetRolesDto dto)
     {
         var res = await _svc.SetRolesAsync(dto);
-        return !res.Success ? BadRequest(res) : Ok(res);
+        if (!res.Success)
+        {
+            BadRequest(res);
+        }
+        await _tokens.RevokeAllRefreshTokensAsync(dto.UserId);
+        return Ok(res);
     }
 
     [HttpPost("reset-password")]
@@ -68,6 +82,11 @@ public class ManagementAccountsController : ControllerBase
     public async Task<IActionResult> Delete(string id)
     {
         var res = await _svc.DeleteAsync(id);
-        return !res.Success ? BadRequest(res) : Ok(res);
+        if (!res.Success)
+        {
+            BadRequest(res);
+        }
+        await _tokens.RevokeAllRefreshTokensAsync(id);
+        return Ok(res);
     }
 }

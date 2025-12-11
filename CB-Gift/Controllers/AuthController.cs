@@ -210,6 +210,8 @@ public class AuthController : ControllerBase
 
         if (!result.Success) return BadRequest(new { message = result.Message });
 
+        await _tokens.RevokeAllRefreshTokensAsync(user.Id);
+
         return Ok(new { message = result.Message });
     }
 

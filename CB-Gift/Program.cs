@@ -159,6 +159,7 @@ builder.Services.AddHttpClient("GhnProdClient", client =>
 {
     client.BaseAddress = new Uri(ghnProdBaseUrl);
     client.DefaultRequestHeaders.Add("Token", ghnToken);
+    client.DefaultRequestHeaders.Add("ShopId", ghnShopId);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
@@ -325,7 +326,7 @@ app.Run();
 static async Task SeedRolesAsync(IServiceProvider serviceProvider)
 {
     var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-    string[] roles = { "Admin", "Seller", "Designer", "QC", "Staff", "Manager" };
+    string[] roles = { "Seller", "Designer", "QC", "Staff", "Manager" };
 
     foreach (var role in roles)
     {
@@ -341,7 +342,7 @@ static async Task SeedAllDataAsync(IServiceProvider serviceProvider)
     var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     var userManager = serviceProvider.GetRequiredService<UserManager<AppUser>>();
 
-    string[] roleNames = { "Admin", "Seller", "Designer", "QC", "Staff", "Manager" };
+    string[] roleNames = { "Seller", "Designer", "QC", "Staff", "Manager" };
 
     foreach (var roleName in roleNames)
     {
@@ -353,7 +354,6 @@ static async Task SeedAllDataAsync(IServiceProvider serviceProvider)
 
     var usersToSeed = new List<(string Email, string Password, string Role)>
     {
-        ("admin@example.com", "Admin@123", "Admin"),
         ("seller@example.com", "Seller@123", "Seller"),
         ("designer@example.com", "Designer@123", "Designer"),
         ("qc@example.com", "Qc@123", "QC"),
