@@ -331,11 +331,11 @@ namespace CB_Gift.Services
         }
 
         public async Task<(int total, List<ProductDto> products)> FilterProductsAsync(
-    string? searchTerm,
-    string? category,
-    int? status,
-    int page,
-    int pageSize)
+        string? searchTerm,
+        string? category,
+        int? status,
+        int page,
+        int pageSize)
         {
             var query = _context.Products
                 .Include(p => p.Category)

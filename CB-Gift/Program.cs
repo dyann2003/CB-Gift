@@ -159,7 +159,7 @@ builder.Services.AddHttpClient("GhnProdClient", client =>
 {
     client.BaseAddress = new Uri(ghnProdBaseUrl);
     client.DefaultRequestHeaders.Add("Token", ghnToken);
-    client.DefaultRequestHeaders.Add("ShopId", ghnShopId);
+ //   client.DefaultRequestHeaders.Add("ShopId", ghnShopId);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
