@@ -431,7 +431,7 @@ namespace CB_Gift.Controllers
 
             try
             {
-                // 🔹 Lấy toàn bộ đơn hàng của seller (join đầy đủ)
+                // 1. Lấy dữ liệu
                 var orders = await _context.Orders
                     .Include(o => o.OrderDetails)
                         .ThenInclude(d => d.ProductVariant)
@@ -445,11 +445,11 @@ namespace CB_Gift.Controllers
                 using var workbook = new XLWorkbook();
                 var ws = workbook.Worksheets.Add("All Orders");
 
-                // ✅ Header (đã thêm 4 cột mới)
+                // 2. Header
                 string[] headers =
                 {
-            "Order ID", "Order Code", "Order Date", "Customer Name",
-            "Phone", "Email", "Address", "Status", "Total Cost",
+            "No.", "Order Code", "Order Date", "Customer Name",
+            "Phone", "Email", "Address", "Status", "Total Cost","Tracking Number",
             "Note", "Product Name", "Quantity", "Price", "Production Status",
             "LinkImg", "LinkThanksCard", "LinkFileDesign", "TimeCreated"
         };
@@ -461,14 +461,19 @@ namespace CB_Gift.Controllers
                     ws.Cell(1, i + 1).Style.Fill.BackgroundColor = XLColor.LightGray;
                 }
 
-                int row = 2;
+                // 3. Ghi dữ liệu
+                int row = 2; // Bắt đầu từ dòng 2
+
                 foreach (var order in orders)
                 {
                     if (order.OrderDetails != null && order.OrderDetails.Any())
                     {
                         foreach (var detail in order.OrderDetails)
                         {
-                            ws.Cell(row, 1).Value = order.OrderId;
+                            // --- SỬA TẠI ĐÂY ---
+                            // Sử dụng (row - 1) để số thứ tự tăng liên tục theo dòng Excel (1, 2, 3, 4...)
+                            ws.Cell(row, 1).Value = row - 1;
+
                             ws.Cell(row, 2).Value = order.OrderCode;
                             ws.Cell(row, 3).Value = order.OrderDate.ToString("yyyy-MM-dd HH:mm");
                             ws.Cell(row, 4).Value = order.EndCustomer?.Name ?? "";
@@ -477,32 +482,30 @@ namespace CB_Gift.Controllers
                             ws.Cell(row, 7).Value = order.EndCustomer?.Address ?? "";
                             ws.Cell(row, 8).Value = order.StatusOrderNavigation?.NameVi ?? "";
                             ws.Cell(row, 9).Value = order.TotalCost ?? 0;
-                            ws.Cell(row, 10).Value = ""; // SellerNote (nếu có field thì thay)
+                            ws.Cell(row, 10).Value = order.Tracking ?? "";
+                            ws.Cell(row, 11).Value = "";
 
-                            // ✅ Tên sản phẩm
-                            var productName =
-                                detail.ProductVariant?.Product?.ProductName ??
-                                detail.ProductVariant?.Sku ??
-                                "Unnamed Product";
-                            ws.Cell(row, 11).Value = productName;
+                            var productName = detail.ProductVariant?.Product?.ProductName ??
+                                              detail.ProductVariant?.Sku ??
+                                              "Unnamed Product";
+                            ws.Cell(row, 12).Value = productName;
 
-                            ws.Cell(row, 12).Value = detail.Quantity;
-                            ws.Cell(row, 13).Value = detail.Price ?? 0;
-                            ws.Cell(row, 14).Value = detail.ProductionStatus?.ToString() ?? "";
+                            ws.Cell(row, 13).Value = detail.Quantity;
+                            ws.Cell(row, 14).Value = detail.Price ?? 0;
+                            ws.Cell(row, 15).Value = detail.ProductionStatus?.ToString() ?? "";
+                            ws.Cell(row, 16).Value = detail.LinkImg ?? "";
+                            ws.Cell(row, 17).Value = detail.LinkThanksCard ?? "";
+                            ws.Cell(row, 18).Value = detail.LinkFileDesign ?? "";
+                            ws.Cell(row, 19).Value = detail.CreatedDate?.ToString("yyyy-MM-dd HH:mm") ?? "";
 
-                            // ✅ Thêm 4 field mới
-                            ws.Cell(row, 15).Value = detail.LinkImg ?? "";
-                            ws.Cell(row, 16).Value = detail.LinkThanksCard ?? "";
-                            ws.Cell(row, 17).Value = detail.LinkFileDesign ?? "";
-                            ws.Cell(row, 18).Value = detail.CreatedDate?.ToString("yyyy-MM-dd HH:mm") ?? "";
-
-                            row++;
+                            row++; // Xuống dòng mới
                         }
                     }
                     else
                     {
-                        // Nếu đơn hàng không có chi tiết
-                        ws.Cell(row, 1).Value = order.OrderId;
+                        // Trường hợp đơn hàng rỗng (không có sản phẩm)
+                        ws.Cell(row, 1).Value = row - 1; // Vẫn tăng số thứ tự
+
                         ws.Cell(row, 2).Value = order.OrderCode;
                         ws.Cell(row, 3).Value = order.OrderDate.ToString("yyyy-MM-dd HH:mm");
                         ws.Cell(row, 4).Value = order.EndCustomer?.Name ?? "";
@@ -512,11 +515,12 @@ namespace CB_Gift.Controllers
                         ws.Cell(row, 8).Value = order.StatusOrderNavigation?.NameVi ?? "";
                         ws.Cell(row, 9).Value = order.TotalCost ?? 0;
                         ws.Cell(row, 10).Value = "";
-                        row++;
+
+                        row++; // Xuống dòng mới
                     }
                 }
 
-                // ✅ Định dạng đẹp
+                // 4. Format
                 ws.Columns().AdjustToContents();
                 ws.SheetView.FreezeRows(1);
 
