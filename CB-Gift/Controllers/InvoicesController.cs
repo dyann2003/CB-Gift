@@ -17,7 +17,7 @@ namespace CB_Gift.Controllers
         {
             _invoiceService = invoiceService;
         }
-    // huy
+        // huy
         [HttpPost]
         [Authorize(Roles = "Staff,Manager")]
         public async Task<IActionResult> CreateInvoice([FromBody] CreateInvoiceRequest request)
@@ -53,19 +53,48 @@ namespace CB_Gift.Controllers
         {
             try
             {
-                var sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-                var paymentLink = await _invoiceService.CreatePaymentLinkAsync(request, sellerId);
-                return Ok(new { paymentUrl = paymentLink });
+                var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                var invoice = await _invoiceService.CreateInvoiceAsync(request, staffId);
+                return Ok(invoice);
             }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { message = ex.Message });
-            }
+            // Bắt lỗi logic (VD: Đã tồn tại hóa đơn, sai Seller...)
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                // Trả về mã 400 và message cụ thể để FE hiển thị
+                return BadRequest(ex.Message);
             }
-        }*/
+            // Bắt lỗi tham số đầu vào
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            // Bắt các lỗi không xác định khác
+            catch (Exception ex)
+            {
+                // Log lỗi tại đây nếu cần
+                return StatusCode(500, "Lỗi hệ thống nội bộ: " + ex.Message);
+            }
+        }
+
+        /*    [HttpPost("create-payment-link")]
+            [Authorize(Roles = "Seller")]
+            public async Task<IActionResult> CreatePaymentLink([FromBody] CreatePaymentLinkRequest request)
+            {
+                try
+                {
+                    var sellerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                    var paymentLink = await _invoiceService.CreatePaymentLinkAsync(request, sellerId);
+                    return Ok(new { paymentUrl = paymentLink });
+                }
+                catch (KeyNotFoundException ex)
+                {
+                    return NotFound(new { message = ex.Message });
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return BadRequest(new { message = ex.Message });
+                }
+            }*/
         /// <summary>
         /// Lấy danh sách hóa đơn cho Seller đang đăng nhập.
         /// Chỉ người dùng có vai trò "Seller" mới có thể gọi API này.
