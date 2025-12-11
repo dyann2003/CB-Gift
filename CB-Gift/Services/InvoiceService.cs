@@ -57,13 +57,13 @@ public class InvoiceService : IInvoiceService
                 // Kiểm tra xem có ID nào không tồn tại không
                 if (requestedOrders.Count != request.OrderIds.Distinct().Count())
                 {
-                    throw new KeyNotFoundException("Một hoặc nhiều OrderID không tồn tại trong hệ thống.");
+                    throw new KeyNotFoundException("One or more OrderIDs do not exist in the system.");
                 }
 
                 // Kiểm tra xem có đơn hàng nào không thuộc về Seller được chỉ định không
                 if (requestedOrders.Any(o => o.SellerUserId != request.SellerId))
                 {
-                    throw new InvalidOperationException("Một hoặc nhiều đơn hàng không thuộc về Seller đã chọn.");
+                    throw new InvalidOperationException("One or more orders do not belong to the selected Seller.");
                 }
                 // Kiểm tra xem có đơn hàng nào chưa được thanh toán không
               /*  var unpaidOrders = requestedOrders.Where(o => o.PaymentStatus != "Paid").ToList();
@@ -82,7 +82,7 @@ public class InvoiceService : IInvoiceService
 
                 if (alreadyInvoicedIds.Any())
                 {
-                    throw new InvalidOperationException($"Các đơn hàng với ID: [{string.Join(", ", alreadyInvoicedIds)}] đã được xuất hóa đơn.");
+                    throw new InvalidOperationException($"Orders with ID: [{string.Join(", ", alreadyInvoicedIds)}] an invoice has been issued.");
                 }
 
                 uninvoicedOrders = requestedOrders;
@@ -101,13 +101,13 @@ public class InvoiceService : IInvoiceService
             else
             {
                 // Nếu không cung cấp đủ thông tin
-                throw new ArgumentException("Phải cung cấp danh sách Order ID hoặc khoảng thời gian (StartDate và EndDate).");
+                throw new ArgumentException("You must provide a list of Order IDs or time periods (StartDate và EndDate).");
             }
 
             // --- PHẦN LOGIC CHUNG 
 
             if (!uninvoicedOrders.Any())
-                throw new InvalidOperationException("Không có đơn hàng mới hợp lệ để tạo hóa đơn.");
+                throw new InvalidOperationException("No valid new orders were found to generate an invoice.");
 
             var subtotal = uninvoicedOrders.Sum(o => o.TotalCost ?? 0);
             decimal discountAmount = 0;
