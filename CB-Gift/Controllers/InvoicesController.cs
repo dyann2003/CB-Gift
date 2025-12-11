@@ -22,6 +22,35 @@ namespace CB_Gift.Controllers
         [Authorize(Roles = "Staff,Manager")]
         public async Task<IActionResult> CreateInvoice([FromBody] CreateInvoiceRequest request)
         {
+            try 
+            {
+                var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                var invoice = await _invoiceService.CreateInvoiceAsync(request, staffId);
+                return Ok(invoice);
+            }
+            // Bắt lỗi logic (VD: Đã tồn tại hóa đơn, sai Seller...)
+            catch (InvalidOperationException ex) 
+            {
+                // Trả về mã 400 và message cụ thể để FE hiển thị
+                return BadRequest(ex.Message); 
+            }
+            // Bắt lỗi tham số đầu vào
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            // Bắt các lỗi không xác định khác
+            catch (Exception ex)
+            {
+                // Log lỗi tại đây nếu cần
+                return StatusCode(500, "Lỗi hệ thống nội bộ: " + ex.Message);
+            }
+        }
+
+    /*    [HttpPost("create-payment-link")]
+        [Authorize(Roles = "Seller")]
+        public async Task<IActionResult> CreatePaymentLink([FromBody] CreatePaymentLinkRequest request)
+        {
             try
             {
                 var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier);

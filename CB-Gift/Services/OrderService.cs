@@ -790,7 +790,7 @@ namespace CB_Gift.Services
 
             if (order.StatusOrder == 19)
             {
-                order.StatusOrder = 10;
+                order.StatusOrder = 11;
             }
 
             await _context.SaveChangesAsync();
@@ -1227,6 +1227,10 @@ namespace CB_Gift.Services
                 }
                 order.Tracking = shippingResult.OrderCode;
                 order.StatusOrder = 13; // OrderStatus.Shipping;
+                foreach (var detail in order.OrderDetails)
+                {
+                    detail.ProductionStatus = ProductionStatus.SHIPPING;
+                }
                 _context.Orders.Update(order);
                 await _context.SaveChangesAsync();
                 // ✅ BẮT ĐẦU GỬI THÔNG BÁO
@@ -1281,7 +1285,7 @@ namespace CB_Gift.Services
                     // Việc này giúp Timeline ở Frontend hiện màu xanh ở bước Shipping cho từng sản phẩm
                     foreach (var detail in order.OrderDetails)
                     {
-                        detail.ProductionStatus = ProductionStatus.SHIPPING;
+                        detail.ProductionStatus = ProductionStatus.QC_DONE;
                     }
                     _context.Orders.Update(order);
                     await _context.SaveChangesAsync();
@@ -1352,7 +1356,7 @@ namespace CB_Gift.Services
 
             var deliveryPhase = new[]
             {
-                "SHIPPING", "SHIPPED"
+                "SHIPPING", "SHIPPED","CHANGE_ADDRESS"
             };
 
             var refundPhase = new[]
