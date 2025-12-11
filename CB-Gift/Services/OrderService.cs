@@ -1347,7 +1347,7 @@ namespace CB_Gift.Services
             var manufacturePhase = new[]
             {
                 "READY_PROD", "INPROD", "FINISHED",
-                "PROD_REWORK", "QC_DONE", "QC_FAIL"
+                "QC_DONE", "QC_FAIL"
             };
 
             var deliveryPhase = new[]
@@ -1357,7 +1357,7 @@ namespace CB_Gift.Services
 
             var refundPhase = new[]
             {
-                "HOLD_RF", "HOLD_RP", "REFUND"
+                "HOLD_RF", "HOLD_RP", "REFUND","PROD_REWORK"
             };
 
             // ================== GROUP OBJECT ==================
