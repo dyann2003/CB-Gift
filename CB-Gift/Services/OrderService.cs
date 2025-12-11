@@ -790,7 +790,7 @@ namespace CB_Gift.Services
 
             if (order.StatusOrder == 19)
             {
-                order.StatusOrder = 10;
+                order.StatusOrder = 11;
             }
 
             await _context.SaveChangesAsync();
