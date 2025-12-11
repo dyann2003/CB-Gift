@@ -1825,21 +1825,40 @@ namespace CB_Gift.Services
         {
             if (file == null || file.Length == 0) throw new ArgumentException("File is empty.");
 
+            // 1. Load Cache cơ bản (Tỉnh/Huyện/Xã/Sản phẩm)
             await _cache.LoadAsync();
+
             var resultList = new List<OrderImportRowDto>();
 
-            using var stream = file.OpenReadStream();
-            using var workbook = new XLWorkbook(stream);
-            var worksheet = workbook.Worksheets.FirstOrDefault();
-            if (worksheet == null) throw new Exception("Excel file has no sheets.");
-
-            var rows = worksheet.RangeUsed().RowsUsed().Skip(1); // Bỏ header
-
-            foreach (var row in rows)
+            // 2. Đọc File Excel và Map sang DTO (Chưa Validate vội)
+            using (var stream = file.OpenReadStream())
+            using (var workbook = new XLWorkbook(stream))
             {
-                var dto = MapRowToDto(row.WorksheetRow());
+                var worksheet = workbook.Worksheets.FirstOrDefault();
+                if (worksheet == null) throw new Exception("Excel file has no sheets.");
 
-                // Thực hiện Validate
+                var rows = worksheet.RangeUsed().RowsUsed().Skip(1); // Bỏ header
+
+                foreach (var row in rows)
+                {
+                    // Map dữ liệu thô sang DTO
+                    var dto = MapRowToDto(row.WorksheetRow());
+                    resultList.Add(dto);
+                }
+            }
+
+            // =========================================================================
+            // [QUAN TRỌNG] 3. Load danh sách OrderCode đã tồn tại trong DB vào Cache
+            // =========================================================================
+            var allOrderCodes = resultList.Select(x => x.OrderCode).ToList();
+            await _cache.LoadExistingOrderCodesAsync(allOrderCodes);
+
+            // =========================================================================
+            // 4. Thực hiện Validate (Lúc này Validator đã có dữ liệu trong Cache để check)
+            // =========================================================================
+            foreach (var dto in resultList)
+            {
+                // Validator sẽ gọi hàm BeUniqueOrderCode -> check trong _cache.ExistingOrderCodes
                 var validationResult = await _validator.ValidateAsync(dto);
 
                 if (!validationResult.IsValid)
@@ -1851,8 +1870,6 @@ namespace CB_Gift.Services
                 {
                     dto.IsValid = true;
                 }
-
-                resultList.Add(dto);
             }
 
             return resultList;
@@ -1920,15 +1937,24 @@ namespace CB_Gift.Services
         {
             var result = new OrderImportResult();
 
-            // Đảm bảo Cache đã load
+            // 1. Load dữ liệu cơ sở (Tỉnh/Huyện/Sản phẩm)
             await _cache.LoadAsync();
 
             // ========================================================================
-            // BƯỚC 1: Validate dữ liệu từng dòng (Kiểu dữ liệu, bắt buộc...)
+            // [QUAN TRỌNG] BƯỚC BỔ SUNG: LOAD LẠI MÃ TRÙNG TỪ DB
+            // Vì đây là Request mới, Cache cũ đã mất, phải load lại để Validator check được.
+            // ========================================================================
+            var allOrderCodes = dtos.Select(x => x.OrderCode).ToList();
+            await _cache.LoadExistingOrderCodesAsync(allOrderCodes);
+
+            // ========================================================================
+            // BƯỚC 1: Validate lại dữ liệu (Để đảm bảo an toàn tuyệt đối)
             // ========================================================================
             foreach (var dto in dtos)
             {
+                // Lúc này Validator đã có dữ liệu trong Cache để check OrderCode trùng
                 var valResult = await _validator.ValidateAsync(dto);
+
                 if (!valResult.IsValid)
                 {
                     result.Errors.Add(new OrderImportRowError
@@ -1940,63 +1966,64 @@ namespace CB_Gift.Services
             }
 
             // ========================================================================
-            // BƯỚC 1.5: Validate tính nhất quán (Consistency Check)
-            // Cùng OrderCode bắt buộc phải cùng thông tin Customer & Shipping
+            // BƯỚC 1.5: Validate trùng lặp TRONG CHÍNH FILE IMPORT (Internal Duplicate)
+            // Trường hợp: File excel có 2 dòng cùng mã "NEW-CODE-1" (chưa có trong DB)
+            // Validator ở trên sẽ thấy cả 2 đều hợp lệ (vì chưa có trong DB).
+            // Nhưng khi Insert dòng 2 sẽ bị lỗi.
             // ========================================================================
 
-            // Gom nhóm để kiểm tra
-            var tempGroups = dtos.GroupBy(x => x.OrderCode);
+            // Tìm các mã bị lặp lại trong danh sách đầu vào
+            var duplicateKeysInFile = dtos
+                .GroupBy(x => x.OrderCode)
+                .Where(g => g.Count() > 1 && !string.IsNullOrWhiteSpace(g.Key)) // Nhóm nào có > 1 dòng
+                .Select(g => g.Key)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var group in tempGroups)
+            if (duplicateKeysInFile.Any())
             {
-                // Nếu nhóm chỉ có 1 dòng thì không cần check
-                if (group.Count() <= 1) continue;
-
-                // Lấy dòng đầu tiên làm "Dòng Chuẩn"
-                var headerRow = group.First();
-
-                // Duyệt các dòng còn lại để so sánh với dòng chuẩn
-                foreach (var row in group.Skip(1))
+                // Báo lỗi cho các dòng bị trùng này
+                foreach (var dto in dtos.Where(d => duplicateKeysInFile.Contains(d.OrderCode)))
                 {
-                    // Hàm kiểm tra xem 2 dòng có khớp thông tin Header không (Viết ở dưới)
-                    if (!IsOrderHeaderConsistent(headerRow, row))
+                    // Tránh add trùng thông báo nếu validator trên đã bắt rồi (trường hợp trùng cả DB)
+                    var existingError = result.Errors.FirstOrDefault(e => e.RowNumber == dto.RowNumber);
+                    string msg = $"Order code '{dto.OrderCode}' it is repeated multiple times in the uploaded file.";
+
+                    if (existingError == null)
                     {
                         result.Errors.Add(new OrderImportRowError
                         {
-                            RowNumber = row.RowNumber,
-                            Messages = new List<string>
-                    {
-                        $"Data is inconsistent with the stream {headerRow.RowNumber} (same code {headerRow.OrderCode}). " +
-                        "Please double check your Name, Phone Number, Email and Shipping Address."
-                    }
+                            RowNumber = dto.RowNumber,
+                            Messages = new List<string> { msg }
                         });
+                    }
+                    else if (!existingError.Messages.Contains(msg))
+                    {
+                        existingError.Messages.Add(msg);
                     }
                 }
             }
 
             // ========================================================================
-            // BƯỚC 2: Check lỗi tổng hợp
+            // BƯỚC 2: Nếu có lỗi -> DỪNG NGAY
             // ========================================================================
-
-            // Nếu có bất kỳ lỗi nào (Validate dòng hoặc Validate logic) -> TRẢ VỀ NGAY
             if (result.Errors.Any())
             {
                 result.SuccessCount = 0;
                 result.TotalRows = dtos.Count;
-                return result;
+                return result; // Trả về danh sách lỗi để Frontend hiển thị lại
             }
 
             // ========================================================================
-            // BƯỚC 3: Lưu Database (Logic cũ giữ nguyên)
+            // BƯỚC 3: Lưu Database (Logic cũ)
             // ========================================================================
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // Gom nhóm lại (vì bên trên chỉ là tempGroups)
                 var orderGroups = dtos.GroupBy(x => x.OrderCode);
 
                 foreach (var group in orderGroups)
                 {
+                    // Factory ở đây cũng có check 1 lần nữa (Throw Exception) để chốt chặn cuối cùng
                     var orderEntity = await _orderFactory.CreateOrderFromGroupAsync(group, sellerUserId);
                     _context.Orders.Add(orderEntity);
                     result.SuccessCount++;
@@ -2008,8 +2035,17 @@ namespace CB_Gift.Services
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                // Log error here if needed
-                throw; // Hoặc return BadRequest tùy logic controller
+                // Nếu Factory throw lỗi "Mã đơn hàng đã tồn tại", catch và trả về lỗi đẹp hơn
+                if (ex.Message.Contains("already existed"))
+                {
+                    result.Errors.Add(new OrderImportRowError
+                    {
+                        RowNumber = 0,
+                        Messages = new List<string> { $"Error: {ex.Message}" }
+                    });
+                    return result;
+                }
+                throw;
             }
 
             result.TotalRows = dtos.Count;

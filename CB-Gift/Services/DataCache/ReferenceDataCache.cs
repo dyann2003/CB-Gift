@@ -14,7 +14,7 @@ public class ReferenceDataCache
     private List<GhnProvince> _ghnProvinces = new();
     private Dictionary<int, List<GhnDistrict>> _ghnDistricts = new(); // Key: ProvinceId
     private Dictionary<int, List<GhnWard>> _ghnWards = new();         // Key: DistrictId
-
+    public HashSet<string> ExistingOrderCodes { get; private set; } = new(StringComparer.OrdinalIgnoreCase);
     public ReferenceDataCache(CBGiftDbContext db, ILocationService locationService)
     {
         _db = db;
@@ -107,5 +107,26 @@ public class ReferenceDataCache
         }
 
         return Normalize(ghnName) == Normalize(inputName);
+    }
+    // --- MỚI: Hàm Load danh sách OrderCode trùng 1 lần duy nhất ---
+    public async Task LoadExistingOrderCodesAsync(IEnumerable<string> incomingOrderCodes)
+    {
+        // 1. Lọc ra các mã không rỗng và loại bỏ trùng lặp trong chính file import
+        var codesToCheck = incomingOrderCodes
+            .Where(c => !string.IsNullOrWhiteSpace(c))
+            .Distinct()
+            .ToList();
+
+        if (!codesToCheck.Any()) return;
+
+        // 2. Query DB 1 lần duy nhất: Lấy những mã nào CÓ nằm trong danh sách incoming
+        // Lưu ý: Nếu danh sách quá lớn (>2000), có thể cần chia batch, nhưng với file import thông thường thì OK.
+        var existingCodes = await _db.Orders
+            .Where(o => codesToCheck.Contains(o.OrderCode))
+            .Select(o => o.OrderCode)
+            .ToListAsync();
+
+        // 3. Lưu vào HashSet để tra cứu O(1)
+        ExistingOrderCodes = new HashSet<string>(existingCodes, StringComparer.OrdinalIgnoreCase);
     }
 }
