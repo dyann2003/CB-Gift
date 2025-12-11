@@ -1281,7 +1281,7 @@ namespace CB_Gift.Services
                     // Việc này giúp Timeline ở Frontend hiện màu xanh ở bước Shipping cho từng sản phẩm
                     foreach (var detail in order.OrderDetails)
                     {
-                        detail.ProductionStatus = ProductionStatus.SHIPPING;
+                        detail.ProductionStatus = ProductionStatus.QC_DONE;
                     }
                     _context.Orders.Update(order);
                     await _context.SaveChangesAsync();
