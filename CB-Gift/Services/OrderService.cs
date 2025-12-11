@@ -1227,6 +1227,10 @@ namespace CB_Gift.Services
                 }
                 order.Tracking = shippingResult.OrderCode;
                 order.StatusOrder = 13; // OrderStatus.Shipping;
+                foreach (var detail in order.OrderDetails)
+                {
+                    detail.ProductionStatus = ProductionStatus.SHIPPING;
+                }
                 _context.Orders.Update(order);
                 await _context.SaveChangesAsync();
                 // ✅ BẮT ĐẦU GỬI THÔNG BÁO
