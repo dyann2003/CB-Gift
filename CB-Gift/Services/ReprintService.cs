@@ -516,7 +516,7 @@ namespace CB_Gift.Services
                         throw new InvalidOperationException($"OrderDetail ID {itemRequest.OriginalOrderDetailId} already has an existing reprint request.");
 
                     var refundExists = await _context.Refunds
-                        .AnyAsync(r => r.OrderDetailId == itemRequest.OriginalOrderDetailId);
+                        .AnyAsync(r => r.OrderDetailId == itemRequest.OriginalOrderDetailId && (r.Status == "Pending" || r.Status == "Approved"));
 
                     if (refundExists)
                         throw new InvalidOperationException($"OrderDetail ID {itemRequest.OriginalOrderDetailId} already has a refund request.");
