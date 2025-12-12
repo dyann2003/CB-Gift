@@ -392,10 +392,10 @@ namespace CB_Gift.Services
                 .FirstOrDefaultAsync(r => r.RefundId == refundId);
 
             if (primaryRefund == null)
-                throw new KeyNotFoundException("Không tìm thấy yêu cầu hoàn tiền (Refund ID đại diện).");
+                throw new KeyNotFoundException("No refund request found");
 
             if (primaryRefund.Status != "Pending")
-                throw new InvalidOperationException("Yêu cầu này đã được xử lý trước đó hoặc không ở trạng thái Pending.");
+                throw new InvalidOperationException("This request has been processed previously or is currently in a Pending state.");
 
             var order = primaryRefund.Order ?? throw new InvalidOperationException("Refund record missing parent Order.");
             var sellerId = primaryRefund.RequestedBySellerId;
@@ -411,7 +411,7 @@ namespace CB_Gift.Services
 
             if (!refundsInGroup.Any())
             {
-                throw new InvalidOperationException("Không tìm thấy bản ghi Pending nào trong đơn hàng để xử lý.");
+                throw new InvalidOperationException("No \"Pending\" entries were found in the order to process.");
             }
 
             int countAffected = refundsInGroup.Count;
@@ -448,7 +448,7 @@ namespace CB_Gift.Services
                     {
                         // === TỪ CHỐI HOÀN TIỀN ===
                         if (string.IsNullOrWhiteSpace(request.RejectionReason))
-                            throw new ArgumentException("Lý do từ chối là bắt buộc.");
+                            throw new ArgumentException("The reason for refusal is mandatory.");
 
                         refund.Status = "Rejected";
                         refund.StaffRejectionReason = request.RejectionReason;
