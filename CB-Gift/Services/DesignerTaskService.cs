@@ -155,7 +155,7 @@ namespace CB_Gift.Services
                 else
                 {
                     // Cả hai trường đều trống -> Lỗi
-                    throw new ArgumentException("Phải cung cấp File mới hoặc URL File đã có.");
+                    throw new ArgumentException("You must provide either a new file or the URL of an existing file.");
                 }
 
                 // 3. LOGIC UPSERT (UPDATE HOẶC INSERT) VÀO OrderDetailDesign
