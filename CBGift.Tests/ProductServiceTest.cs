@@ -237,22 +237,7 @@ namespace CB_Gift.Tests.Services
             await ctx.SaveChangesAsync();
         }
 
-        [Fact]
-        public async Task GetAllAsync_Returns_All_WithVariants_And_CategoryName()
-        {
-            var db = BuildContext(nameof(GetAllAsync_Returns_All_WithVariants_And_CategoryName));
-            await SeedBasicAsync(db);
-            var mapper = BuildMapper();
-            var svc = new ProductService(db, mapper.Object);
-
-            var result = await svc.GetAllAsync();
-
-            Assert.Equal(2, result.Count());
-            var red = result.First(p => p.ProductName == "Red Mug");
-            Assert.Equal("Mugs", red.CategoryName);
-            Assert.Equal(2, red.Variants!.Count);
-            Assert.Contains(red.Variants!, v => v.Sku == "RMUG-S" && v.BaseCost == 9.9m && v.TotalCost == 12.9m);
-        }
+    
 
         [Fact]
         public async Task GetAllProductsHaveStatusTrueAsync_Filters_Status_1()

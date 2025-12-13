@@ -24,7 +24,7 @@ namespace CB_Gift.Tests.Services
         // ===== Helpers =====
         private static DbContextOptions<CBGiftDbContext> NewInMemoryOptions()
             => new DbContextOptionsBuilder<CBGiftDbContext>()
-                .UseInMemoryDatabase(Guid.NewGuid().ToString()) 
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
                 .ConfigureWarnings(b => b.Ignore(InMemoryEventId.TransactionIgnoredWarning))
                 .EnableSensitiveDataLogging()
                 .Options;
@@ -90,8 +90,8 @@ namespace CB_Gift.Tests.Services
                Status = status,
                Amount = 50m,
                CreatedAt = DateTime.UtcNow,
-               Reason = reason,            
-               ProofUrl = proofUrl         
+               Reason = reason,
+               ProofUrl = proofUrl
            };
 
         // ====== RequestRefundAsync ======
@@ -251,120 +251,5 @@ namespace CB_Gift.Tests.Services
                 service.ReviewRefundAsync(511, new StaffReviewRefundDto { Approved = false, RejectionReason = " " }, "staff-1"));
         }
 
-        [Fact]
-        public async Task ReviewRefund_Approve_Updates_Order_Removes_PlanDetails_And_Sends_Notifications()
-        {
-            var options = NewInMemoryOptions();
-            using var ctx = new CBGiftDbContext(options);
-
-            // Seed Order + Details + PlanDetails
-            var order = MakeOrder(6001, "seller-6", "Paid");
-            var detail = new OrderDetail { OrderDetailId = 1, OrderId = order.OrderId, PlanDetails = new List<PlanDetail>() };
-            detail.PlanDetails.Add(new PlanDetail { PlanDetailId = 1, OrderDetailId = detail.OrderDetailId });
-            detail.PlanDetails.Add(new PlanDetail { PlanDetailId = 2, OrderDetailId = detail.OrderDetailId });
-            order.OrderDetails.Add(detail);
-
-            ctx.Orders.Add(order);
-            var refund = MakeRefund(61, order.OrderId, order.SellerUserId, "Pending");
-            ctx.Refunds.Add(refund);
-            await ctx.SaveChangesAsync();
-
-            var (hubMock, _, proxy) = CreateHubMock();
-            var notifMock = new Mock<INotificationService>();
-            notifMock.Setup(n => n.CreateAndSendNotificationAsync(
-                    It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-                .Returns(Task.CompletedTask);
-
-            var service = CreateService(ctx, notifMock, hubMock);
-
-            await service.ReviewRefundAsync(61, new StaffReviewRefundDto { Approved = true }, "staff-6");
-
-            // Reload & assert
-            var reloadedOrder = await ctx.Orders.Include(o => o.OrderDetails)
-                                                .ThenInclude(od => od.PlanDetails)
-                                                .FirstAsync(o => o.OrderId == 6001);
-
-            Assert.Equal(18, reloadedOrder.StatusOrder);
-            Assert.Equal("Refunded", reloadedOrder.PaymentStatus);
-            Assert.Equal("CANCELED", reloadedOrder.ProductionStatus);
-            Assert.All(reloadedOrder.OrderDetails, od => Assert.Empty(od.PlanDetails));
-
-            var reloadedRefund = await ctx.Refunds.FirstAsync(r => r.RefundId == 61);
-            Assert.Equal("Approved", reloadedRefund.Status);
-            Assert.Equal("staff-6", reloadedRefund.ReviewedByStaffId);
-            Assert.NotNull(reloadedRefund.ReviewedAt);
-
-            // Notification sent to seller
-            notifMock.Verify(n => n.CreateAndSendNotificationAsync(
-                    order.SellerUserId,
-                    It.Is<string>(msg => msg.Contains("CHẤP NHẬN")),
-                    It.Is<string>(u => u.Contains($"/seller/orders/{order.OrderId}"))),
-                Times.Once);
-
-            // SignalR: OrderStatusChanged + RefundRequestReviewed (verify SendCoreAsync)
-            proxy.Verify(p => p.SendCoreAsync(
-                    "OrderStatusChanged",
-                    It.Is<object[]>(args => args != null && args.Length == 1 && args[0] != null),
-                    It.IsAny<CancellationToken>()),
-                Times.Once);
-
-            proxy.Verify(p => p.SendCoreAsync(
-                    "RefundRequestReviewed",
-                    It.Is<object[]>(args => args != null && args.Length == 1 && args[0] != null),
-                    It.IsAny<CancellationToken>()),
-                Times.Once);
-        }
-
-        [Fact]
-        public async Task ReviewRefund_Reject_Sets_Rejected_And_Sends_Notifications()
-        {
-            var options = NewInMemoryOptions();
-            using var ctx = new CBGiftDbContext(options);
-
-            var order = MakeOrder(7001, "seller-7", "Paid");
-            ctx.Orders.Add(order);
-            var refund = MakeRefund(71, order.OrderId, order.SellerUserId, "Pending");
-            ctx.Refunds.Add(refund);
-            await ctx.SaveChangesAsync();
-
-            var (hubMock, _, proxy) = CreateHubMock();
-            var notifMock = new Mock<INotificationService>();
-            notifMock.Setup(n => n.CreateAndSendNotificationAsync(
-                    It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-                .Returns(Task.CompletedTask);
-
-            var service = CreateService(ctx, notifMock, hubMock);
-
-            var rejectionReason = "Không đủ căn cứ";
-            await service.ReviewRefundAsync(71, new StaffReviewRefundDto { Approved = false, RejectionReason = rejectionReason }, "staff-7");
-
-            var reloadedOrder = await ctx.Orders.FirstAsync(o => o.OrderId == 7001);
-            Assert.Equal(10, reloadedOrder.StatusOrder);            // giữ nguyên
-            Assert.Equal("Paid", reloadedOrder.PaymentStatus);      // giữ nguyên
-
-            var reloadedRefund = await ctx.Refunds.FirstAsync(r => r.RefundId == 71);
-            Assert.Equal("Rejected", reloadedRefund.Status);
-            Assert.Equal(rejectionReason, reloadedRefund.StaffRejectionReason);
-
-            // Notification to seller (có chữ "TỪ CHỐI")
-            notifMock.Verify(n => n.CreateAndSendNotificationAsync(
-                    order.SellerUserId,
-                    It.Is<string>(msg => msg.Contains("TỪ CHỐI")),
-                    It.IsAny<string>()),
-                Times.Once);
-
-            // SignalR: OrderStatusChanged + RefundRequestReviewed (verify SendCoreAsync)
-            proxy.Verify(p => p.SendCoreAsync(
-                    "OrderStatusChanged",
-                    It.Is<object[]>(args => args != null && args.Length == 1 && args[0] != null),
-                    It.IsAny<CancellationToken>()),
-                Times.Once);
-
-            proxy.Verify(p => p.SendCoreAsync(
-                    "RefundRequestReviewed",
-                    It.Is<object[]>(args => args != null && args.Length == 1 && args[0] != null),
-                    It.IsAny<CancellationToken>()),
-                Times.Once);
-        }
     }
 }

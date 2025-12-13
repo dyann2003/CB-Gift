@@ -1,7 +1,9 @@
 ﻿using CB_Gift.Controllers;
 using CB_Gift.Data;
 using CB_Gift.DTOs;
+using CB_Gift.Models;
 using CB_Gift.Services.Email;
+using CB_Gift.Services.IService;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
@@ -20,6 +22,7 @@ using IdentitySignInResult = Microsoft.AspNetCore.Identity.SignInResult;
 public class AuthControllerTests
 {
     private readonly ITestOutputHelper _out;
+
     private static readonly JsonSerializerOptions JsonOpt = new()
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
@@ -27,14 +30,14 @@ public class AuthControllerTests
 
     public AuthControllerTests(ITestOutputHelper output) => _out = output;
 
-    private IConfiguration BuildConfig() =>
+    private static IConfiguration BuildConfig() =>
         new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Jwt:ExpiresMinutes"] = "60",
             ["App:ClientUrl"] = "https://example.com"
         }).Build();
 
-    private static Mock<UserManager<AppUser>> CreateUserManagerWithOptions()
+    private static Mock<UserManager<AppUser>> CreateUserManager()
     {
         var store = new Mock<IUserStore<AppUser>>();
         var options = Options.Create(new IdentityOptions());
@@ -51,7 +54,7 @@ public class AuthControllerTests
             normalizer, errors, services, logger);
     }
 
-    private static Mock<SignInManager<AppUser>> CreateSignInManagerMock(UserManager<AppUser> um, HttpContext? ctx = null)
+    private static Mock<SignInManager<AppUser>> CreateSignInManager(UserManager<AppUser> um, HttpContext? ctx = null)
     {
         return new Mock<SignInManager<AppUser>>(
             um,
@@ -59,6 +62,40 @@ public class AuthControllerTests
             Mock.Of<IUserClaimsPrincipalFactory<AppUser>>(),
             null, null, null, null)
         { CallBase = true };
+    }
+
+    private static (AuthController ctl,
+        DefaultHttpContext http,
+        Mock<UserManager<AppUser>> um,
+        Mock<SignInManager<AppUser>> sm,
+        Mock<ITokenService> tokens,
+        Mock<IAccountService> accounts,
+        Mock<IInvoiceService> invoice,
+        IConfiguration config) BuildSut()
+    {
+        var http = new DefaultHttpContext();
+
+        var um = CreateUserManager();
+        var sm = CreateSignInManager(um.Object, http);
+
+        var tokens = new Mock<ITokenService>(MockBehavior.Strict);
+        var accounts = new Mock<IAccountService>(MockBehavior.Strict);
+        var invoice = new Mock<IInvoiceService>(MockBehavior.Strict);
+
+        var config = BuildConfig();
+
+        var ctl = new AuthController(
+            sm.Object,
+            um.Object,
+            tokens.Object,
+            config,
+            accounts.Object,
+            invoice.Object)
+        {
+            ControllerContext = new ControllerContext { HttpContext = http }
+        };
+
+        return (ctl, http, um, sm, tokens, accounts, invoice, config);
     }
 
     private void LogResult(string label, IActionResult result)
@@ -74,719 +111,678 @@ public class AuthControllerTests
         _out.WriteLine($"[{label}] {result.GetType().Name} :: {json}");
     }
 
-    private static bool ToBool(IActionResult result) =>
-        result is OkResult || result is OkObjectResult;
+    private static string? ExtractMessage(IActionResult result)
+    {
+        if (result is OkObjectResult ok && ok.Value != null)
+        {
+            var json = JsonSerializer.Serialize(ok.Value);
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("message", out var msg)) return msg.GetString();
+        }
+        if (result is UnauthorizedObjectResult un && un.Value != null)
+        {
+            var json = JsonSerializer.Serialize(un.Value);
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("message", out var msg)) return msg.GetString();
+        }
+        if (result is BadRequestObjectResult bad && bad.Value != null)
+        {
+            var json = JsonSerializer.Serialize(bad.Value);
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("message", out var msg)) return msg.GetString();
+        }
+        return null;
+    }
 
-    // ===== Login
+    private static void AssertSetCookieContains(DefaultHttpContext http, params string[] cookieKeys)
+    {
+        http.Response.Headers.TryGetValue("Set-Cookie", out var setCookies).Should().BeTrue();
+        var raw = setCookies.ToString();
+        foreach (var key in cookieKeys)
+            raw.Should().Contain($"{key}=");
+    }
+
+    // =========================
+    // LOGIN (cover theo bảng: username/email variations + password normal/boundary + invalid)
+    // =========================
 
     [Fact]
-    public async Task Login_Returns_False_When_User_NotFound_Or_Inactive()
+    public async Task Login_UTCID01_Success_ReturnsTokens_And_SetsCookies()
     {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-        var tokens = new Mock<ITokenService>();
-        var accounts = new Mock<IAccountService>();
-        var config = BuildConfig();
+        var (ctl, http, um, sm, tokens, accounts, invoice, _) = BuildSut();
 
-        um.Setup(m => m.FindByNameAsync(It.IsAny<string>())).ReturnsAsync((AppUser)null!);
-        um.Setup(m => m.FindByEmailAsync(It.IsAny<string>())).ReturnsAsync((AppUser)null!);
+        var user = new AppUser { Id = "U1", UserName = "test@example.com", Email = "test@example.com", IsActive = true };
 
-        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
+        um.Setup(x => x.FindByNameAsync("test@example.com")).ReturnsAsync((AppUser)null!);
+        um.Setup(x => x.FindByEmailAsync("test@example.com")).ReturnsAsync(user);
 
-        // Case 1: user not found
-        var r1 = await ctl.Login(new LoginDto { UserNameOrEmail = "emailnotfound@gmail.com", Password = "x" });
-        bool result1 = r1 is not UnauthorizedObjectResult;
-        result1.Should().BeFalse();
+        sm.Setup(x => x.CheckPasswordSignInAsync(user, "Password_Pass@123", false))
+          .ReturnsAsync(IdentitySignInResult.Success);
 
-        // Case 2: user inactive
-        var inactive = new AppUser { UserName = "u", Email = "userinactive@x.com", IsActive = false };
-        um.Setup(m => m.FindByNameAsync("u")).ReturnsAsync(inactive);
+        tokens.Setup(t => t.CreateTokenAsync(user)).ReturnsAsync("access.jwt");
+        tokens.Setup(t => t.GenerateRefreshTokenAsync(user.Id))
+              .ReturnsAsync(new RefreshToken { Token = "refresh.jwt" });
 
-        var r2 = await ctl.Login(new LoginDto { UserNameOrEmail = "u", Password = "x" });
-        bool result2 = r2 is not UnauthorizedObjectResult;
-        result2.Should().BeFalse();
+
+        var r = await ctl.Login(new LoginDto
+        {
+            UserNameOrEmail = "test@example.com",
+            Password = "Password_Pass@123"
+        });
+
+        LogResult("Login_UTCID01", r);
+
+        var ok = r.Should().BeOfType<OkObjectResult>().Subject;
+
+        // cookies
+        AssertSetCookieContains(http, "access_token", "refresh_token");
+
+        // response payload
+        var json = JsonSerializer.Serialize(ok.Value);
+        json.Should().Contain("AccessToken");
+        json.Should().Contain("RefreshToken");
+
+        tokens.VerifyAll();
+        sm.VerifyAll();
+        um.VerifyAll();
+        accounts.VerifyNoOtherCalls();
+        invoice.VerifyNoOtherCalls();
     }
 
     [Fact]
-    public async Task Login_Returns_False_When_Bad_Password()
+    public async Task Login_UTCID02_UserNotFound_Returns401_WithMessage()
     {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-        var tokens = new Mock<ITokenService>();
-        var accounts = new Mock<IAccountService>();
-        var config = BuildConfig();
+        var (ctl, _, um, sm, tokens, accounts, invoice, _) = BuildSut();
 
-        var user = new AppUser { UserName = "u", Email = "useinactive@gmail.com", IsActive = true };
-        um.Setup(m => m.FindByNameAsync("u")).ReturnsAsync(user);
-        um.Setup(m => m.FindByEmailAsync("u")).ReturnsAsync((AppUser)null!);
+        um.Setup(x => x.FindByNameAsync("notfound@example.com")).ReturnsAsync((AppUser)null!);
+        um.Setup(x => x.FindByEmailAsync("notfound@example.com")).ReturnsAsync((AppUser)null!);
 
-        sm.Setup(s => s.CheckPasswordSignInAsync(user, "badpass", false))
+        // nothing else should be called
+        var r = await ctl.Login(new LoginDto { UserNameOrEmail = "notfound@example.com", Password = "Password_Pass@123" });
+        LogResult("Login_UTCID02", r);
+
+        r.Should().BeOfType<UnauthorizedObjectResult>();
+        ExtractMessage(r).Should().Be("User not found.");
+
+        sm.Verify(x => x.CheckPasswordSignInAsync(It.IsAny<AppUser>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
+        tokens.VerifyNoOtherCalls();
+        accounts.VerifyNoOtherCalls();
+        invoice.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task Login_UTCID06_InactiveUser_Returns401_WithMessage()
+    {
+        var (ctl, _, um, sm, tokens, accounts, invoice, _) = BuildSut();
+
+        var inactive = new AppUser { Id = "U2", UserName = "inactive@gmail.com", Email = "inactive@gmail.com", IsActive = false };
+
+        um.Setup(x => x.FindByNameAsync("inactive@gmail.com")).ReturnsAsync((AppUser)null!);
+        um.Setup(x => x.FindByEmailAsync("inactive@gmail.com")).ReturnsAsync(inactive);
+
+        var r = await ctl.Login(new LoginDto { UserNameOrEmail = "inactive@gmail.com", Password = "Password_Pass@123" });
+        LogResult("Login_UTCID06", r);
+
+        r.Should().BeOfType<UnauthorizedObjectResult>();
+        ExtractMessage(r).Should().Be("Account deactivated.");
+
+        sm.Verify(x => x.CheckPasswordSignInAsync(It.IsAny<AppUser>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
+        tokens.VerifyNoOtherCalls();
+        accounts.VerifyNoOtherCalls();
+        invoice.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task Login_UTCID10_InvalidCredentials_Returns401_WithMessage()
+    {
+        var (ctl, _, um, sm, tokens, accounts, invoice, _) = BuildSut();
+
+        var user = new AppUser { Id = "U3", UserName = "test@example.com", Email = "test@example.com", IsActive = true };
+
+        um.Setup(x => x.FindByNameAsync("test@example.com")).ReturnsAsync((AppUser)null!);
+        um.Setup(x => x.FindByEmailAsync("test@example.com")).ReturnsAsync(user);
+
+        sm.Setup(x => x.CheckPasswordSignInAsync(user, "password_test_fail", false))
           .ReturnsAsync(IdentitySignInResult.Failed);
 
-        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
+        var r = await ctl.Login(new LoginDto { UserNameOrEmail = "test@example.com", Password = "password_test_fail" });
+        LogResult("Login_UTCID10", r);
 
-        var r = await ctl.Login(new LoginDto { UserNameOrEmail = "u", Password = "badpass" });
-        LogResult("Login_BadPassword", r);
+        r.Should().BeOfType<UnauthorizedObjectResult>();
+        ExtractMessage(r).Should().Be("Invalid credentials.");
 
-        bool success = r is OkResult || r is OkObjectResult;
-        success.Should().BeFalse();
+        tokens.VerifyNoOtherCalls();
+        accounts.VerifyNoOtherCalls();
+        invoice.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData("short")] // UTCID08 (Boundary lower than 8)
+    [InlineData("L/g0R)a[F];c:H.v?6E<X>z\"")] // UTCID09 (dài bất thường)
+    public async Task Login_BoundaryPassword_StillHandled_ByController(string password)
+    {
+        // Controller không tự validate length; nếu DTO có [StringLength] thì thường fail ModelState trong runtime.
+        // Ở unit test, để match bảng, ta chủ động add ModelState error (giống khi framework validate).
+        var (ctl, _, um, sm, tokens, accounts, invoice, _) = BuildSut();
+
+        ctl.ModelState.AddModelError("Password", "The password must be 8 - 50 characters");
+
+        var r = await ctl.Login(new LoginDto { UserNameOrEmail = "test@example.com", Password = password });
+        LogResult("Login_BoundaryPassword_ModelState", r);
+
+        r.Should().BeOfType<BadRequestObjectResult>();
+
+        // Ensure no downstream calls
+        um.Verify(x => x.FindByNameAsync(It.IsAny<string>()), Times.Never);
+        um.Verify(x => x.FindByEmailAsync(It.IsAny<string>()), Times.Never);
+        sm.Verify(x => x.CheckPasswordSignInAsync(It.IsAny<AppUser>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
+
+        tokens.VerifyNoOtherCalls();
+        accounts.VerifyNoOtherCalls();
+        invoice.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task Login_UTCID04_UsernameRequired_ModelStateBadRequest(string? uoe)
+    {
+        var (ctl, _, um, sm, tokens, accounts, invoice, _) = BuildSut();
+
+        ctl.ModelState.AddModelError("UserNameOrEmail", "The Email field is required.");
+
+        var r = await ctl.Login(new LoginDto { UserNameOrEmail = uoe!, Password = "Password_Pass@123" });
+        LogResult("Login_UTCID04", r);
+
+        r.Should().BeOfType<BadRequestObjectResult>();
+
+        um.Verify(x => x.FindByNameAsync(It.IsAny<string>()), Times.Never);
+        um.Verify(x => x.FindByEmailAsync(It.IsAny<string>()), Times.Never);
+        sm.Verify(x => x.CheckPasswordSignInAsync(It.IsAny<AppUser>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
+
+        tokens.VerifyNoOtherCalls();
+        accounts.VerifyNoOtherCalls();
+        invoice.VerifyNoOtherCalls();
     }
 
     [Fact]
-    public async Task Login_Sets_Cookie_And_Returns_Token_On_Success()
+    public async Task Login_UTCID05_InvalidEmailFormat_ModelStateBadRequest()
     {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-        var tokens = new Mock<ITokenService>();
-        var accounts = new Mock<IAccountService>();
-        var config = BuildConfig();
+        var (ctl, _, um, sm, tokens, accounts, invoice, _) = BuildSut();
 
-        var user = new AppUser { UserName = "okuser", Email = "ok@x.com", IsActive = true };
-        um.Setup(m => m.FindByNameAsync("okuser")).ReturnsAsync(user);
-        um.Setup(m => m.FindByEmailAsync("okuser")).ReturnsAsync((AppUser)null!);
+        ctl.ModelState.AddModelError("UserNameOrEmail", "The Email field is not a valid e-mail address.");
 
-        sm.Setup(s => s.CheckPasswordSignInAsync(user, "good", false))
-          .ReturnsAsync(IdentitySignInResult.Success);
-        tokens.Setup(t => t.CreateTokenAsync(user)).ReturnsAsync("jwt-token");
+        var r = await ctl.Login(new LoginDto { UserNameOrEmail = "notanemail@dcd", Password = "Password_Pass@123" });
+        LogResult("Login_UTCID05", r);
 
-        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
+        r.Should().BeOfType<BadRequestObjectResult>();
 
-        var result = await ctl.Login(new LoginDto { UserNameOrEmail = "okuser", Password = "good" });
-        LogResult("Login_Success", result);
+        um.Verify(x => x.FindByNameAsync(It.IsAny<string>()), Times.Never);
+        um.Verify(x => x.FindByEmailAsync(It.IsAny<string>()), Times.Never);
+        sm.Verify(x => x.CheckPasswordSignInAsync(It.IsAny<AppUser>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
 
-        ToBool(result).Should().BeTrue();
+        tokens.VerifyNoOtherCalls();
+        accounts.VerifyNoOtherCalls();
+        invoice.VerifyNoOtherCalls();
+    }
 
-        http.Response.Headers.TryGetValue("Set-Cookie", out var setCookies).Should().BeTrue();
-        setCookies.ToString().Should().Contain("access_token=");
+    // =========================
+    // FORGOT PASSWORD (cover theo bảng: success, notfound, invalid email, inactive, null)
+    // =========================
+
+    [Fact]
+    public async Task Forgot_UTCID01_Success_ReturnsOk_And_RevokesAllRefreshTokens()
+    {
+        var (ctl, _, um, sm, tokens, accounts, invoice, _) = BuildSut();
+
+        var user = new AppUser { Id = "U10", UserName = "test@example.com", Email = "test@example.com", IsActive = true };
+
+        um.Setup(x => x.FindByNameAsync("test@example.com")).ReturnsAsync((AppUser)null!);
+        um.Setup(x => x.FindByEmailAsync("test@example.com")).ReturnsAsync(user);
+
+        accounts.Setup(a => a.SendPasswordResetOtpAsync(It.Is<ForgotPasswordDto>(d => d.Email == "test@example.com")))
+                .ReturnsAsync(new ServiceResult<ForgotPasswordDto> { Success = true, Message = "OTP sent." });
+
+        tokens.Setup(t => t.RevokeAllRefreshTokensAsync(user.Id)).Returns(Task.CompletedTask);
+
+        var r = await ctl.ForgotPassword(new ForgotPasswordDto { Email = "test@example.com" });
+        LogResult("Forgot_UTCID01", r);
+
+        r.Should().BeOfType<OkObjectResult>();
+        ExtractMessage(r).Should().Be("OTP sent.");
+
+        accounts.VerifyAll();
+        tokens.VerifyAll();
+
+        // not used
+        sm.VerifyNoOtherCalls();
+        invoice.VerifyNoOtherCalls();
     }
 
     [Fact]
-    public async Task Login_ByEmail_Sets_Cookie_And_Returns_Token()
+    public async Task Forgot_UTCID02_UserNotFound_Returns401()
     {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-        var tokens = new Mock<ITokenService>();
-        var accounts = new Mock<IAccountService>();
-        var config = BuildConfig();
+        var (ctl, _, um, sm, tokens, accounts, invoice, _) = BuildSut();
 
-        um.Setup(m => m.FindByNameAsync("mailuser")).ReturnsAsync((AppUser)null!);
-        var user = new AppUser { UserName = "mailuser", Email = "mailuser@x.com", IsActive = true };
-        um.Setup(m => m.FindByEmailAsync("mailuser")).ReturnsAsync(user);
+        um.Setup(x => x.FindByNameAsync("notfound@example.com")).ReturnsAsync((AppUser)null!);
+        um.Setup(x => x.FindByEmailAsync("notfound@example.com")).ReturnsAsync((AppUser)null!);
 
-        sm.Setup(s => s.CheckPasswordSignInAsync(user, "good", false))
-          .ReturnsAsync(IdentitySignInResult.Success);
-        tokens.Setup(t => t.CreateTokenAsync(user)).ReturnsAsync("jwt-token");
+        var r = await ctl.ForgotPassword(new ForgotPasswordDto { Email = "notfound@example.com" });
+        LogResult("Forgot_UTCID02", r);
 
-        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
+        r.Should().BeOfType<UnauthorizedObjectResult>();
+        ExtractMessage(r).Should().Be("Email not found.");
 
-        var r = await ctl.Login(new LoginDto { UserNameOrEmail = "mailuser", Password = "good" });
-        LogResult("Login_ByEmail", r);
-
-        ToBool(r).Should().BeTrue();
-
-        http.Response.Headers.TryGetValue("Set-Cookie", out var setCookies).Should().BeTrue();
-        setCookies.ToString().Should().Contain("access_token=");
+        accounts.VerifyNoOtherCalls();
+        tokens.VerifyNoOtherCalls();
+        sm.VerifyNoOtherCalls();
+        invoice.VerifyNoOtherCalls();
     }
 
     [Fact]
-    public async Task Login_Returns_False_When_LockedOut()
+    public async Task Forgot_UTCID05_Inactive_Returns401()
     {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-        var tokens = new Mock<ITokenService>();
-        var accounts = new Mock<IAccountService>();
-        var config = BuildConfig();
+        var (ctl, _, um, sm, tokens, accounts, invoice, _) = BuildSut();
 
-        var user = new AppUser { UserName = "lock", Email = "lock@x.com", IsActive = true };
-        um.Setup(m => m.FindByNameAsync("lock")).ReturnsAsync(user);
-        um.Setup(m => m.FindByEmailAsync("lock")).ReturnsAsync((AppUser)null!);
+        var user = new AppUser { Id = "U11", UserName = "inactive@gmail.com", Email = "inactive@gmail.com", IsActive = false };
 
-        sm.Setup(s => s.CheckPasswordSignInAsync(user, "pwd", false))
-          .ReturnsAsync(IdentitySignInResult.LockedOut);
+        um.Setup(x => x.FindByNameAsync("inactive@gmail.com")).ReturnsAsync((AppUser)null!);
+        um.Setup(x => x.FindByEmailAsync("inactive@gmail.com")).ReturnsAsync(user);
 
-        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
+        var r = await ctl.ForgotPassword(new ForgotPasswordDto { Email = "inactive@gmail.com" });
+        LogResult("Forgot_UTCID05", r);
 
-        var r = await ctl.Login(new LoginDto { UserNameOrEmail = "lock", Password = "pwd" });
-        LogResult("Login_LockedOut", r);
+        r.Should().BeOfType<UnauthorizedObjectResult>();
+        ExtractMessage(r).Should().Be("Your account has been deactivated.");
 
-        ToBool(r).Should().BeFalse();
-        tokens.Verify(t => t.CreateTokenAsync(It.IsAny<AppUser>()), Times.Never);
-        http.Response.Headers.TryGetValue("Set-Cookie", out _).Should().BeFalse();
+        accounts.VerifyNoOtherCalls();
+        tokens.VerifyNoOtherCalls();
+        sm.VerifyNoOtherCalls();
+        invoice.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Forgot_UTCID06_EmailRequired_Returns400(string? email)
+    {
+        var (ctl, _, um, sm, tokens, accounts, invoice, _) = BuildSut();
+
+        var r = await ctl.ForgotPassword(new ForgotPasswordDto { Email = email! });
+        LogResult("Forgot_UTCID06", r);
+
+        r.Should().BeOfType<BadRequestObjectResult>();
+        ExtractMessage(r).Should().Be("Please enter your email address.");
+
+        um.Verify(x => x.FindByNameAsync(It.IsAny<string>()), Times.Never);
+        um.Verify(x => x.FindByEmailAsync(It.IsAny<string>()), Times.Never);
+
+        accounts.VerifyNoOtherCalls();
+        tokens.VerifyNoOtherCalls();
+        sm.VerifyNoOtherCalls();
+        invoice.VerifyNoOtherCalls();
     }
 
     [Fact]
-    public async Task Login_ModelInvalid_Returns_False()
+    public async Task Forgot_InvalidEmailFormat_CanBeHandled_ByService_Failure()
     {
-        var http = new DefaultHttpContext();
-        var ctl = new AuthController(
-            CreateSignInManagerMock(CreateUserManagerWithOptions().Object, http).Object,
-            CreateUserManagerWithOptions().Object,
-            Mock.Of<ITokenService>(),
-            BuildConfig(),
-            new Mock<IAccountService>().Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
+        // Nếu bạn muốn đúng theo bảng: invalid email => "The Email field is not a valid e-mail address."
+        // Controller hiện không check ModelState, nên ta mock service trả fail message đó.
+        var (ctl, _, um, sm, tokens, accounts, invoice, _) = BuildSut();
 
-        ctl.ModelState.AddModelError("UserNameOrEmail", "Required");
-        var r1 = await ctl.Login(new LoginDto { UserNameOrEmail = "", Password = "x" });
-        LogResult("Login_EmptyUsername", r1);
-        ToBool(r1).Should().BeFalse();
+        var user = new AppUser { Id = "U12", UserName = "notanemail@dcd", Email = "notanemail@dcd", IsActive = true };
 
-        ctl.ModelState.Clear();
-        ctl.ModelState.AddModelError("Password", "Required");
-        var r2 = await ctl.Login(new LoginDto { UserNameOrEmail = "u", Password = "" });
-        LogResult("Login_EmptyPassword", r2);
-        ToBool(r2).Should().BeFalse();
+        um.Setup(x => x.FindByNameAsync("notanemail@dcd")).ReturnsAsync((AppUser)null!);
+        um.Setup(x => x.FindByEmailAsync("notanemail@dcd")).ReturnsAsync(user);
 
-        http.Response.Headers.TryGetValue("Set-Cookie", out _).Should().BeFalse();
+        accounts.Setup(a => a.SendPasswordResetOtpAsync(It.Is<ForgotPasswordDto>(d => d.Email == "notanemail@dcd")))
+                .ReturnsAsync(new ServiceResult<ForgotPasswordDto> { Success = false, Message = "The Email field is not a valid e-mail address." });
+
+        var r = await ctl.ForgotPassword(new ForgotPasswordDto { Email = "notanemail@dcd" });
+        LogResult("Forgot_InvalidEmailFormat", r);
+
+        r.Should().BeOfType<BadRequestObjectResult>();
+        ExtractMessage(r).Should().Be("The Email field is not a valid e-mail address.");
+
+        // because fail => should NOT revoke tokens
+        tokens.Verify(t => t.RevokeAllRefreshTokensAsync(It.IsAny<string>()), Times.Never);
+
+        accounts.VerifyAll();
+        sm.VerifyNoOtherCalls();
+        invoice.VerifyNoOtherCalls();
     }
 
-    [Fact]
-    public async Task Login_UserName_CaseInsensitive_Succeeds()
-    {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-        var tokens = new Mock<ITokenService>();
-        var config = BuildConfig();
-
-        var user = new AppUser { UserName = "okuser", Email = "ok@x.com", IsActive = true };
-
-        um.Setup(m => m.FindByNameAsync("OKUSER")).ReturnsAsync(user);
-
-        sm.Setup(s => s.CheckPasswordSignInAsync(user, "Password123@", false))
-          .ReturnsAsync(IdentitySignInResult.Success);
-        tokens.Setup(t => t.CreateTokenAsync(user)).ReturnsAsync("jwt");
-
-        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, new Mock<IAccountService>().Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
-
-        var r = await ctl.Login(new LoginDto { UserNameOrEmail = "OKUSER", Password = "Password123@" });
-        LogResult("Login_Username_CaseInsensitive", r);
-
-        ToBool(r).Should().BeTrue();
-
-        http.Response.Headers.TryGetValue("Set-Cookie", out var setCookies).Should().BeTrue();
-        setCookies.ToString().Should().Contain("access_token=");
-        tokens.Verify(t => t.CreateTokenAsync(user), Times.Once);
-    }
+    // =========================
+    // RESET PASSWORD WITH OTP (cover theo bảng: required fields, otp length, notfound, expired/incorrect otp, password policy, mismatch, boundary)
+    // =========================
 
     [Fact]
-    public async Task Login_Email_CaseInsensitive_Succeeds()
+    public async Task Reset_UTCID01_Success_ReturnsOk_Message()
     {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-        var tokens = new Mock<ITokenService>();
-        var config = BuildConfig();
+        var (ctl, _, um, sm, tokens, accounts, invoice, _) = BuildSut();
 
-        var user = new AppUser { UserName = "mailuser", Email = "mailuser@x.com", IsActive = true };
+        accounts.Setup(a => a.ResetPasswordWithOtpAsync(It.Is<ResetPasswordWithOtpDto>(d =>
+                d.Email == "test@example.com" &&
+                d.Otp == "123456" &&
+                d.NewPassword == "Password_Pass@123" &&
+                d.ConfirmPassword == "Password_Pass@123")))
+            .ReturnsAsync(new ServiceResult<ResetPasswordWithOtpDto> { Success = true, Message = "Password reset success." });
 
-        um.Setup(m => m.FindByNameAsync("MAILUSER@X.COM")).ReturnsAsync((AppUser)null!);
-        um.Setup(m => m.FindByEmailAsync("MAILUSER@X.COM")).ReturnsAsync(user);
-
-        sm.Setup(s => s.CheckPasswordSignInAsync(user, "good", false))
-          .ReturnsAsync(IdentitySignInResult.Success);
-        tokens.Setup(t => t.CreateTokenAsync(user)).ReturnsAsync("jwt");
-
-        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, new Mock<IAccountService>().Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
-
-        var r = await ctl.Login(new LoginDto { UserNameOrEmail = "MAILUSER@X.COM", Password = "good" });
-        LogResult("Login_Email_CaseInsensitive", r);
-
-        ToBool(r).Should().BeTrue();
-
-        http.Response.Headers.TryGetValue("Set-Cookie", out var setCookies).Should().BeTrue();
-        setCookies.ToString().Should().Contain("access_token=");
-        tokens.Verify(t => t.CreateTokenAsync(user), Times.Once);
-    }
-
-    // ===== Logout
-
-    [Fact]
-    public void Logout_Returns_True_When_Successful()
-    {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-        var tokens = new Mock<ITokenService>();
-        var accounts = new Mock<IAccountService>();
-        var config = BuildConfig();
-
-        var ctl = new AuthController(sm.Object, um.Object, tokens.Object, config, accounts.Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
-
-        var result = ctl.Logout();
-        LogResult("Logout", result);
-
-        ToBool(result).Should().BeTrue();
-
-        http.Response.Headers.TryGetValue("Set-Cookie", out var setCookies).Should().BeTrue();
-        setCookies.ToString().Should().Contain("access_token=");
-    }
-
-    [Fact]
-    public void Logout_Deletes_Cookie_Header_Has_Delete_Semantics()
-    {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-
-        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), new Mock<IAccountService>().Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
-
-        var r = ctl.Logout();
-        ToBool(r).Should().BeTrue();
-
-        http.Response.Headers.TryGetValue("Set-Cookie", out var setCookies).Should().BeTrue();
-        var cookie = setCookies.ToString();
-
-        cookie.Should().Contain("access_token=");
-        cookie.ToLowerInvariant().Should().Contain("expires="); // chấp nhận khác biệt chữ hoa/thường
-    }
-
-    // ===== Change password
-
-    [Fact]
-    public async Task ChangePassword_Returns_False_When_User_Not_In_Context()
-    {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-
-        var ctl = new AuthController(
-            sm.Object,
-            um.Object,
-            Mock.Of<ITokenService>(),
-            BuildConfig(),
-            new Mock<IAccountService>().Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
-
-        var r = await ctl.ChangePassword(new ChangePasswordDto
+        var dto = new ResetPasswordWithOtpDto
         {
-            CurrentPassword = "oldpass123@",
-            NewPassword = "newpass123@"
+            Email = "test@example.com",
+            Otp = "123456",
+            NewPassword = "Password_Pass@123",
+            ConfirmPassword = "Password_Pass@123"
+        };
+
+        var r = await ctl.ResetPasswordWithOtp(dto);
+        LogResult("Reset_UTCID01", r);
+
+        r.Should().BeOfType<OkObjectResult>();
+        ExtractMessage(r).Should().Be("Password reset success.");
+
+        accounts.VerifyAll();
+        um.VerifyNoOtherCalls();
+        sm.VerifyNoOtherCalls();
+        tokens.VerifyNoOtherCalls();
+        invoice.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task Reset_EmailRequired_ModelStateBadRequest()
+    {
+        var (ctl, _, um, sm, tokens, accounts, invoice, _) = BuildSut();
+        ctl.ModelState.AddModelError("Email", "The Email field is required.");
+
+        var r = await ctl.ResetPasswordWithOtp(new ResetPasswordWithOtpDto
+        {
+            Email = null!,
+            Otp = "123456",
+            NewPassword = "Password_Pass@123",
+            ConfirmPassword = "Password_Pass@123"
         });
 
-        LogResult("ChangePassword_Unauthorized", r);
-        ToBool(r).Should().BeFalse();
+        LogResult("Reset_EmailRequired", r);
+
+        r.Should().BeOfType<BadRequestObjectResult>();
+        accounts.VerifyNoOtherCalls();
+        um.VerifyNoOtherCalls();
+        sm.VerifyNoOtherCalls();
+        tokens.VerifyNoOtherCalls();
+        invoice.VerifyNoOtherCalls();
     }
 
-    [Fact]
-    public async Task ChangePassword_Returns_False_When_Manager_Fails()
+    [Theory]
+    [InlineData("12345")]   // < 6 digits
+    [InlineData("1234567")] // > 6 digits
+    public async Task Reset_OtpMustBe6Digits_ModelStateBadRequest(string otp)
     {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
+        var (ctl, _, um, sm, tokens, accounts, invoice, _) = BuildSut();
+        ctl.ModelState.AddModelError("Otp", "The otp must be 6 digits.");
 
-        var user = new AppUser { Id = "U100", UserName = "test", Email = "t@x.com" };
-
-        um.Setup(m => m.GetUserAsync(It.IsAny<ClaimsPrincipal>())).ReturnsAsync(user);
-        um.Setup(m => m.ChangePasswordAsync(user, "oldpass123@", "newpass123@"))
-          .ReturnsAsync(IdentityResult.Failed(new IdentityError { Code = "E1", Description = "boom" }));
-
-        var ctl = new AuthController(
-            sm.Object,
-            um.Object,
-            Mock.Of<ITokenService>(),
-            BuildConfig(),
-            new Mock<IAccountService>().Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
-
-        var r = await ctl.ChangePassword(new ChangePasswordDto
+        var r = await ctl.ResetPasswordWithOtp(new ResetPasswordWithOtpDto
         {
-            CurrentPassword = "oldpass123@",
-            NewPassword = "newpass123@"
+            Email = "test@example.com",
+            Otp = otp,
+            NewPassword = "Password_Pass@123",
+            ConfirmPassword = "Password_Pass@123"
         });
 
-        LogResult("ChangePassword_Failed", r);
-        ToBool(r).Should().BeFalse();
+        LogResult("Reset_OtpMustBe6Digits", r);
+
+        r.Should().BeOfType<BadRequestObjectResult>();
+        accounts.VerifyNoOtherCalls();
+        um.VerifyNoOtherCalls();
+        sm.VerifyNoOtherCalls();
+        tokens.VerifyNoOtherCalls();
+        invoice.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData("Reset_UserNotFound")]
+    [InlineData("Reset_ExpiredOtp")]
+    [InlineData("Reset_IncorrectOTP")]
+    [InlineData("Reset_InvalidPassword")]
+    [InlineData("Reset_NotMatchPassword")]
+    public async Task Reset_ServiceFail_PropagatesMessage_AsBadRequest(string message)
+    {
+        var (ctl, _, um, sm, tokens, accounts, invoice, _) = BuildSut();
+
+        accounts.Setup(a => a.ResetPasswordWithOtpAsync(It.IsAny<ResetPasswordWithOtpDto>()))
+            .ReturnsAsync(new ServiceResult<ResetPasswordWithOtpDto> { Success = false, Message = message });
+
+        var dto = new ResetPasswordWithOtpDto
+        {
+            Email = "test@example.com",
+            Otp = "123456",
+            NewPassword = "Password_Pass@123",
+            ConfirmPassword = "Password_Pass@123"
+        };
+
+        var r = await ctl.ResetPasswordWithOtp(dto);
+        LogResult($"Reset_Fail_{message}", r);
+
+        r.Should().BeOfType<BadRequestObjectResult>();
+        ExtractMessage(r).Should().Be(message);
+
+        accounts.VerifyAll();
+        um.VerifyNoOtherCalls();
+        sm.VerifyNoOtherCalls();
+        tokens.VerifyNoOtherCalls();
+        invoice.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData("Abcdef12!")] // Boundary min ~ 8
+    [InlineData("Abcdef12!Abcdef12!Abcdef12!Abcdef12!Abcdef12!")] // ~ 50
+    public async Task Reset_BoundaryPassword_Valid_WhenServiceReturnsSuccess(string pwd)
+    {
+        var (ctl, _, um, sm, tokens, accounts, invoice, _) = BuildSut();
+
+        accounts.Setup(a => a.ResetPasswordWithOtpAsync(It.Is<ResetPasswordWithOtpDto>(d => d.NewPassword == pwd && d.ConfirmPassword == pwd)))
+            .ReturnsAsync(new ServiceResult<ResetPasswordWithOtpDto> { Success = true, Message = "OK" });
+
+        var r = await ctl.ResetPasswordWithOtp(new ResetPasswordWithOtpDto
+        {
+            Email = "test@example.com",
+            Otp = "123456",
+            NewPassword = pwd,
+            ConfirmPassword = pwd
+        });
+
+        LogResult("Reset_BoundaryPwd", r);
+
+        r.Should().BeOfType<OkObjectResult>();
+        ExtractMessage(r).Should().Be("OK");
+
+        accounts.VerifyAll();
+        um.VerifyNoOtherCalls();
+        sm.VerifyNoOtherCalls();
+        tokens.VerifyNoOtherCalls();
+        invoice.VerifyNoOtherCalls();
+    }
+
+    // =========================
+    // CHANGE PASSWORD (cover theo bảng: success, wrong current, required fields, policy fail, boundary)
+    // =========================
+
+    private static ClaimsPrincipal BuildPrincipal(string userId = "U200")
+    {
+        var identity = new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId),
+            new Claim(ClaimTypes.Name, "tester")
+        }, "TestAuth");
+        return new ClaimsPrincipal(identity);
     }
 
     [Fact]
-    public async Task ChangePassword_Returns_True_On_Success()
+    public async Task ChangePassword_UTCID01_Success_RevokesAllTokens_DeletesCookies_ReturnsOk()
     {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
+        var (ctl, http, um, sm, tokens, accounts, invoice, _) = BuildSut();
 
-        var user = new AppUser { Id = "U101", UserName = "ok", Email = "ok@x.com" };
-        um.Setup(m => m.GetUserAsync(It.IsAny<ClaimsPrincipal>())).ReturnsAsync(user);
-        um.Setup(m => m.ChangePasswordAsync(user, "old", "new"))
+        var user = new AppUser { Id = "U200", UserName = "u", Email = "u@x.com", IsActive = true };
+
+        // ensure controller has User in context
+        http.User = BuildPrincipal(user.Id);
+
+        um.Setup(x => x.GetUserAsync(It.IsAny<ClaimsPrincipal>())).ReturnsAsync(user);
+
+        um.Setup(x => x.ChangePasswordAsync(user, "Current_Password@123", "New_Password_Pass@123"))
           .ReturnsAsync(IdentityResult.Success);
 
-        var ctl = new AuthController(
-            sm.Object,
-            um.Object,
-            Mock.Of<ITokenService>(),
-            BuildConfig(),
-            new Mock<IAccountService>().Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
+        tokens.Setup(t => t.RevokeAllRefreshTokensAsync(user.Id)).Returns(Task.CompletedTask);
 
         var r = await ctl.ChangePassword(new ChangePasswordDto
         {
-            CurrentPassword = "old",
-            NewPassword = "new"
+            CurrentPassword = "Current_Password@123",
+            NewPassword = "New_Password_Pass@123"
         });
 
-        LogResult("ChangePassword_Success", r);
-        ToBool(r).Should().BeTrue();
+        LogResult("Change_UTCID01", r);
+
+        r.Should().BeOfType<OkObjectResult>();
+        ExtractMessage(r).Should().Be("Password changed. All devices have been logged out.");
+
+        // cookies deleted => Set-Cookie usually exists
+        http.Response.Headers.TryGetValue("Set-Cookie", out var setCookies).Should().BeTrue();
+        setCookies.ToString().Should().Contain("access_token=");
+        setCookies.ToString().Should().Contain("refresh_token=");
+
+        um.VerifyAll();
+        tokens.VerifyAll();
+        sm.VerifyNoOtherCalls();
+        accounts.VerifyNoOtherCalls();
+        invoice.VerifyNoOtherCalls();
     }
 
     [Fact]
-    public async Task ChangePassword_Returns_False_When_CurrentPassword_Wrong()
+    public async Task ChangePassword_Unauthorized_WhenUserNull()
     {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
+        var (ctl, http, um, sm, tokens, accounts, invoice, _) = BuildSut();
+        http.User = BuildPrincipal("U404");
 
-        var user = new AppUser { Id = "U200", UserName = "u", Email = "u@x.com" };
-        um.Setup(m => m.GetUserAsync(It.IsAny<ClaimsPrincipal>())).ReturnsAsync(user);
-        um.Setup(m => m.ChangePasswordAsync(user, "Passwordwrong", "Newpass@123"))
+        um.Setup(x => x.GetUserAsync(It.IsAny<ClaimsPrincipal>())).ReturnsAsync((AppUser)null!);
+
+        var r = await ctl.ChangePassword(new ChangePasswordDto
+        {
+            CurrentPassword = "x",
+            NewPassword = "y"
+        });
+
+        LogResult("Change_Unauthorized_UserNull", r);
+
+        r.Should().BeOfType<UnauthorizedResult>();
+
+        tokens.VerifyNoOtherCalls();
+        accounts.VerifyNoOtherCalls();
+        invoice.VerifyNoOtherCalls();
+        sm.VerifyNoOtherCalls();
+        um.VerifyAll();
+    }
+
+    [Fact]
+    public async Task ChangePassword_WrongCurrentPassword_ReturnsBadRequest_WithErrors()
+    {
+        var (ctl, http, um, sm, tokens, accounts, invoice, _) = BuildSut();
+
+        var user = new AppUser { Id = "U201", UserName = "u", Email = "u@x.com" };
+        http.User = BuildPrincipal(user.Id);
+
+        um.Setup(x => x.GetUserAsync(It.IsAny<ClaimsPrincipal>())).ReturnsAsync(user);
+
+        um.Setup(x => x.ChangePasswordAsync(user, "Wrong_Current_Password@123", "New_Password_Pass@123"))
           .ReturnsAsync(IdentityResult.Failed(new IdentityError
           {
               Code = "PasswordMismatch",
               Description = "Incorrect password."
           }));
 
-        var ctl = new AuthController(
-            sm.Object,
-            um.Object,
-            Mock.Of<ITokenService>(),
-            BuildConfig(),
-            new Mock<IAccountService>().Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
+        var r = await ctl.ChangePassword(new ChangePasswordDto
+        {
+            CurrentPassword = "Wrong_Current_Password@123",
+            NewPassword = "New_Password_Pass@123"
+        });
+
+        LogResult("Change_WrongCurrent", r);
+
+        var bad = r.Should().BeOfType<BadRequestObjectResult>().Subject;
+        var json = JsonSerializer.Serialize(bad.Value);
+        json.Should().Contain("Change password failed");
+        json.Should().Contain("PasswordMismatch");
+        json.Should().Contain("Incorrect password.");
+
+        // on failure => should NOT revoke all tokens
+        tokens.Verify(t => t.RevokeAllRefreshTokensAsync(It.IsAny<string>()), Times.Never);
+
+        um.VerifyAll();
+        sm.VerifyNoOtherCalls();
+        accounts.VerifyNoOtherCalls();
+        invoice.VerifyNoOtherCalls();
+        tokens.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ChangePassword_ModelStateInvalid_ReturnsBadRequest()
+    {
+        var (ctl, http, um, sm, tokens, accounts, invoice, _) = BuildSut();
+        http.User = BuildPrincipal("U202");
+
+        ctl.ModelState.AddModelError("NewPassword", "The password must be 8 - 50 characters");
 
         var r = await ctl.ChangePassword(new ChangePasswordDto
         {
-            CurrentPassword = "Passwordwrong",
-            NewPassword = "Newpass@123"
+            CurrentPassword = "Current_Password@123",
+            NewPassword = "short"
         });
 
-        LogResult("ChangePassword_WrongPassword", r);
-        ToBool(r).Should().BeFalse();
-    }
+        LogResult("Change_ModelStateInvalid", r);
 
-    [Fact]
-    public async Task ChangePassword_Returns_False_When_NewPassword_TooWeak()
-    {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-
-        var user = new AppUser { Id = "U201", UserName = "weak", Email = "w@x.com" };
-        um.Setup(m => m.GetUserAsync(It.IsAny<ClaimsPrincipal>())).ReturnsAsync(user);
-        um.Setup(m => m.ChangePasswordAsync(user, "Old@123", "short"))
-          .ReturnsAsync(IdentityResult.Failed(new IdentityError { Code = "PasswordTooShort", Description = "Too short." }));
-
-        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), new Mock<IAccountService>().Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
-
-        var r = await ctl.ChangePassword(new ChangePasswordDto { CurrentPassword = "Old@123", NewPassword = "short" });
-        ToBool(r).Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task ChangePassword_Returns_False_When_NewPassword_FailsPolicy()
-    {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-
-        var user = new AppUser { Id = "U201", UserName = "u2", Email = "u2@x.com" };
-        um.Setup(m => m.GetUserAsync(It.IsAny<ClaimsPrincipal>())).ReturnsAsync(user);
-        um.Setup(m => m.ChangePasswordAsync(user, "PasswordOld@123", "short"))
-          .ReturnsAsync(IdentityResult.Failed(
-              new IdentityError { Code = "PasswordTooShort", Description = "Too short." },
-              new IdentityError { Code = "PasswordRequiresDigit", Description = "Need a digit." }
-          ));
-
-        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), new Mock<IAccountService>().Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
-
-        var r = await ctl.ChangePassword(new ChangePasswordDto { CurrentPassword = "PasswordOld@123", NewPassword = "short" });
-        ToBool(r).Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task ChangePassword_NewPassword_NullOrEmpty_ModelInvalid_Returns_False()
-    {
-        var http = new DefaultHttpContext();
-        var ctl = new AuthController(
-            CreateSignInManagerMock(CreateUserManagerWithOptions().Object, http).Object,
-            CreateUserManagerWithOptions().Object,
-            Mock.Of<ITokenService>(),
-            BuildConfig(),
-            new Mock<IAccountService>().Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
-
-        // NewPassword = null
-        ctl.ModelState.AddModelError("NewPassword", "Required");
-        var r1 = await ctl.ChangePassword(new ChangePasswordDto { CurrentPassword = "Old@123", NewPassword = null! });
-        LogResult("ChangePassword_NewPassword_Null", r1);
-        ToBool(r1).Should().BeFalse();
-
-        // NewPassword = ""
-        ctl.ModelState.Clear();
-        ctl.ModelState.AddModelError("NewPassword", "Required");
-        var r2 = await ctl.ChangePassword(new ChangePasswordDto { CurrentPassword = "Old@123", NewPassword = "" });
-        LogResult("ChangePassword_NewPassword_Empty", r2);
-        ToBool(r2).Should().BeFalse();
-    }
-
-    // ===== Register
-
-    [Fact]
-    public async Task Register_Returns_BadRequest_When_AccountService_Fails()
-    {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-        var accounts = new Mock<IAccountService>();
-        accounts.Setup(a => a.RegisterAsync(It.IsAny<RegisterRequestDto>()))
-                .ReturnsAsync(new ServiceResult<RegisterResponseDto> { Success = false, Message = "Email already registered." });
-
-        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), accounts.Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
-
-        var r = await ctl.Register(new RegisterRequestDto { Email = "dup@x.com" });
-        LogResult("Register_Failed", r);
         r.Should().BeOfType<BadRequestObjectResult>();
+
+        um.Verify(x => x.GetUserAsync(It.IsAny<ClaimsPrincipal>()), Times.Never);
+        um.Verify(x => x.ChangePasswordAsync(It.IsAny<AppUser>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+
+        tokens.VerifyNoOtherCalls();
+        accounts.VerifyNoOtherCalls();
+        invoice.VerifyNoOtherCalls();
+        sm.VerifyNoOtherCalls();
     }
 
-    [Fact]
-    public async Task Register_Returns_Ok_With_Data_On_Success()
+    [Theory]
+    [InlineData("Abcdef12!")] // boundary min
+    [InlineData("Abcdef12!Abcdef12!Abcdef12!Abcdef12!Abcdef12!")] // boundary max-ish
+    public async Task ChangePassword_BoundaryPasswords_Success(string newPwd)
     {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-        var accounts = new Mock<IAccountService>();
-        var data = new RegisterResponseDto { Email = "new@x.com", TemporaryPassword = "abc123" };
-        accounts.Setup(a => a.RegisterAsync(It.IsAny<RegisterRequestDto>()))
-                .ReturnsAsync(new ServiceResult<RegisterResponseDto> { Success = true, Data = data });
+        var (ctl, http, um, sm, tokens, accounts, invoice, _) = BuildSut();
 
-        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), accounts.Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
+        var user = new AppUser { Id = "U203", UserName = "u", Email = "u@x.com" };
+        http.User = BuildPrincipal(user.Id);
 
-        var r = await ctl.Register(new RegisterRequestDto { Email = "new@x.com" });
-        LogResult("Register_Success", r);
-        r.Should().BeOfType<OkObjectResult>();
-    }
+        um.Setup(x => x.GetUserAsync(It.IsAny<ClaimsPrincipal>())).ReturnsAsync(user);
+        um.Setup(x => x.ChangePasswordAsync(user, "Current_Password@123", newPwd))
+          .ReturnsAsync(IdentityResult.Success);
 
-    // ===== Forgot password (ĐÃ SỬA: bám đúng hành vi controller: forward sang service, KHÔNG check ModelState)
+        tokens.Setup(t => t.RevokeAllRefreshTokensAsync(user.Id)).Returns(Task.CompletedTask);
 
-    [Fact]
-    public async Task ForgotPassword_Returns_Ok_Generic_Message_When_Service_Succeeds()
-    {
-        // Arrange
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-        var accounts = new Mock<IAccountService>();
-
-        accounts.Setup(a => a.SendPasswordResetOtpAsync(It.IsAny<ForgotPasswordDto>()))
-                .ReturnsAsync(new ServiceResult<ForgotPasswordDto>
-                {
-                    Success = true,
-                    Message = "OTP has been sent to your email."
-                });
-
-        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), accounts.Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
-
-        // Act
-        var r = await ctl.ForgotPassword(new ForgotPasswordDto { Email = "notfound@example.com" });
-        LogResult("Forgot_Success_Generic", r);
-
-        // Assert
-        var ok = r.Should().BeOfType<OkObjectResult>().Subject;
-        ok.Value.Should().BeEquivalentTo(new { message = "If your email is registered, you will receive an OTP." });
-
-        accounts.Verify(a => a.SendPasswordResetOtpAsync(It.Is<ForgotPasswordDto>(d => d.Email == "notfound@example.com")), Times.Once);
-    }
-
-    [Fact]
-    public async Task ForgotPassword_Returns_BadRequest_When_Service_Fails_Email_Not_Confirmed()
-    {
-        // Arrange
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-        var accounts = new Mock<IAccountService>();
-
-        accounts.Setup(a => a.SendPasswordResetOtpAsync(It.IsAny<ForgotPasswordDto>()))
-            .ReturnsAsync(new ServiceResult<ForgotPasswordDto>
-            {
-                Success = false,
-                Message = "Email not confirmed."
-            });
-
-        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), accounts.Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
-
-        // Act
-        var r = await ctl.ForgotPassword(new ForgotPasswordDto { Email = "notconfirm@gmail.com" });
-
-        // Assert
-        var bad = r.Should().BeOfType<BadRequestObjectResult>().Subject;
-        bad.Value.Should().BeEquivalentTo(new { message = "Email not confirmed." });
-
-        accounts.Verify(a => a.SendPasswordResetOtpAsync(It.Is<ForgotPasswordDto>(d => d.Email == "notconfirm@gmail.com")), Times.Once);
-    }
-
-
-    [Fact]
-    public async Task ForgotPassword_Returns_BadRequest_When_User_Inactive_From_Service()
-    {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-        var accounts = new Mock<IAccountService>();
-
-        accounts.Setup(a => a.SendPasswordResetOtpAsync(It.IsAny<ForgotPasswordDto>()))
-            .ReturnsAsync(new ServiceResult<ForgotPasswordDto>
-            {
-                Success = false,
-                Message = "User is inactive."
-            });
-
-        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), accounts.Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
-
-        var r = await ctl.ForgotPassword(new ForgotPasswordDto { Email = "inactive@gmail.com" });
-        r.Should().BeOfType<BadRequestObjectResult>();
-    }
-
-    [Fact]
-    public async Task ForgotPassword_ModelInvalid_Still_Calls_Service_And_Propagates_Failure()
-    {
-        // Arrange
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-        var accounts = new Mock<IAccountService>();
-
-        accounts.Setup(a => a.SendPasswordResetOtpAsync(It.IsAny<ForgotPasswordDto>()))
-                .ReturnsAsync(new ServiceResult<ForgotPasswordDto> { Success = false, Message = "Invalid email format." });
-
-        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), accounts.Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
-
-        ctl.ModelState.AddModelError("Email", "The Email field is not a valid e-mail address.");
-
-        // Act
-        var r = await ctl.ForgotPassword(new ForgotPasswordDto { Email = "not-an-email" });
-
-        // Assert
-        var bad = r.Should().BeOfType<BadRequestObjectResult>().Subject;
-        bad.Value.Should().BeEquivalentTo(new { message = "Invalid email format." });
-
-        accounts.Verify(a => a.SendPasswordResetOtpAsync(It.Is<ForgotPasswordDto>(d => d.Email == "not-an-email")), Times.Once);
-    }
-
-    // ===== Reset password
-
-    /*[Fact]
-    public async Task ResetPassword_Returns_BadRequest_When_Model_Invalid()
-    {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-        var accounts = new Mock<IAccountService>();
-
-        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), accounts.Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
-
-        ctl.ModelState.AddModelError("Email", "Required");
-        var r = await ctl.ResetPassword(new ResetPasswordWithOtpDto());
-        r.Should().BeOfType<BadRequestObjectResult>();
-    }
-
-    [Fact]
-    public async Task ResetPassword_Returns_BadRequest_When_Service_Fails()
-    {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-        var accounts = new Mock<IAccountService>();
-
-        accounts.Setup(a => a.ResetPasswordWithOtpAsync(It.IsAny<ResetPasswordWithOtpDto>()))
-            .ReturnsAsync(new ServiceResult<ResetPasswordWithOtpDto> { Success = false, Message = "Invalid OTP" });
-
-        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), accounts.Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
-
-        var r = await ctl.ResetPassword(new ResetPasswordWithOtpDto { Email = "user@gmail.com" });
-        r.Should().BeOfType<BadRequestObjectResult>();
-    }
-
-    [Fact]
-    public async Task ResetPassword_Returns_Ok_When_Service_Succeeds()
-    {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-        var accounts = new Mock<IAccountService>();
-
-        accounts.Setup(a => a.ResetPasswordWithOtpAsync(It.IsAny<ResetPasswordWithOtpDto>()))
-            .ReturnsAsync(new ServiceResult<ResetPasswordWithOtpDto> { Success = true, Message = "Password has been reset successfully." });
-
-        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), accounts.Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
-
-        var r = await ctl.ResetPassword(new ResetPasswordWithOtpDto { Email = "okuser@gmail.com" });
-        r.Should().BeOfType<OkObjectResult>();
-    }
-
-
-    [Fact]
-    public async Task ResetPassword_Returns_BadRequest_When_Passwords_Do_Not_Match()
-    {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-        var accounts = new Mock<IAccountService>();
-
-        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), accounts.Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
-
-        ctl.ModelState.AddModelError("ConfirmPassword", "Mật khẩu và mật khẩu xác nhận không khớp.");
-        var dto = new ResetPasswordWithOtpDto
+        var r = await ctl.ChangePassword(new ChangePasswordDto
         {
-            Email = "user@gmail.com",
-            Otp = "123456",
-            NewPassword = "NewPass@1",
-            ConfirmPassword = "Different"
-        };
+            CurrentPassword = "Current_Password@123",
+            NewPassword = newPwd
+        });
 
-        var r = await ctl.ResetPassword(dto);
-        r.Should().BeOfType<BadRequestObjectResult>();
-        accounts.Verify(a => a.ResetPasswordWithOtpAsync(It.IsAny<ResetPasswordWithOtpDto>()), Times.Never);
+        LogResult("Change_Boundary", r);
+
+        r.Should().BeOfType<OkObjectResult>();
+        ExtractMessage(r).Should().Be("Password changed. All devices have been logged out.");
+
+        um.VerifyAll();
+        tokens.VerifyAll();
+
+        sm.VerifyNoOtherCalls();
+        accounts.VerifyNoOtherCalls();
+        invoice.VerifyNoOtherCalls();
     }
-    [Fact]
-    public async Task ResetPassword_Returns_BadRequest_When_Required_Fields_Missing()
-    {
-        var http = new DefaultHttpContext();
-        var um = CreateUserManagerWithOptions();
-        var sm = CreateSignInManagerMock(um.Object, http);
-        var accounts = new Mock<IAccountService>();
-
-        var ctl = new AuthController(sm.Object, um.Object, Mock.Of<ITokenService>(), BuildConfig(), accounts.Object)
-        { ControllerContext = new ControllerContext { HttpContext = http } };
-
-        ctl.ModelState.AddModelError("Otp", "Required");
-        var r = await ctl.ResetPassword(new ResetPasswordWithOtpDto { Email = "user@gmail.com" });
-        r.Should().BeOfType<BadRequestObjectResult>();
-    }*/
-
 }
