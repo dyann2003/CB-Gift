@@ -187,15 +187,17 @@ namespace CB_Gift.Services.Reports
         {
             var query = PrepareOrderQuery(filter);
 
-            var totalOrders = await query.CountAsync();
+            var totalOrders = await query
+             .Where(x => x.StatusOrder != 1) // Chỉ lấy những đơn có status khác 1
+             .CountAsync();
 
             // Backlog: Đơn đang xử lý (Status từ 2 đến 7: NEED_DESIGN -> IN_PROD)
             // Giả sử ID status khớp với PRODUCTION_STATUS_MAP bạn gửi
 
-            var backlog = await query.CountAsync(o => o.StatusOrder >= 2 && o.StatusOrder <= 7);
+            var backlog = await query.CountAsync(o => o.StatusOrder >= 2 && o.StatusOrder <= 12);
 
             // Velocity: Đơn Shipped / Số ngày
-            var shippedCount = await query.CountAsync(o => o.StatusOrder == 8 || o.StatusOrderNavigation.Code == "SHIPPED"); // 8 = FINISHED/SHIPPED
+            var shippedCount = await query.CountAsync(o => o.StatusOrder == 14 || o.StatusOrderNavigation.Code == "SHIPPED"); // 8 = FINISHED/SHIPPED
             var days = (filter.EndDate - filter.StartDate).TotalDays + 1;
             var velocity = days > 0 ? Math.Round(shippedCount / days, 1) : 0;
 
