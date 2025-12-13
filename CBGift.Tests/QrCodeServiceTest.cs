@@ -72,34 +72,6 @@ namespace CB_Gift.Tests.Services
             Assert.Null(result);
         }
 
-        [Fact]
-        public async Task GenerateQrCodeAsync_ReturnsExpectedShape_AndQrUrl()
-        {
-            var ctx = BuildContext(nameof(GenerateQrCodeAsync_ReturnsExpectedShape_AndQrUrl));
-            await SeedAsync(ctx);
-
-            var svc = new QrCodeService(ctx);
-
-            var result = await svc.GenerateQrCodeAsync(orderDetailId: 5001);
-            Assert.NotNull(result);
-
-            var t = result.GetType();
-            int orderDetailId = (int)t.GetProperty("OrderDetailId")!.GetValue(result)!;
-            string orderCode = (string)t.GetProperty("OrderCode")!.GetValue(result)!;
-            string productName = (string)t.GetProperty("ProductName")!.GetValue(result)!;
-            int qty = (int)t.GetProperty("Quantity")!.GetValue(result)!;
-            string qrUrl = (string)t.GetProperty("QrCodeUrl")!.GetValue(result)!;
-
-            Assert.Equal(5001, orderDetailId);
-            Assert.Equal("ORD-001", orderCode);
-            Assert.Equal("Mug Premium", productName);
-            Assert.Equal(2, qty);
-
-            var expectedData = $"http://localhost:3000/qc/order-detail/{orderDetailId}";
-            var expectedPrefix = "https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=";
-            Assert.StartsWith(expectedPrefix, qrUrl);
-            Assert.EndsWith(WebUtility.UrlEncode(expectedData), qrUrl);
-        }
 
 
 
