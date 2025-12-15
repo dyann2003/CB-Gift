@@ -1431,6 +1431,7 @@ namespace CB_Gift.Services
                 .Include(o => o.OrderDetails)
                     .ThenInclude(od => od.ProductVariant)
                     .ThenInclude(pv => pv.Product)
+                    .Where(o=>o.StatusOrder!=1)
                 .AsQueryable();
 
             if (!string.IsNullOrEmpty(status))
