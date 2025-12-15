@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 
 namespace CB_Gift.Controllers
 {
@@ -28,31 +29,38 @@ namespace CB_Gift.Controllers
                 var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
                 if (string.IsNullOrEmpty(userId))
                 {
-                    return Unauthorized(new { message = "Không thể xác định người dùng từ token." });
+                    return Unauthorized(new { message = "The user cannot be identified." });
                 }
 
                 if (uploadDto.File == null || uploadDto.File.Length == 0)
                 {
-                    return BadRequest(new { message = "Vui lòng chọn một tệp." });
+                    return BadRequest(new { message = "Please select a file." });
+                }
+                if (!IsValidFileName(uploadDto.File.FileName))
+                {
+                    return BadRequest(new
+                    {
+                        message = "File name contains invalid characters. Only letters, numbers, '_', '-', '.' are allowed."
+                    });
                 }
 
                 // Validate định dạng file hình ảnh
-                var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp",".mp4" };
+                var allowedExtensions = new[] { ".jpg", ".jpeg", ".png" };
                 var fileExtension = Path.GetExtension(uploadDto.File.FileName).ToLowerInvariant();
 
                 if (!allowedExtensions.Contains(fileExtension))
                 {
                     return BadRequest(new
                     {
-                        message = $"Định dạng file không hợp lệ. Chỉ chấp nhận các file ảnh: {string.Join(", ", allowedExtensions)}"
+                        message = $"Invalid file format. Only image files are accepted: {string.Join(", ", allowedExtensions)}"
                     });
                 }
 
                 // Giới hạn kích thước (ví dụ 5MB)
-                const long maxFileSize = 5 * 1024 * 1024; // 5 MB
+                const long maxFileSize = 10 * 1024 * 1024; // 10 MB
                 if (uploadDto.File.Length > maxFileSize)
                 {
-                    return BadRequest(new { message = "Kích thước file vượt quá giới hạn cho phép (tối đa 5MB)." });
+                    return BadRequest(new { message = "The file size exceeds the allowed limit (maximum 10MB)." });
                 }
 
                 await using var stream = uploadDto.File.OpenReadStream();
@@ -65,14 +73,20 @@ namespace CB_Gift.Controllers
             {
                 Exception currentEx = ex;
                 while (currentEx.InnerException != null)
-                {
                     currentEx = currentEx.InnerException;
-                }
-                var rootErrorMessage = currentEx.Message;
-                Console.WriteLine($"---> DATABASE SAVE FAILED (ROOT): {rootErrorMessage}");
 
-                return StatusCode(500, new { message = "Lỗi khi lưu dữ liệu vào database.", error = rootErrorMessage });
+                var rootErrorMessage = currentEx.Message;
+
+                // log nội bộ
+                Console.WriteLine($"[UPLOAD IMAGE ERROR]: {rootErrorMessage}");
+
+                return StatusCode(500, new
+                {
+                    message = "An unexpected error occurred while uploading the file.",
+                    detail = rootErrorMessage
+                });
             }
+
         }
 
         /// Lấy danh sách tất cả các ảnh đã được upload bởi người dùng đang đăng nhập.
@@ -82,7 +96,7 @@ namespace CB_Gift.Controllers
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userId))
             {
-                return Unauthorized(new { message = "Không thể xác định người dùng." });
+                return Unauthorized(new { message = "The user cannot be identified." });
             }
 
             var images = await _imageService.GetImagesByUserAsync(userId);
@@ -97,11 +111,17 @@ namespace CB_Gift.Controllers
             {
                 var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
                 if (string.IsNullOrEmpty(userId))
-                    return Unauthorized(new { message = "Không thể xác định người dùng." });
+                    return Unauthorized(new { message = "The user cannot be identified." });
 
                 if (uploadDto.File == null || uploadDto.File.Length == 0)
-                    return BadRequest(new { message = "Vui lòng chọn một tệp." });
-
+                    return BadRequest(new { message = "Please select a file." });
+                if (!IsValidFileName(uploadDto.File.FileName))
+                {
+                    return BadRequest(new
+                    {
+                        message = "File name contains invalid characters. Only letters, numbers, '_', '-', '.' are allowed."
+                    });
+                }
                 // 1. Validate loại file (cho phép cả ảnh và video)
                 var allowedExtensions = new[] {
                     ".jpg", ".jpeg", ".png", ".gif", ".webp", // Ảnh
@@ -109,12 +129,12 @@ namespace CB_Gift.Controllers
                 };
                 var fileExtension = Path.GetExtension(uploadDto.File.FileName).ToLowerInvariant();
                 if (!allowedExtensions.Contains(fileExtension))
-                    return BadRequest(new { message = $"Định dạng file không hợp lệ. Chỉ chấp nhận: {string.Join(", ", allowedExtensions)}" });
+                    return BadRequest(new { message = $"Invalid file format. Only accept: {string.Join(", ", allowedExtensions)}" });
 
                 // 2. Validate kích thước (100MB)
-                const long maxFileSize = 100 * 1024 * 1024; // 100 MB
+                const long maxFileSize = 100 * 1024 * 1024; // 200 MB
                 if (uploadDto.File.Length > maxFileSize)
-                    return BadRequest(new { message = "Kích thước file vượt quá giới hạn (100MB)." });
+                    return BadRequest(new { message = "The file size has exceeded the limit (100MB)." });
 
                 await using var stream = uploadDto.File.OpenReadStream();
 
@@ -134,8 +154,19 @@ namespace CB_Gift.Controllers
                 while (currentEx.InnerException != null) currentEx = currentEx.InnerException;
                 var rootErrorMessage = currentEx.Message;
 
-                return StatusCode(500, new { message = "Lỗi khi upload media.", error = rootErrorMessage });
+                return StatusCode(500, new { message = "Error uploading media.", error = rootErrorMessage });
             }
         }
+        private bool IsValidFileName(string fileName)
+        {
+            if (string.IsNullOrWhiteSpace(fileName))
+                return false;
+
+            var name = Path.GetFileNameWithoutExtension(fileName);
+
+            return Regex.IsMatch(name, @"^[\p{L}0-9 _\-\.]+$");
+        }
+
+
     }
 }
