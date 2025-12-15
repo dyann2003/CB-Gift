@@ -170,24 +170,24 @@ namespace CB_Gift.Controllers
         }
         [HttpGet("cancel")]
         [AllowAnonymous]
-        public async Task<IActionResult> CancelPayment([FromQuery] int paymentId)
+        public async Task<IActionResult> CancelPayment([FromQuery] int? paymentId, [FromQuery] int? orderCode)
         {
-            var payment = await _context.Payments
-                .FirstOrDefaultAsync(p => p.PaymentId == paymentId);
+            int actualPaymentId = paymentId ?? orderCode ?? 0;
+            if (actualPaymentId == 0) return BadRequest("PaymentId not provided");
 
-            if (payment == null)
-                return BadRequest("Payment not found");
+            var payment = await _context.Payments.FirstOrDefaultAsync(p => p.PaymentId == actualPaymentId);
+            if (payment == null) return BadRequest("Payment not found");
 
-            // Chỉ update nếu còn Pending
             if (payment.Status == "Pending")
             {
                 payment.Status = "Cancelled";
-                // payment.UpdatedAt = DateTime.UtcNow;
-                payment.Note = "Cancelled";
+                payment.Note = "Cancelled by user";
+              //  payment.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
             }
 
             return Redirect("/seller/manage-invoice");
         }
+
     }
 }
