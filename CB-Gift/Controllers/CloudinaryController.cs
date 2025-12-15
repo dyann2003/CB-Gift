@@ -29,7 +29,7 @@ namespace CB_Gift.Controllers
                 // Kiểm tra file bên trong DTO
                 if (file == null || file.Length == 0)
                 {
-                    return BadRequest(new { message = "Vui lòng chọn một tệp để tải lên." });
+                    return BadRequest(new { message = "Please select a file to upload." });
                 }
 
                 // Gọi Service để tải lên
@@ -37,7 +37,7 @@ namespace CB_Gift.Controllers
 
                 return Ok(new
                 {
-                    message = "Tải lên thành công!",
+                    message = "Upload successful!",
                     publicId = uploadResult.PublicId,
                     url = uploadResult.SecureUrl.ToString()
                 });
@@ -48,7 +48,7 @@ namespace CB_Gift.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Đã xảy ra lỗi trong quá trình tải lên.", error = ex.Message });
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred during the upload process.", error = ex.Message });
             }
         }
     }
