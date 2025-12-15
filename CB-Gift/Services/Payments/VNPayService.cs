@@ -67,11 +67,14 @@ namespace CB_Gift.Services.Payments
         public Task<PaymentProcessingResult> VerifyWebhookAsync(string rawPayload, string signature)
         {
             var result = new PaymentProcessingResult { RawResponse = rawPayload };
-            string vnp_HashSecret = _config["VNPay:HashSecret"];
-            /*string qs = rawPayload.Substring(rawPayload.IndexOf("?") + 1);
-            bool isValidSignature = _helper.ValidateSignatureFromQueryString(signature, vnp_HashSecret, qs);*/
 
-            bool isValidSignature = _helper.ValidateSignatureFromQueryString(signature, vnp_HashSecret, rawPayload);
+            string vnp_HashSecret = _config["VNPay:HashSecret"];
+
+            bool isValidSignature = _helper.ValidateSignatureFromQueryString(
+                signature,
+                vnp_HashSecret,
+                rawPayload
+            );
 
             if (!isValidSignature)
             {
@@ -81,25 +84,38 @@ namespace CB_Gift.Services.Payments
             }
 
             var queryParams = System.Web.HttpUtility.ParseQueryString(rawPayload);
-            string vnp_ResponseCode = queryParams["vnp_ResponseCode"];
-            string vnp_TransactionStatus = queryParams["vnp_TransactionStatus"];
 
-            if (vnp_ResponseCode == "00" && vnp_TransactionStatus == "00")
+            string responseCode = queryParams["vnp_ResponseCode"];
+            string transactionStatus = queryParams["vnp_TransactionStatus"];
+
+            int paymentId = int.Parse(queryParams["vnp_TxnRef"]);
+
+            // ✅ SUCCESS
+            if (responseCode == "00" && transactionStatus == "00")
             {
                 result.IsSuccess = true;
-                result.Message = "Success";
-                result.PaymentId = int.Parse(queryParams["vnp_TxnRef"]);
+                result.PaymentId = paymentId;
                 result.TransactionId = queryParams["vnp_TransactionNo"];
                 result.AmountPaid = decimal.Parse(queryParams["vnp_Amount"]) / 100;
+                result.Message = "Payment success";
             }
+            // ✅ USER CANCEL
+            else if (responseCode == "24")
+            {
+                result.IsSuccess = false;
+                result.PaymentId = paymentId;
+                result.Message = "User cancelled payment";
+            }
+            // ❌ FAILED
             else
             {
                 result.IsSuccess = false;
-                result.Message = $"Failed with code {vnp_ResponseCode}";
+                result.PaymentId = paymentId;
+                result.Message = $"Payment failed with code {responseCode}";
             }
-            Console.WriteLine("ABC" + result);
 
             return Task.FromResult(result);
         }
+
     }
 }
