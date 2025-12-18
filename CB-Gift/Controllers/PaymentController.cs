@@ -5,7 +5,10 @@ using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using System.Text; // Thêm
 using System.IO;
-using Newtonsoft.Json.Linq; // Thêm
+using Newtonsoft.Json.Linq;
+using System.Data;
+using CB_Gift.Data;
+using Microsoft.EntityFrameworkCore; // Thêm
 
 namespace CB_Gift.Controllers
 {
@@ -15,12 +18,14 @@ namespace CB_Gift.Controllers
     {
         private readonly IInvoiceService _invoiceService;
         private readonly ILogger<PaymentController> _logger;
+        private readonly CBGiftDbContext _context;
 
         // Inject IInvoiceService (vì nó chứa logic thanh toán đã refactor)
-        public PaymentController(IInvoiceService invoiceService, ILogger<PaymentController> logger)
+        public PaymentController(IInvoiceService invoiceService, ILogger<PaymentController> logger, CBGiftDbContext context)
         {
             _invoiceService = invoiceService;
             _logger = logger;
+            _context = context;
         }
 
         /// <summary>
@@ -163,5 +168,26 @@ namespace CB_Gift.Controllers
                 return Ok(new { RspCode = "99", Message = "Unknown error" });
             }
         }
+        [HttpGet("cancel")]
+        [AllowAnonymous]
+        public async Task<IActionResult> CancelPayment([FromQuery] int? paymentId, [FromQuery] int? orderCode)
+        {
+            int actualPaymentId = paymentId ?? orderCode ?? 0;
+            if (actualPaymentId == 0) return BadRequest("PaymentId not provided");
+
+            var payment = await _context.Payments.FirstOrDefaultAsync(p => p.PaymentId == actualPaymentId);
+            if (payment == null) return BadRequest("Payment not found");
+
+            if (payment.Status == "Pending")
+            {
+                payment.Status = "Cancelled";
+                payment.Note = "Cancelled by user";
+              //  payment.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+            }
+
+            return Redirect("/seller/manage-invoice");
+        }
+
     }
 }

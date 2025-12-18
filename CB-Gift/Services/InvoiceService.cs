@@ -283,7 +283,7 @@ public class InvoiceService : IInvoiceService
             throw new KeyNotFoundException("Không tìm thấy hóa đơn hoặc bạn không có quyền truy cập.");
 
         if (invoice.Status == "Paid")
-            throw new InvalidOperationException("Hóa đơn này đã được thanh toán.");
+            throw new InvalidOperationException("This invoice has been paid.");
 
         // 1. - 3. Logic tính toán và validation (Giữ nguyên)
         decimal remainingBalance = invoice.TotalAmount - invoice.AmountPaid;
@@ -325,7 +325,7 @@ public class InvoiceService : IInvoiceService
                 throw new InvalidOperationException("Không thể lấy HttpContext.");
             }
 
-            string description = $"Thanh toan cho hoa don {invoice.InvoiceNumber}";
+            string description = $"Pay the invoice {invoice.InvoiceNumber}";
 
             // 5.3. Gọi hàm tạo link (chung cho cả 2 cổng)
             string checkoutUrl = await paymentGateway.CreatePaymentLinkAsync(
@@ -671,18 +671,36 @@ public class InvoiceService : IInvoiceService
             // Kiểm tra xác thực thất bại
             if (!result.IsSuccess)
             {
-                log.ProcessingStatus = "VerificationFailed";
-                log.ErrorMessage = result.Message;
-                // Nếu xác thực thất bại nhưng vẫn lấy được PaymentId (vd: giao dịch fail)
+                log.RelatedInvoiceId = null;
+
                 if (result.PaymentId > 0)
                 {
                     var failedPayment = await _context.Payments.FindAsync(result.PaymentId);
                     if (failedPayment != null && failedPayment.Status == "Pending")
                     {
-                        failedPayment.Status = "Failed";
                         log.RelatedInvoiceId = failedPayment.InvoiceId;
+
+                        // ✅ Xử lý Cancel
+                        if (result.Message != null &&
+                            result.Message.Contains("cancel", StringComparison.OrdinalIgnoreCase))
+                        {
+                            failedPayment.Status = "Cancelled";
+                            log.ProcessingStatus = "Processed_Cancelled";
+                        }
+                        // ❌ Xử lý Failed
+                        else
+                        {
+                            failedPayment.Status = "Failed";
+                            log.ProcessingStatus = "Processed_Failed";
+                        }
                     }
                 }
+                else
+                {
+                    log.ProcessingStatus = "VerificationFailed";
+                }
+
+                log.ErrorMessage = result.Message;
                 await _context.SaveChangesAsync();
                 return;
             }
