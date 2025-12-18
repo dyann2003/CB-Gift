@@ -172,21 +172,21 @@ namespace CB_Gift.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> CancelPayment([FromQuery] int? paymentId, [FromQuery] int? orderCode)
         {
-            int actualPaymentId = paymentId ?? orderCode ?? 0;
+            int actualPaymentId = paymentId ?? orderCode ?? (Request.Query["id"].FirstOrDefault() != null ? int.Parse(Request.Query["id"]) : 0);
             if (actualPaymentId == 0) return BadRequest("PaymentId not provided");
-
+        
             var payment = await _context.Payments.FirstOrDefaultAsync(p => p.PaymentId == actualPaymentId);
             if (payment == null) return BadRequest("Payment not found");
-
+        
             if (payment.Status == "Pending")
             {
                 payment.Status = "Cancelled";
                 payment.Note = "Cancelled by user";
-              //  payment.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
             }
-
-            return Redirect("/seller/manage-invoice");
+        
+            // Redirect thẳng sang FE
+            return Redirect("https://cb-gift-fe-sby6.vercel.app/seller/manage-invoice");
         }
 
     }
