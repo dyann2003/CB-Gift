@@ -142,7 +142,7 @@ namespace CB_Gift.Services
 
             // 4. Update trạng thái Reprint thành Approved
             var listReprints = await _context.Reprints
-                .Where(r => dto.OriginalOrderDetailIds.Contains(r.OriginalOrderDetailId))
+                .Where(r => dto.OriginalOrderDetailIds.Contains(r.OriginalOrderDetailId) && r.Status == "Pending")
                 .ToListAsync();
 
             foreach (var reprint in listReprints)
