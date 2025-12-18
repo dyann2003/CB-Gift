@@ -750,12 +750,12 @@ namespace CB_Gift.Services
                 .FirstOrDefaultAsync(o => o.OrderId == orderId && o.SellerUserId == sellerUserId);
 
             if (order == null)
-                throw new KeyNotFoundException("Không tìm thấy đơn hàng hoặc không có quyền.");
+                throw new KeyNotFoundException("Order not found or not authorized.");
 
             var customer = await _context.EndCustomers.FindAsync(order.EndCustomerId);
 
             if (customer == null)
-                throw new KeyNotFoundException("Không tìm thấy thông tin khách hàng.");
+                throw new KeyNotFoundException("Customer information not found.");
 
             // ==========================================================
             // BƯỚC 1: Cập nhật thông tin khách hàng (EndCustomer)
@@ -822,7 +822,7 @@ namespace CB_Gift.Services
             if (order.StatusOrder != 1)
             {
                 // Ném ra lỗi để Controller có thể bắt và trả về BadRequest
-                throw new InvalidOperationException("Chỉ có thể xóa đơn hàng ở trạng thái 'Daft(Nháp)'.");
+                throw new InvalidOperationException("Orders can only be deleted if they are in 'Draft' status.");
             }
 
             // Xóa các OrderDetail liên quan trước
@@ -1100,7 +1100,7 @@ namespace CB_Gift.Services
                 // Giả định 1 là 'Mới tạo' (hoặc tương đương)
                 if (order.StatusOrder != 1)
                 {
-                    throw new InvalidOperationException($"Chỉ có thể chuyển đơn hàng ở trạng thái 'Mới tạo' (StatusOrder = 1). Trạng thái hiện tại: {order.StatusOrder}.");
+                    throw new InvalidOperationException($"Orders can only be transferred if the status is 'Newly Created' (StatusOrder = 1). Current status: {order.StatusOrder}.");
                 }
 
                 // 3. Cập nhật Order cha
@@ -1222,7 +1222,7 @@ namespace CB_Gift.Services
                     return new ApproveOrderResult
                     {
                         IsSuccess = false,
-                        ErrorMessage = "Lỗi tạo đơn vận chuyển: Không nhận được Mã Vận Đơn từ hệ thống."
+                        ErrorMessage = "Shipping order creation error: Tracking number not received from the system."
                     };
                 }
                 order.Tracking = shippingResult.OrderCode;
@@ -1264,18 +1264,18 @@ namespace CB_Gift.Services
                 try
                 {
                     // 1. Phân tích nguyên nhân cụ thể từ Message lỗi
-                    string reasonDetail = "Địa chỉ hoặc SĐT không hợp lệ"; // Mặc định
+                    string reasonDetail = "Invalid address or phone number"; // Mặc định
                     string logReason = "Likely invalid Address or Phone";
 
                     // Kiểm tra các từ khóa lỗi thường gặp của GHN/GHTK
                     if (ex.Message.Contains("PHONE_INVALID") || ex.Message.Contains("phone"))
                     {
-                        reasonDetail = "Số điện thoại người nhận không đúng định dạng (thừa/thiếu số hoặc đầu số lạ)";
+                        reasonDetail = "The recipient's phone number is not in the correct format (extra/missing digits or unfamiliar area code).";
                         logReason = "Invalid Phone Number";
                     }
                     else if (ex.Message.Contains("WARD") || ex.Message.Contains("DISTRICT") || ex.Message.Contains("ADDRESS"))
                     {
-                        reasonDetail = "Địa chỉ (Phường/Xã hoặc Quận/Huyện) không khớp với hệ thống vận chuyển";
+                        reasonDetail = "The address (Ward/Commune or District/County) does not match the shipping system.";
                         logReason = "Invalid Address/Geography";
                     }
 
@@ -1291,7 +1291,7 @@ namespace CB_Gift.Services
                     await _context.SaveChangesAsync();
 
                     // 3. Gửi thông báo chi tiết cho Seller
-                    string notificationMsg = $"Tạo đơn vận chuyển thất bại: {reasonDetail}. Đơn hàng #{order.OrderCode} đã chuyển sang trạng thái chờ. Vui lòng cập nhật lại.";
+                    string notificationMsg = $"Shipping order creation failed: {reasonDetail}.Order #{order.OrderCode} it has switched to a pending state. Please update again.";
 
                     await _notificationService.CreateAndSendNotificationAsync(
                         order.SellerUserId,
@@ -1312,7 +1312,7 @@ namespace CB_Gift.Services
                 catch (Exception updateEx)
                 {
                     _logger.LogError(updateEx, "Lỗi khi cập nhật trạng thái chờ cho đơn hàng " + orderId);
-                    return new ApproveOrderResult { IsSuccess = false, ErrorMessage = "Lỗi nghiêm trọng: Không thể cập nhật trạng thái đơn hàng sau khi API vận chuyển lỗi." };
+                    return new ApproveOrderResult { IsSuccess = false, ErrorMessage = "Fatal error: Unable to update order status after shipping API failed." };
                 }
             }
             catch (DbUpdateException ex)
@@ -1728,7 +1728,7 @@ namespace CB_Gift.Services
             using var stream = file.OpenReadStream();
             using var workbook = new XLWorkbook(stream);
             var worksheet = workbook.Worksheets.FirstOrDefault();
-            if (worksheet == null) throw new Exception("Không có sheet dữ liệu.");
+            if (worksheet == null) throw new Exception("There is no data sheet.");
 
             var rows = worksheet.RangeUsed().RowsUsed().Skip(1);
             result.TotalRows = rows.Count();

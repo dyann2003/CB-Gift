@@ -661,7 +661,7 @@ namespace CB_Gift.Services
                 if (!isAssignmentAllowed)
                 {
                     // Designer này không nằm trong danh sách cho phép của Seller.
-                    throw new InvalidOperationException("Designer không được phân quyền cho Seller này.");
+                    throw new InvalidOperationException("The designer has not granted permissions to this seller.");
                 }
 
                 var assignmentTime = DateTime.UtcNow;

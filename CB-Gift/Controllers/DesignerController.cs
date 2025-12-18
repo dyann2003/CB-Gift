@@ -62,7 +62,7 @@ public class DesignerController : ControllerBase
             // KIỂM TRA MỚI: Phải có FILE MỚI hoặc URL CŨ
             if ((dto.DesignFile == null || dto.DesignFile.Length == 0) && string.IsNullOrEmpty(dto.FileUrl))
             {
-                return BadRequest(new { message = "Vui lòng cung cấp File thiết kế mới hoặc chọn File từ kho ảnh." });
+                return BadRequest(new { message = "Please provide a new design file or select a file from our image library." });
             }
 
             var success = await _designerTaskService.UploadDesignFileAsync(orderDetailId, designerId, dto);
@@ -73,7 +73,7 @@ public class DesignerController : ControllerBase
                 return StatusCode(403, new { message = "Bạn không có quyền thực hiện hoặc đơn hàng không ở trạng thái hợp lệ để upload." });
             }
 
-            return Ok(new { message = "Upload file thiết kế thành công. Đơn hàng đã được chuyển sang trạng thái chờ duyệt." });
+            return Ok(new { message = "Design file uploaded successfully. The order has been moved to the approval status." });
         }
         catch (InvalidOperationException ex)
         {
@@ -137,7 +137,7 @@ public class DesignerController : ControllerBase
         if (taskDetail == null)
         {
             // Dùng Forbid (403) thay vì NotFound (404) để bảo mật
-            return Forbid("Bạn không có quyền xem task này hoặc task không tồn tại.");
+            return Forbid("You do not have permission to view this task, or the task does not exist.");
         }
 
         return Ok(taskDetail);
