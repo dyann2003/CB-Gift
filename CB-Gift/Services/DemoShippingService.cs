@@ -97,12 +97,12 @@ namespace CB_Gift.Services
         }
 
         // 3. HÀM CẬP NHẬT TRẠNG THÁI (Dùng cho UI Admin set bằng tay)
-    /*    public async Task ManualUpdateStatusAsync(string trackingCode, string newStatus)
+    /*    public async Task ManualUpdateStatusAsync(string dto.OrderCode, string newStatus)
         {
             // === BƯỚC 1: Debug Input ===
-            Console.WriteLine($"[DEBUG] Bắt đầu Update: Code='{trackingCode}', NewStatus='{newStatus}'");
+            Console.WriteLine($"[DEBUG] Bắt đầu Update: Code='{dto.OrderCode}', NewStatus='{newStatus}'");
 
-            var code = trackingCode.Trim();
+            var code = dto.OrderCode.Trim();
             var status = newStatus.Trim().ToLower();
 
             // === BƯỚC 2: Thêm Log GhnTracking ===
@@ -164,19 +164,21 @@ namespace CB_Gift.Services
             var result = await _context.SaveChangesAsync();
             Console.WriteLine($"[DEBUG] SaveChanges thành công. Số dòng ảnh hưởng: {result}");
         }*/
-        public async Task ManualUpdateStatusAsync(string trackingCode, string newStatus)
+        public async Task ManualUpdateStatusAsync(UpdateShippingStatusDto dto)
         {
             // === BƯỚC 1: Debug Input ===
-            Console.WriteLine($"[DEBUG] Bắt đầu Update: Code='{trackingCode}', NewStatus='{newStatus}'");
+            Console.WriteLine($"[DEBUG] Bắt đầu Update: Code='{dto.OrderCode}', NewStatus='{dto.NewStatus}'");
 
-            var code = trackingCode.Trim();
-            var status = newStatus.Trim().ToLower();
+            var code = dto.OrderCode.Trim();
+            var status = dto.NewStatus.Trim().ToLower();
+            var reason = dto.Reason?.Trim();
 
             // === BƯỚC 2: Thêm Log GhnTracking (Giữ nguyên) ===
             var log = new GhnTrackingLog
             {
                 OrderCode = code,
                 Status = status,
+                ReasonCancel = reason,
                 UpdatedDate = DateTime.Now
             };
             _context.GhnTrackingLogs.Add(log);
@@ -237,7 +239,20 @@ namespace CB_Gift.Services
 
                     isChanged = true;
                     break;
-
+                case "cancel":
+                case "delivery_fail":
+                case "returned": // Hủy/Trả hàng
+                    order.StatusOrder = 20;// CANCEL_SHIP
+                    // Cập nhật trạng thái từng sản phẩm con (OrderDetail)
+                    if (order.OrderDetails != null)
+                    {
+                        foreach (var detail in order.OrderDetails)
+                        {
+                            detail.ProductionStatus = ProductionStatus.CANCEL_SHIP;
+                        }
+                    }
+                    isChanged = true;
+                    break;
                 default:
                     Console.WriteLine($"[WARNING] Status '{status}' không khớp với case nào!");
                     break;

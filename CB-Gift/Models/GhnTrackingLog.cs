@@ -15,6 +15,8 @@ namespace CB_Gift.Models
         [MaxLength(50)]
         public string Status { get; set; } // ready_to_pick, picking, delivered...
 
+        public string? ReasonCancel { get; set; } // Lý do hủy (nếu có)
+
         public DateTime UpdatedDate { get; set; } = DateTime.Now;
     }
 }

@@ -29,6 +29,7 @@
         // Khác
         HOLD_RF,  //14 // chờ Refund
         HOLD_RP, //15  // Chờ reprint
-        REFUND //16    // Đã Refund
+        REFUND, //16    // Đã Refund
+        CANCEL_SHIP //17  // Hủy giao hàng
     }
 }
