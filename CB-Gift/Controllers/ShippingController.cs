@@ -72,18 +72,25 @@ namespace CB_Gift.Controllers
         }
 
         [HttpPost("update-status-manual")]
-        public async Task<IActionResult> UpdateStatusManual([FromBody] UpdateTrackingRequest request)
+        public async Task<IActionResult> UpdateStatusManual([FromBody] UpdateShippingStatusDto dto)
         {
             try
             {
-                // Kiểm tra xem service hiện tại có phải là ManualGhnService không
                 if (_shippingService is DemoShippingService manualService)
                 {
-                    await manualService.ManualUpdateStatusAsync(request.OrderCode, request.NewStatus);
-                    return Ok(new { Message = $"Đã cập nhật đơn {request.OrderCode} sang trạng thái {request.NewStatus}" });
+                    await manualService.ManualUpdateStatusAsync(dto);
+
+                    return Ok(new
+                    {
+                        Message = $"Đã cập nhật đơn {dto.OrderCode} sang trạng thái {dto.NewStatus}",
+                        Reason = dto.Reason
+                    });
                 }
 
-                return BadRequest(new { Message = "Hệ thống đang chạy chế độ Real, không thể cập nhật thủ công." });
+                return BadRequest(new
+                {
+                    Message = "Hệ thống đang chạy chế độ Real, không thể cập nhật thủ công."
+                });
             }
             catch (Exception ex)
             {

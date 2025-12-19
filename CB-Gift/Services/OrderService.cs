@@ -1356,7 +1356,7 @@ namespace CB_Gift.Services
 
             var deliveryPhase = new[]
             {
-                "SHIPPING", "SHIPPED","CHANGE_ADDRESS"
+                "SHIPPING", "SHIPPED","CHANGE_ADDRESS", "CANCEL_SHIP"
             };
 
             var refundPhase = new[]
