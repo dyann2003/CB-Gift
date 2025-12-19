@@ -159,7 +159,7 @@ builder.Services.AddHttpClient("GhnProdClient", client =>
 {
     client.BaseAddress = new Uri(ghnProdBaseUrl);
     client.DefaultRequestHeaders.Add("Token", ghnToken);
- //   client.DefaultRequestHeaders.Add("ShopId", ghnShopId);
+    //   client.DefaultRequestHeaders.Add("ShopId", ghnShopId);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
@@ -240,31 +240,57 @@ builder.Services.AddScoped<IValidator<OrderImportRowDto>, OrderImportRowValidato
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IOrderImportService, OrderImportService>();
 
-// ================== 8. Quartz ==================
 builder.Services.AddQuartz(q =>
 {
     q.SchedulerId = "Scheduler-Core";
-    var jobKey = new JobKey("groupOrdersJob");
-    q.AddJob<GroupOrdersJob>(opts => opts.WithIdentity(jobKey));
 
-    q.AddTrigger(opts => opts
-        .ForJob(jobKey)
-        .WithIdentity("groupOrdersTrigger")
-        .StartNow()
-        .WithSchedule(CronScheduleBuilder.DailyAtHourAndMinute(0, 5))
+    var vietnamTimeZone =
+        TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
+
+    // ===== JOB 1: Group Orders (00:05 mỗi ngày) =====
+    var groupOrdersJobKey = new JobKey("groupOrdersJob", "OrderJobs");
+
+    q.AddJob<GroupOrdersJob>(opts =>
+        opts.WithIdentity(groupOrdersJobKey)
+            .StoreDurably()
     );
 
-    var invoiceJobKey = new JobKey("createMonthlyInvoicesJob");
-    q.AddJob<CreateMonthlyInvoicesJob>(opts => opts.WithIdentity(invoiceJobKey));
+    q.AddTrigger(opts => opts
+        .ForJob(groupOrdersJobKey)
+        .WithIdentity("groupOrdersTrigger", "OrderTriggers")
+        .WithSchedule(
+            CronScheduleBuilder
+                .DailyAtHourAndMinute(0, 5)
+                .InTimeZone(vietnamTimeZone)
+                .WithMisfireHandlingInstructionFireAndProceed()
+        )
+    );
+
+    // ===== JOB 2: Create Monthly Invoices (ngày 10 lúc 00:05) =====
+    var invoiceJobKey =
+        new JobKey("createMonthlyInvoicesJob", "InvoiceJobs");
+
+    q.AddJob<CreateMonthlyInvoicesJob>(opts =>
+        opts.WithIdentity(invoiceJobKey)
+            .StoreDurably()
+    );
+
     q.AddTrigger(opts => opts
         .ForJob(invoiceJobKey)
-        .WithIdentity("monthlyInvoiceTrigger")
-        .StartNow()
-        .WithSchedule(CronScheduleBuilder.MonthlyOnDayAndHourAndMinute(10, 0, 5))
+        .WithIdentity("monthlyInvoiceTrigger", "InvoiceTriggers")
+        .WithSchedule(
+            CronScheduleBuilder
+                .MonthlyOnDayAndHourAndMinute(10, 0, 5)
+                .InTimeZone(vietnamTimeZone)
+                .WithMisfireHandlingInstructionFireAndProceed()
+        )
     );
 });
-builder.Services.AddQuartzHostedService(options => options.WaitForJobsToComplete = true);
 
+builder.Services.AddQuartzHostedService(options =>
+{
+    options.WaitForJobsToComplete = true;
+});
 // Cấu hình nhận diện Header từ Proxy của Digital Ocean
 // Nếu không có đoạn này, App sẽ nghĩ nó đang chạy HTTP thường -> Cookie Secure bị hủy -> Lỗi 401
 builder.Services.Configure<ForwardedHeadersOptions>(options =>

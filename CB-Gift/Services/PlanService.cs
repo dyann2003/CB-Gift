@@ -116,7 +116,7 @@ namespace CB_Gift.Services
 
                         if (staffIds.Any())
                         {
-                            string message = $"Hệ thống vừa tạo {plansCreated} kế hoạch sản xuất mới. Vui lòng kiểm tra.";
+                            string message = $"Hệ thống vừa tạo {plansCreated} kế hoạch sản xuất mới vào lúc: {DateTime.UtcNow:HH:mm dd/MM/yyyy}. Vui lòng kiểm tra.";
                             string link = "/staff/needs-production";
 
                             foreach (var staffId in staffIds)
