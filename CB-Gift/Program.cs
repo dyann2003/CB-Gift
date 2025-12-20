@@ -291,6 +291,7 @@ builder.Services.AddQuartzHostedService(options =>
 {
     options.WaitForJobsToComplete = true;
 });
+
 // Cấu hình nhận diện Header từ Proxy của Digital Ocean
 // Nếu không có đoạn này, App sẽ nghĩ nó đang chạy HTTP thường -> Cookie Secure bị hủy -> Lỗi 401
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
