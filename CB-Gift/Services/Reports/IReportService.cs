@@ -6,6 +6,7 @@ namespace CB_Gift.Services.Reports
     public interface IReportService
     {
         Task<KpiDto> GetFinancialKpisAsync(ReportFilterDto filter);
+        Task<decimal> GetOutstandingDebtAsync(ReportFilterDto filter);
         Task<List<RevenueChartDto>> GetRevenueChartAsync(ReportFilterDto filter);
         Task<List<FinancialIssueDto>> GetFinancialIssuesChartAsync(ReportFilterDto filter);
         Task<List<ReprintReasonDto>> GetReprintReasonsChartAsync(ReportFilterDto filter);
