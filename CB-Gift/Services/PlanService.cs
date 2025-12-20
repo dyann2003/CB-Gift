@@ -116,7 +116,14 @@ namespace CB_Gift.Services
 
                         if (staffIds.Any())
                         {
-                            string message = $"Hệ thống vừa tạo {plansCreated} kế hoạch sản xuất mới vào lúc: {DateTime.UtcNow:HH:mm dd/MM/yyyy}. Vui lòng kiểm tra.";
+                            var vietnamTimeZone = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
+
+                            var vietnamNow = TimeZoneInfo.ConvertTimeFromUtc(
+                                DateTime.UtcNow,
+                                vietnamTimeZone
+                            );
+
+                            string message = $"Hệ thống vừa tạo {plansCreated} kế hoạch sản xuất mới vào lúc: {vietnamNow:HH:mm dd/MM/yyyy}. Vui lòng kiểm tra.";
                             string link = "/staff/needs-production";
 
                             foreach (var staffId in staffIds)
