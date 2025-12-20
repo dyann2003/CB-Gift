@@ -251,6 +251,8 @@ namespace CB_Gift.DTOs
         public DateTime? CreationDate { get; set; }
         public DateTime? OrderDate { get; set; } // Ngày confirmed
         public DateTime? ShippedDate { get; set; }  // ⬇️ Thời gian shipped (delivered)
+        public DateTime? CanceledDate { get; set; }
+        public string? CancelReason { get; set; }
         // --- Danh sách YÊU CẦU REFUND đã tổng hợp ---
         // Sử dụng RefundDetailsDto (chứa CreatedAt, ReviewedAt, Status, Items)
         public List<RefundDetailsDto> AllRefunds { get; set; } = new List<RefundDetailsDto>();
