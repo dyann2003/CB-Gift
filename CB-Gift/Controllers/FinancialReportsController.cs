@@ -15,7 +15,15 @@ namespace CB_Gift.Controllers
 
         [HttpGet("kpis")]
         public async Task<IActionResult> GetKpis([FromQuery] ReportFilterDto filter) => Ok(await _service.GetFinancialKpisAsync(filter));
-
+        [HttpGet("outstanding-debt")]
+        public async Task<IActionResult> GetOutstandingDebt([FromQuery] ReportFilterDto filter)
+        {
+            var debt = await _service.GetOutstandingDebtAsync(filter);
+            return Ok(new
+            {
+                OutstandingDebt = debt
+            });
+        }
         [HttpGet("revenue-chart")]
         public async Task<IActionResult> GetRevenueChart([FromQuery] ReportFilterDto filter) => Ok(await _service.GetRevenueChartAsync(filter));
 

@@ -20,15 +20,40 @@ namespace CB_Gift.Services.Reports
 
 
         // --- HELPER: Tạo Query chung để không lặp code ---
-        private (IQueryable<Invoice>, IQueryable<Payment>, IQueryable<Refund>, IQueryable<Order>) PrepareQueries(ReportFilterDto filter)
+        private (IQueryable<Invoice>, IQueryable<Payment>, IQueryable<Refund>, IQueryable<Order>)PrepareQueries(ReportFilterDto filter)
         {
             var fromDate = filter.StartDate.Date;
             var toDate = filter.EndDate.Date.AddDays(1).AddTicks(-1);
 
-            var invoiceQuery = _context.Invoices.AsNoTracking().Where(i => i.CreatedAt >= fromDate && i.CreatedAt <= toDate && i.Status != "Cancelled");
-            var paymentQuery = _context.Payments.AsNoTracking().Where(p => p.PaymentDate >= fromDate && p.PaymentDate <= toDate && p.Status == "Completed");
-            var refundQuery = _context.Refunds.AsNoTracking().Where(r => r.CreatedAt >= fromDate && r.CreatedAt <= toDate && r.Status == "Approved");
-            var orderQuery = _context.Orders.AsNoTracking().Where(o => o.OrderDate >= fromDate && o.OrderDate <= toDate);
+            // ✅ DOANH THU: chỉ Invoice khác canceled
+            var invoiceQuery = _context.Invoices
+                .AsNoTracking()
+                .Where(i =>
+                    i.CreatedAt >= fromDate &&
+                    i.CreatedAt <= toDate &&
+                    i.Status != "Canceled");
+
+            // ✅ TIỀN THU THỰC
+            var paymentQuery = _context.Payments
+                .AsNoTracking()
+                .Where(p =>
+                    p.PaymentDate >= fromDate &&
+                    p.PaymentDate <= toDate &&
+                    p.Status == "Completed");
+
+            // ✅ REFUND ĐÃ DUYỆT
+            var refundQuery = _context.Refunds
+                .AsNoTracking()
+                .Where(r =>
+                    r.CreatedAt >= fromDate &&
+                    r.CreatedAt <= toDate &&
+                    r.Status == "Approved");
+
+            var orderQuery = _context.Orders
+                .AsNoTracking()
+                .Where(o =>
+                    o.OrderDate >= fromDate &&
+                    o.OrderDate <= toDate);
 
             if (!string.IsNullOrEmpty(filter.SellerId) && filter.SellerId != "all")
             {
@@ -41,27 +66,56 @@ namespace CB_Gift.Services.Reports
             return (invoiceQuery, paymentQuery, refundQuery, orderQuery);
         }
 
+
         // 1. API KPI (Load siêu nhanh)
         public async Task<KpiDto> GetFinancialKpisAsync(ReportFilterDto filter)
         {
             var (invoiceQ, paymentQ, refundQ, orderQ) = PrepareQueries(filter);
 
-            var totalRevenue = await invoiceQ.SumAsync(i => i.TotalAmount);
-            var cashCollected = await paymentQ.SumAsync(p => p.Amount);
+            // 🔹 DOANH THU của invoice
+            var grossRevenue = await invoiceQ.SumAsync(i => i.TotalAmount);
+
+            // 🔹 REFUND ĐÃ DUYỆT
             var totalRefunds = await refundQ.SumAsync(r => r.Amount);
+
+            // 🔹 DOANH THU THỰC
+            var netRevenue = grossRevenue - totalRefunds;
+
+            // 🔹 TIỀN ĐÃ THU
+            var cashCollected = await paymentQ.SumAsync(p => p.Amount);
 
             var totalOrders = await orderQ.CountAsync();
             var reprintCount = await orderQ.CountAsync(o => o.StatusOrder == 11 || o.ActiveTts == true);
-            var reprintRate = totalOrders > 0 ? Math.Round(((double)reprintCount / totalOrders) * 100, 1) : 0;
+            var reprintRate = totalOrders > 0
+                ? Math.Round(((double)reprintCount / totalOrders) * 100, 1)
+                : 0;
 
             return new KpiDto
             {
-                TotalRevenue = totalRevenue,
+              //  TotalRevenue = Math.Max(0, netRevenue), // ✅ NET REVENUE
+                TotalRevenue = grossRevenue,
                 CashCollected = cashCollected,
-                OutstandingDebt = Math.Max(0, totalRevenue - cashCollected),
+                OutstandingDebt = 0, // ❌ Không tính ở KPI này
                 TotalRefunds = totalRefunds,
                 ReprintRate = reprintRate
             };
+        }
+        public async Task<decimal> GetOutstandingDebtAsync(ReportFilterDto filter)
+        {
+            var fromDate = filter.StartDate.Date;
+            var toDate = filter.EndDate.Date.AddDays(1).AddTicks(-1);
+
+            var query = _context.Invoices.AsNoTracking()
+                .Where(i =>
+                    i.CreatedAt >= fromDate &&
+                    i.CreatedAt <= toDate &&
+                    i.Status != "Cancelled"); // ⬅️ KHÔNG loại Paid vội
+
+            if (!string.IsNullOrEmpty(filter.SellerId) && filter.SellerId != "all")
+                query = query.Where(i => i.SellerUserId == filter.SellerId);
+
+            return await query.SumAsync(i =>
+                Math.Max(0, i.TotalAmount - i.AmountPaid));
         }
 
         // 2. API Revenue Chart
