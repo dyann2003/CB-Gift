@@ -2113,6 +2113,15 @@ namespace CB_Gift.Services
                 .FirstOrDefaultAsync();
 
             orderActivityDto.ShippedDate = shippedLog?.UpdatedDate;
+            // 🔍 Lấy log cancel từ GHN
+            var cancelLog = await _context.GhnTrackingLogs
+                .Where(x => x.OrderCode == orderData.Tracking)
+                .Where(x => x.Status.ToLower() == "cancel")
+                .OrderByDescending(x => x.UpdatedDate)
+                .FirstOrDefaultAsync();
+
+            orderActivityDto.CanceledDate = cancelLog?.UpdatedDate;
+            orderActivityDto.CancelReason = cancelLog?.ReasonCancel;
 
             var allRefunds = await _context.Refunds
             // Phải Include OrderDetail để lấy thông tin sản phẩm (ProductName, Sku, Price)
