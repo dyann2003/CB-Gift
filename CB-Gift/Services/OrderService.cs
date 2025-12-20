@@ -1978,13 +1978,13 @@ namespace CB_Gift.Services
             // ========================================================================
 
             // Tìm các mã bị lặp lại trong danh sách đầu vào
-            var duplicateKeysInFile = dtos
+            /*var duplicateKeysInFile = dtos
                 .GroupBy(x => x.OrderCode)
                 .Where(g => g.Count() > 1 && !string.IsNullOrWhiteSpace(g.Key)) // Nhóm nào có > 1 dòng
                 .Select(g => g.Key)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);*/
 
-            if (duplicateKeysInFile.Any())
+            /*if (duplicateKeysInFile.Any())
             {
                 // Báo lỗi cho các dòng bị trùng này
                 foreach (var dto in dtos.Where(d => duplicateKeysInFile.Contains(d.OrderCode)))
@@ -2007,7 +2007,7 @@ namespace CB_Gift.Services
                     }
                 }
             }
-
+            */
             // ========================================================================
             // BƯỚC 2: Nếu có lỗi -> DỪNG NGAY
             // ========================================================================
