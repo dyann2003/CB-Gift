@@ -92,16 +92,20 @@ namespace CB_Gift.Services
         }
         public async Task<bool> UpdateCategoryStatusAsync(int id, UpdateCategoryStatusDto statusDto)
         {
-            var categoryToUpdate = await _context.Categories.FindAsync(id);
-            if (categoryToUpdate == null)
-            {
-                return false; // Không tìm thấy
-            }
+            var category = await _context.Categories
+                .FirstOrDefaultAsync(c => c.CategoryId == id);
 
-            categoryToUpdate.Status = statusDto.Status;
-            _context.Entry(categoryToUpdate).State = EntityState.Modified;
+            if (category == null)
+                return false;
+
+            category.Status = statusDto.Status;
+
+            await _context.Products
+                .Where(p => p.CategoryId == id)
+                .ExecuteUpdateAsync(p =>
+                    p.SetProperty(x => x.Status, statusDto.Status));
+
             await _context.SaveChangesAsync();
-
             return true;
         }
 

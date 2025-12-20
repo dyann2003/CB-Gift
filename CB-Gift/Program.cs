@@ -260,7 +260,7 @@ builder.Services.AddQuartz(q =>
         .WithIdentity("groupOrdersTrigger", "OrderTriggers")
         .WithSchedule(
             CronScheduleBuilder
-                .DailyAtHourAndMinute(0, 5)
+                .DailyAtHourAndMinute(11, 5)
                 .InTimeZone(vietnamTimeZone)
                 .WithMisfireHandlingInstructionFireAndProceed()
         )
