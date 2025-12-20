@@ -138,60 +138,66 @@ namespace CB_Gift.Services
             if (existingProduct == null)
                 throw new Exception("Product not found");
 
-            // Map thông tin Product chính
+            // 1. Update Product
             _mapper.Map(request, existingProduct);
 
-            // Danh sách Variant hiện có trong DB
             var existingVariants = existingProduct.ProductVariants.ToList();
-
-            // Danh sách Variant gửi lên
             var incomingVariants = request.Variants ?? new List<ProductVariantUpdateDto>();
 
-            // 🔹 1. Cập nhật và thêm mới
+            // 2. Update & Add Variant (CHỈ DỰA VÀO ID)
             foreach (var variantDto in incomingVariants)
             {
-                if (variantDto.ProductVariantId == 0)
+                if (variantDto.ProductVariantId > 0)
                 {
-                    // Thêm mới
+                    var existingVariant = existingVariants
+                        .FirstOrDefault(v => v.ProductVariantId == variantDto.ProductVariantId);
+
+                    if (existingVariant == null)
+                    {
+                        throw new Exception(
+                            $"ProductVariantId {variantDto.ProductVariantId} không tồn tại");
+                    }
+
+                    _mapper.Map(variantDto, existingVariant);
+                }
+                else
+                {
                     var newVariant = _mapper.Map<ProductVariant>(variantDto);
                     newVariant.ProductId = id;
                     _context.ProductVariants.Add(newVariant);
                 }
-                else
-                {
-                    // Cập nhật nếu đã tồn tại
-                    var existingVariant = existingVariants
-                        .FirstOrDefault(v => v.ProductVariantId == variantDto.ProductVariantId);
-
-                    if (existingVariant != null)
-                    {
-                        _mapper.Map(variantDto, existingVariant);
-                    }
-                }
             }
 
-            // 🔹 2. Xóa những variant không còn trong request
+            // 3. Delete Variant an toàn
             var variantIdsFromRequest = incomingVariants
-                .Where(v => v.ProductVariantId != 0)
+                .Where(v => v.ProductVariantId > 0)
                 .Select(v => v.ProductVariantId)
                 .ToList();
 
+            var usedVariantIds = await _context.OrderDetails
+                .Select(o => o.ProductVariantId)
+                .Distinct()
+                .ToListAsync();
+
             var variantsToRemove = existingVariants
-                .Where(v => !variantIdsFromRequest.Contains(v.ProductVariantId))
+                .Where(v =>
+                    !variantIdsFromRequest.Contains(v.ProductVariantId) &&
+                    !usedVariantIds.Contains(v.ProductVariantId)
+                )
                 .ToList();
 
             _context.ProductVariants.RemoveRange(variantsToRemove);
 
-            // 🔹 3. Lưu thay đổi
             await _context.SaveChangesAsync();
 
-            // 🔹 4. Trả về DTO sau khi cập nhật
+            // 4. Return
             var updatedProduct = await _context.Products
                 .Include(p => p.ProductVariants)
                 .FirstOrDefaultAsync(p => p.ProductId == id);
 
             return _mapper.Map<ProductDto>(updatedProduct);
         }
+
 
 
         // 🔹 Delete product
