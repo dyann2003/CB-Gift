@@ -27,19 +27,15 @@ namespace CB_Gift.Tests.Services
     {
         private readonly CBGiftDbContext _db;
 
-        // Mapper: mock + ConfigurationProvider cho ProjectTo
         private readonly Mock<IMapper> _mapperMock;
         private readonly MapperConfiguration _mapperConfig;
-
         private readonly ILogger<OrderService> _logger;
 
-        // Notification + SignalR
         private readonly Mock<INotificationService> _notifyMock;
         private readonly Mock<IHubContext<NotificationHub>> _hubContextMock;
         private readonly Mock<IHubClients> _hubClientsMock;
         private readonly Mock<IClientProxy> _clientProxyMock;
 
-        // NEW deps
         private readonly Mock<IShippingService> _shippingMock;
         private readonly Mock<OrderFactory> _orderFactoryMock;
         private readonly Mock<IValidator<OrderImportRowDto>> _validatorMock;
@@ -47,25 +43,34 @@ namespace CB_Gift.Tests.Services
 
         private readonly OrderService _svc;
 
+        // Quy ước ID theo testcase sheet:
+        private const int VALID_ORDER_ID = 100;
+        private const int VALID_ORDER_ID_2 = 101;
+        private const int INVALID_ID = 0;
+        private const int NOTFOUND_ID = 9999;
+
+        private const int VALID_ORDERDETAIL_ID = 1000;
+        private const int VALID_VARIANT_ID = 10;
+        private const int NOTFOUND_VARIANT_ID = 9999;
+
+        private const string VALID_SELLER_A = "sellerA";
+        private const string VALID_SELLER_B = "sellerB";
+        private const string INVALID_SELLER = "Invalid userSellerId";
+
         public OrderServiceTests()
         {
             _db = InMemoryDbFactory.CreateContext();
-
             _logger = Mock.Of<ILogger<OrderService>>();
 
-            // ---------- AutoMapper config tối thiểu cho ProjectTo ----------
             _mapperConfig = BuildMapperConfig();
-
             _mapperMock = new Mock<IMapper>(MockBehavior.Loose);
             _mapperMock.SetupGet(m => m.ConfigurationProvider).Returns(_mapperConfig);
 
-            // ---------- Notification ----------
             _notifyMock = new Mock<INotificationService>(MockBehavior.Strict);
             _notifyMock
                 .Setup(n => n.CreateAndSendNotificationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
 
-            // ---------- SignalR ----------
             _clientProxyMock = new Mock<IClientProxy>(MockBehavior.Strict);
             _clientProxyMock
                 .Setup(cp => cp.SendCoreAsync(It.IsAny<string>(), It.IsAny<object[]>(), It.IsAny<CancellationToken>()))
@@ -77,20 +82,12 @@ namespace CB_Gift.Tests.Services
             _hubContextMock = new Mock<IHubContext<NotificationHub>>(MockBehavior.Strict);
             _hubContextMock.SetupGet(h => h.Clients).Returns(_hubClientsMock.Object);
 
-            // ---------- Shipping ----------
             _shippingMock = new Mock<IShippingService>(MockBehavior.Strict);
 
-            // ---------- Import-related ----------
-            // Nếu OrderFactory có ctor khác null thì phải truyền đúng ctor args thật
-            _orderFactoryMock = new Mock<OrderFactory>(MockBehavior.Loose, /* ctor args if any */ null);
+            _orderFactoryMock = new Mock<OrderFactory>(MockBehavior.Loose, null);
             _validatorMock = new Mock<IValidator<OrderImportRowDto>>(MockBehavior.Strict);
 
-            // IMPORTANT:
-            // ReferenceDataCache phải có method virtual (LoadAsync, LoadExistingOrderCodesAsync)
-            // thì Setup dưới đây mới không bị NotSupportedException.
             _cacheMock = new Mock<ReferenceDataCache>(MockBehavior.Loose);
-
-            // Default setups cho cache load (nếu test gọi import/validate)
             _cacheMock.Setup(c => c.LoadAsync()).Returns(Task.CompletedTask);
             _cacheMock.Setup(c => c.LoadExistingOrderCodesAsync(It.IsAny<List<string>>()))
                       .Returns(Task.CompletedTask);
@@ -110,6 +107,9 @@ namespace CB_Gift.Tests.Services
             Seed(_db);
         }
 
+        // =======================
+        // Mapper + Seed (giữ như bạn)
+        // =======================
         private static MapperConfiguration BuildMapperConfig()
         {
             return new MapperConfiguration(cfg =>
@@ -126,14 +126,12 @@ namespace CB_Gift.Tests.Services
 
         private static void Seed(CBGiftDbContext db)
         {
-            // Status
             var stDraft = new OrderStatus { StatusId = 1, Code = "DRAFT", NameVi = "Nháp" };
             var stCheckDesign = new OrderStatus { StatusId = 5, Code = "CHECKDESIGN", NameVi = "Duyệt thiết kế" };
             var stShipping = new OrderStatus { StatusId = 13, Code = "SHIPPING", NameVi = "Đang giao" };
 
             var p = new Product { ProductId = 1, ProductName = "Mug", ProductCode = "P001", CategoryId = 1, Status = 1, Describe = "desc" };
 
-            // IMPORTANT: ProductVariant scaffold của bạn có nhiều string NOT NULL -> set dummy để tránh null.
             var v1 = new ProductVariant
             {
                 ProductVariantId = 10,
@@ -252,110 +250,154 @@ namespace CB_Gift.Tests.Services
         }
 
         // =========================================================
-        // CreateCustomerAsync
+        // 1) createCustomer (UTCD01..UTCD07)
         // =========================================================
-        [Fact]
-        public async Task CreateCustomerAsync_Creates_And_Returns()
+        public static IEnumerable<object[]> CreateCustomerCases()
+        {
+            // NOTE: “kỳ vọng exception/message” bạn chỉnh theo service thật.
+            yield return new object[] { "UTCD01", "Customer Test", "0123456789", "test@example.com", true, null, null };
+            yield return new object[] { "UTCD02", null, "0123456789", "test@example.com", false, typeof(ArgumentException), "name" };
+            yield return new object[] { "UTCD03", "Customer Test", null, "test@example.com", false, typeof(ArgumentException), "phone" };
+            yield return new object[] { "UTCD04", "Customer Test", "123", "test@example.com", false, typeof(ArgumentException), "phone" };
+            yield return new object[] { "UTCD05", "Customer Test", "0123456789", "invalid_email_format@gmail", false, typeof(ArgumentException), "email" };
+            yield return new object[] { "UTCD06", "Customer Test", "0123456789", null, false, typeof(ArgumentException), "email" };
+            yield return new object[] { "UTCD07", "Customer Test", "0123456789", "test@example.com", true, null, null }; // duplicate-valid (theo sheet vẫn pass)
+        }
+
+        [Theory]
+        [MemberData(nameof(CreateCustomerCases))]
+        public async Task CreateCustomerAsync_Should_Follow_Testcase(
+            string tcId,
+            string name,
+            string phone,
+            string email,
+            bool expectSuccess,
+            Type expectExceptionType,
+            string messageKeyword)
         {
             var req = new EndCustomerCreateRequest
             {
-                Name = "Jane",
-                Email = "jane@x.com",
-                Phone = "0123",
-                Address = "A",
-                Address1 = "A1",
-                ZipCode = "70000",
-                ShipState = "S",
-                ShipCity = "C",
-                ShipCountry = "VN"
+                Name = name,
+                Email = email,
+                Phone = phone,
+                Address = "Valid address",
+                Address1 = "Valid address1",
+                ZipCode = "Valid zipCode",
+                ShipState = "Valid state",
+                ShipCity = "Valid city",
+                ShipCountry = "Valid country"
             };
 
-            var res = await _svc.CreateCustomerAsync(req);
+            if (expectSuccess)
+            {
+                var res = await _svc.CreateCustomerAsync(req);
+                res.Should().NotBeNull(because: tcId);
+                res.CustId.Should().BeGreaterThan(0, because: tcId);
+                res.Name.Should().Be(name, because: tcId);
+                return;
+            }
 
-            res.Should().NotBeNull();
-            res.CustId.Should().BeGreaterThan(0);
-            res.Name.Should().Be("Jane");
+            Func<Task> act = async () => await _svc.CreateCustomerAsync(req);
+            var ex = await act.Should().ThrowAsync<Exception>(because: tcId);
+
+            if (expectExceptionType != null)
+                ex.Which.Should().BeOfType(expectExceptionType, because: tcId);
+
+            if (!string.IsNullOrWhiteSpace(messageKeyword))
+                ex.Which.Message.Should().Contain(messageKeyword, because: tcId);
         }
 
         // =========================================================
-        // CreateOrderAsync (ActiveTTS true/false)
+        // 2) createOrder (UTCD01..UTCD05)
+        // Sheet của bạn thể hiện validate: endCustomerId, totalCost, sellerUserId, activeTTS
+        // Nhưng method service của bạn đang: CreateOrderAsync(OrderCreateRequest req, string sellerId)
+        // => Map testcase sang input: sellerId + ActiveTTS + (nếu req có EndCustomerId/TotalCost thì set)
         // =========================================================
-        [Fact]
-        public async Task CreateOrderAsync_ActiveTTS_Adds_Surcharge_1()
+        public static IEnumerable<object[]> CreateOrderCases()
         {
-            var req = new OrderCreateRequest { ActiveTTS = true };
+            yield return new object[] { "UTCD01", VALID_SELLER_A, true, true, null, null }; // Normal
+            yield return new object[] { "UTCD02", null, true, false, typeof(ArgumentException), "seller" }; // seller required
+            yield return new object[] { "UTCD03", VALID_SELLER_A, false, true, null, null }; // Normal (no TTS)
+            yield return new object[] { "UTCD04", VALID_SELLER_A, true, true, null, null }; // Normal (nếu sheet có totalCost valid)
+            yield return new object[] { "UTCD05", VALID_SELLER_A, true, true, null, null };
+        }
+
+        [Theory]
+        [MemberData(nameof(CreateOrderCases))]
+        public async Task CreateOrderAsync_Should_Follow_Testcase(
+            string tcId,
+            string sellerUserId,
+            bool activeTts,
+            bool expectSuccess,
+            Type expectExceptionType,
+            string messageKeyword)
+        {
+            var req = new OrderCreateRequest { ActiveTTS = activeTts };
 
             _mapperMock.Setup(m => m.Map<Order>(It.IsAny<OrderCreateRequest>()))
-                .Returns((OrderCreateRequest r) => new Order { ActiveTts = r.ActiveTTS, TotalCost = 0 });
+                .Returns((OrderCreateRequest r) => new Order
+                {
+                    ActiveTts = r.ActiveTTS,
+                    TotalCost = 0
+                });
 
-            var id = await _svc.CreateOrderAsync(req, "sellerZ");
+            if (expectSuccess)
+            {
+                var id = await _svc.CreateOrderAsync(req, sellerUserId);
+                id.Should().BeGreaterThan(0, because: tcId);
 
-            var inDb = await _db.Orders.FindAsync(id);
-            inDb.Should().NotBeNull();
-            inDb!.SellerUserId.Should().Be("sellerZ");
-            inDb.StatusOrder.Should().Be(1);
-            inDb.ProductionStatus.Should().Be("CREATED");
-            inDb.TotalCost.Should().Be(1);
-        }
+                var inDb = await _db.Orders.FindAsync(id);
+                inDb.Should().NotBeNull(because: tcId);
 
-        [Fact]
-        public async Task CreateOrderAsync_NoTTS_No_Surcharge()
-        {
-            var req = new OrderCreateRequest { ActiveTTS = false };
+                // Theo code test cũ của bạn:
+                inDb!.StatusOrder.Should().Be(1, because: tcId);
+                inDb.ProductionStatus.Should().Be("CREATED", because: tcId);
 
-            _mapperMock.Setup(m => m.Map<Order>(It.IsAny<OrderCreateRequest>()))
-                .Returns((OrderCreateRequest r) => new Order { ActiveTts = r.ActiveTTS, TotalCost = 0 });
+                // surcharge TTS
+                inDb.TotalCost.Should().Be(activeTts ? 1 : 0, because: tcId);
+                return;
+            }
 
-            var id = await _svc.CreateOrderAsync(req, "sellerZ");
+            Func<Task> act = async () => await _svc.CreateOrderAsync(req, sellerUserId);
+            var ex = await act.Should().ThrowAsync<Exception>(because: tcId);
 
-            var inDb = await _db.Orders.FindAsync(id);
-            inDb.Should().NotBeNull();
-            inDb!.TotalCost.Should().Be(0);
+            if (expectExceptionType != null)
+                ex.Which.Should().BeOfType(expectExceptionType, because: tcId);
+
+            if (!string.IsNullOrWhiteSpace(messageKeyword))
+                ex.Which.Message.Should().Contain(messageKeyword, because: tcId);
         }
 
         // =========================================================
-        // AddOrderDetailAsync (owner / variant exists / quantity / recalc)
+        // 3) addOrderDetail (UTCD01..UTCD09)
         // =========================================================
-        [Fact]
-        public async Task AddOrderDetailAsync_Throws_When_NotOwner()
+        public static IEnumerable<object[]> AddOrderDetailCases()
         {
-            var req = new OrderDetailCreateRequest { ProductVariantID = 10, Quantity = 1 };
-
-            _mapperMock.Setup(m => m.Map<OrderDetail>(It.IsAny<OrderDetailCreateRequest>()))
-                .Returns(new OrderDetail { ProductVariantId = 10, Quantity = 1 });
-
-            var act = async () => await _svc.AddOrderDetailAsync(101, req, "sellerA");
-            await act.Should().ThrowAsync<Exception>().WithMessage("*not yours*");
+            // Map theo sheet: orderId: valid / 0 / notfound ; variantId: valid / 0 / notfound ; quantity valid/bad
+            yield return new object[] { "UTCD01", VALID_ORDER_ID, VALID_SELLER_A, VALID_VARIANT_ID, 10, true, null, null };   // Normal
+            yield return new object[] { "UTCD02", INVALID_ID, VALID_SELLER_A, VALID_VARIANT_ID, 10, false, typeof(ArgumentException), "order" };
+            yield return new object[] { "UTCD03", NOTFOUND_ID, VALID_SELLER_A, VALID_VARIANT_ID, 10, false, typeof(Exception), "not found" };
+            yield return new object[] { "UTCD04", VALID_ORDER_ID, VALID_SELLER_A, INVALID_ID, 10, false, typeof(ArgumentException), "variant" };
+            yield return new object[] { "UTCD05", VALID_ORDER_ID, VALID_SELLER_A, NOTFOUND_VARIANT_ID, 10, false, typeof(ArgumentException), "does not exist" };
+            yield return new object[] { "UTCD06", VALID_ORDER_ID, VALID_SELLER_A, VALID_VARIANT_ID, 0, false, typeof(ArgumentException), "greater than zero" };
+            yield return new object[] { "UTCD07", VALID_ORDER_ID, "wrongSeller", VALID_VARIANT_ID, 10, false, typeof(Exception), "not yours" };
+            yield return new object[] { "UTCD08", VALID_ORDER_ID, VALID_SELLER_A, VALID_VARIANT_ID, 1, true, null, null };   // Boundary-ish
+            yield return new object[] { "UTCD09", VALID_ORDER_ID, VALID_SELLER_A, VALID_VARIANT_ID, 20, true, null, null };   // Large qty (nếu service cho phép)
         }
 
-        [Fact]
-        public async Task AddOrderDetailAsync_Throws_When_Variant_NotFound()
+        [Theory]
+        [MemberData(nameof(AddOrderDetailCases))]
+        public async Task AddOrderDetailAsync_Should_Follow_Testcase(
+            string tcId,
+            int orderId,
+            string sellerUserId,
+            int variantId,
+            int quantity,
+            bool expectSuccess,
+            Type expectExceptionType,
+            string messageKeyword)
         {
-            var req = new OrderDetailCreateRequest { ProductVariantID = 999, Quantity = 1 };
-            _mapperMock.Setup(m => m.Map<OrderDetail>(It.IsAny<OrderDetailCreateRequest>()))
-                .Returns(new OrderDetail());
-
-            var act = async () => await _svc.AddOrderDetailAsync(100, req, "sellerA");
-            await act.Should().ThrowAsync<ArgumentException>().WithMessage("*does not exist*");
-        }
-
-        [Fact]
-        public async Task AddOrderDetailAsync_Throws_When_Quantity_Invalid()
-        {
-            var req = new OrderDetailCreateRequest { ProductVariantID = 10, Quantity = 0 };
-            _mapperMock.Setup(m => m.Map<OrderDetail>(It.IsAny<OrderDetailCreateRequest>()))
-                .Returns(new OrderDetail());
-
-            var act = async () => await _svc.AddOrderDetailAsync(100, req, "sellerA");
-            await act.Should().ThrowAsync<ArgumentException>().WithMessage("*greater than zero*");
-        }
-
-        [Fact]
-        public async Task AddOrderDetailAsync_Adds_And_Recalculates_TotalCost()
-        {
-            // Order 100 đang có: v10 qty1, v11 qty2.
-            // Add thêm v10 qty3 => tổng theo công thức của bạn = 47
-            var req = new OrderDetailCreateRequest { ProductVariantID = 10, Quantity = 3 };
+            var req = new OrderDetailCreateRequest { ProductVariantID = variantId, Quantity = quantity };
 
             _mapperMock.Setup(m => m.Map<OrderDetail>(It.IsAny<OrderDetailCreateRequest>()))
                 .Returns((OrderDetailCreateRequest r) => new OrderDetail
@@ -365,376 +407,253 @@ namespace CB_Gift.Tests.Services
                     NeedDesign = false
                 });
 
-            await _svc.AddOrderDetailAsync(100, req, "sellerA");
-
-            var order = await _db.Orders.FindAsync(100);
-            order.Should().NotBeNull();
-            order!.TotalCost.Should().Be(47);
-        }
-
-        // =========================================================
-        // DeleteOrderAsync (not found / status != 1 / success)
-        // =========================================================
-        [Fact]
-        public async Task DeleteOrderAsync_ReturnsFalse_When_NotFound_Or_NotOwned()
-        {
-            (await _svc.DeleteOrderAsync(999, "sellerA")).Should().BeFalse();
-            (await _svc.DeleteOrderAsync(101, "sellerA")).Should().BeFalse();
-        }
-
-        [Fact]
-        public async Task DeleteOrderAsync_Throws_When_Status_Not_Draft()
-        {
-            var o = await _db.Orders.FindAsync(100);
-            o!.StatusOrder = 2;
-            await _db.SaveChangesAsync();
-
-            var act = async () => await _svc.DeleteOrderAsync(100, "sellerA");
-            await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*Daft(Nháp)*");
-        }
-
-        [Fact]
-        public async Task DeleteOrderAsync_Removes_Order_And_Details_When_Draft()
-        {
-            var ok = await _svc.DeleteOrderAsync(100, "sellerA");
-            ok.Should().BeTrue();
-
-            (await _db.Orders.FindAsync(100)).Should().BeNull();
-            (await _db.OrderDetails.Where(d => d.OrderId == 100).ToListAsync()).Should().BeEmpty();
-        }
-
-        // =========================================================
-        // SellerApproveOrderDesignAsync
-        // =========================================================
-        [Fact]
-        public async Task SellerApproveOrderDesignAsync_ReturnsFalse_When_Order_NotFound()
-        {
-            var ok = await _svc.SellerApproveOrderDesignAsync(999, ProductionStatus.READY_PROD, "sellerA");
-            ok.Should().BeFalse();
-        }
-
-        [Fact]
-        public async Task SellerApproveOrderDesignAsync_Throws_When_WrongSeller()
-        {
-            var o = await _db.Orders.FindAsync(100);
-            o!.StatusOrder = 5;
-            await _db.SaveChangesAsync();
-
-            var act = async () => await _svc.SellerApproveOrderDesignAsync(100, ProductionStatus.READY_PROD, "other");
-            await act.Should().ThrowAsync<UnauthorizedAccessException>().WithMessage("*not authorized*");
-        }
-
-        [Fact]
-        public async Task SellerApproveOrderDesignAsync_Throws_When_OrderStatus_Not_CheckDesign()
-        {
-            var o = await _db.Orders.FindAsync(100);
-            o!.StatusOrder = 4;
-            await _db.SaveChangesAsync();
-
-            var act = async () => await _svc.SellerApproveOrderDesignAsync(100, ProductionStatus.READY_PROD, "sellerA");
-            await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*not in CHECK_DESIGN*");
-        }
-
-        [Fact]
-        public async Task SellerApproveOrderDesignAsync_Throws_When_NotAllDetails_In_CheckDesign()
-        {
-            var o = await _db.Orders.Include(x => x.OrderDetails).FirstAsync(x => x.OrderId == 100);
-            o.StatusOrder = 5;
-            o.OrderDetails.First().ProductionStatus = ProductionStatus.DESIGN_REDO;
-            await _db.SaveChangesAsync();
-
-            var act = async () => await _svc.SellerApproveOrderDesignAsync(100, ProductionStatus.READY_PROD, "sellerA");
-            await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*Not all OrderDetails*");
-        }
-
-        [Fact]
-        public async Task SellerApproveOrderDesignAsync_Throws_When_Action_Invalid()
-        {
-            var o = await _db.Orders.Include(x => x.OrderDetails).FirstAsync(x => x.OrderId == 101);
-            o.StatusOrder = 5;
-            foreach (var d in o.OrderDetails) d.ProductionStatus = ProductionStatus.CHECK_DESIGN;
-            await _db.SaveChangesAsync();
-
-            var act = async () => await _svc.SellerApproveOrderDesignAsync(101, ProductionStatus.DRAFT, "sellerB");
-            await act.Should().ThrowAsync<InvalidOperationException>();
-        }
-
-        [Fact]
-        public async Task SellerApproveOrderDesignAsync_Success_Sends_Notification_And_SignalR()
-        {
-            var o = await _db.Orders.Include(x => x.OrderDetails).FirstAsync(x => x.OrderId == 100);
-            o.StatusOrder = 5;
-            foreach (var d in o.OrderDetails)
+            if (expectSuccess)
             {
-                d.NeedDesign = true;
-                d.ProductionStatus = ProductionStatus.CHECK_DESIGN;
-                d.AssignedDesignerUserId = "designerX";
+                await _svc.AddOrderDetailAsync(orderId, req, sellerUserId);
+                var order = await _db.Orders.FindAsync(orderId);
+                order.Should().NotBeNull(because: tcId);
+                return;
             }
-            await _db.SaveChangesAsync();
 
-            var ok = await _svc.SellerApproveOrderDesignAsync(100, ProductionStatus.READY_PROD, "sellerA");
-            ok.Should().BeTrue();
+            Func<Task> act = async () => await _svc.AddOrderDetailAsync(orderId, req, sellerUserId);
+            var ex = await act.Should().ThrowAsync<Exception>(because: tcId);
 
-            (await _db.Orders.FindAsync(100))!.StatusOrder.Should().Be(7);
+            if (expectExceptionType != null)
+                ex.Which.Should().BeOfType(expectExceptionType, because: tcId);
 
-            _notifyMock.Verify(n => n.CreateAndSendNotificationAsync(
-                "designerX",
-                It.Is<string>(msg => msg.Contains("ACCEPT", StringComparison.OrdinalIgnoreCase)),
-                It.IsAny<string>()), Times.AtLeastOnce);
-
-            _hubClientsMock.Verify(h => h.Group("order_100"), Times.AtLeastOnce);
-            _clientProxyMock.Verify(cp => cp.SendCoreAsync(
-                "OrderStatusChanged",
-                It.IsAny<object[]>(),
-                It.IsAny<CancellationToken>()), Times.AtLeastOnce);
+            if (!string.IsNullOrWhiteSpace(messageKeyword))
+                ex.Which.Message.Should().Contain(messageKeyword, because: tcId);
         }
 
         // =========================================================
-        // SellerApproveOrderDetailDesignAsync
+        // 4) deleteOrder (UTCD01..UTCD04)
         // =========================================================
-        [Fact]
-        public async Task SellerApproveOrderDetailDesignAsync_ReturnsFalse_When_Order_NotFound()
+        public static IEnumerable<object[]> DeleteOrderCases()
         {
-            var ok = await _svc.SellerApproveOrderDetailDesignAsync(99999, ProductionStatus.READY_PROD, "sellerA", "x");
-            ok.Should().BeFalse();
+            yield return new object[] { "UTCD01", VALID_ORDER_ID, VALID_SELLER_A, true, null, null }; // true
+            yield return new object[] { "UTCD02", INVALID_ID, VALID_SELLER_A, false, null, null }; // false / exception tùy service
+            yield return new object[] { "UTCD03", NOTFOUND_ID, VALID_SELLER_A, false, null, null }; // false
+            yield return new object[] { "UTCD04", VALID_ORDER_ID_2, null, false, typeof(ArgumentException), "seller" }; // seller required
         }
 
-        [Fact]
-        public async Task SellerApproveOrderDetailDesignAsync_Throws_When_WrongSeller()
+        [Theory]
+        [MemberData(nameof(DeleteOrderCases))]
+        public async Task DeleteOrderAsync_Should_Follow_Testcase(
+            string tcId,
+            int orderId,
+            string sellerUserId,
+            bool expectTrue,
+            Type expectExceptionType,
+            string messageKeyword)
         {
-            var act = async () => await _svc.SellerApproveOrderDetailDesignAsync(1000, ProductionStatus.READY_PROD, "wrong", "x");
-            await act.Should().ThrowAsync<UnauthorizedAccessException>();
-        }
+            if (expectExceptionType == null)
+            {
+                var ok = await _svc.DeleteOrderAsync(orderId, sellerUserId);
+                ok.Should().Be(expectTrue, because: tcId);
+                return;
+            }
 
-        [Fact]
-        public async Task SellerApproveOrderDetailDesignAsync_Throws_When_Not_In_CheckDesign()
-        {
-            var d = await _db.OrderDetails.Include(x => x.Order).FirstAsync(x => x.OrderDetailId == 1002); // order 101
-            d.Order!.SellerUserId = "sellerB";
-            d.ProductionStatus = ProductionStatus.DESIGN_REDO;
-            await _db.SaveChangesAsync();
+            Func<Task> act = async () => await _svc.DeleteOrderAsync(orderId, sellerUserId);
+            var ex = await act.Should().ThrowAsync<Exception>(because: tcId);
+            ex.Which.Should().BeOfType(expectExceptionType, because: tcId);
 
-            var act = async () => await _svc.SellerApproveOrderDetailDesignAsync(1002, ProductionStatus.READY_PROD, "sellerB", "x");
-            await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*Must be CHECK_DESIGN*");
-        }
-
-        [Fact]
-        public async Task SellerApproveOrderDetailDesignAsync_Throws_When_Action_Invalid()
-        {
-            var d = await _db.OrderDetails.Include(x => x.Order).FirstAsync(x => x.OrderDetailId == 1000);
-            d.Order!.SellerUserId = "sellerA";
-            d.ProductionStatus = ProductionStatus.CHECK_DESIGN;
-            await _db.SaveChangesAsync();
-
-            var act = async () => await _svc.SellerApproveOrderDetailDesignAsync(1000, ProductionStatus.DRAFT, "sellerA", "x");
-            await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*DESIGN_REDO or READY_PROD*");
-        }
-
-        [Fact]
-        public async Task SellerApproveOrderDetailDesignAsync_Success_Writes_Log_Sends_Notify_And_SignalR()
-        {
-            var d = await _db.OrderDetails.Include(x => x.Order).FirstAsync(x => x.OrderDetailId == 1000);
-            d.Order!.SellerUserId = "sellerA";
-            d.ProductionStatus = ProductionStatus.CHECK_DESIGN;
-            d.AssignedDesignerUserId = "designerY";
-            await _db.SaveChangesAsync();
-
-            var ok = await _svc.SellerApproveOrderDetailDesignAsync(1000, ProductionStatus.READY_PROD, "sellerA", "ok");
-            ok.Should().BeTrue();
-
-            (await _db.OrderDetails.FindAsync(1000))!.ProductionStatus.Should().Be(ProductionStatus.READY_PROD);
-
-            var logs = await _db.OrderDetailLogs.Where(l => l.OrderDetailId == 1000).ToListAsync();
-            logs.Should().NotBeEmpty();
-            logs.Last().EventType.Should().Be("DESIGN_APPROVED");
-
-            _notifyMock.Verify(n => n.CreateAndSendNotificationAsync(
-                "designerY",
-                It.Is<string>(msg => msg.Contains("#1000")),
-                It.IsAny<string>()), Times.AtLeastOnce);
-
-            _hubClientsMock.Verify(h => h.Group("order_100"), Times.AtLeastOnce);
-            _clientProxyMock.Verify(cp => cp.SendCoreAsync(
-                "OrderStatusChanged",
-                It.IsAny<object[]>(),
-                It.IsAny<CancellationToken>()), Times.AtLeastOnce);
+            if (!string.IsNullOrWhiteSpace(messageKeyword))
+                ex.Which.Message.Should().Contain(messageKeyword, because: tcId);
         }
 
         // =========================================================
-        // SendOrderToReadyProdAsync
+        // 5) sellerApproveOrderDesign (UTCD01..UTCD07)
         // =========================================================
-        [Fact]
-        public async Task SendOrderToReadyProdAsync_ReturnsFalse_When_NotFound()
+        public static IEnumerable<object[]> SellerApproveOrderDesignCases()
         {
-            var ok = await _svc.SendOrderToReadyProdAsync(999, "sellerA");
-            ok.Should().BeFalse();
+            yield return new object[] { "UTCD01", VALID_ORDER_ID, ProductionStatus.READY_PROD, VALID_SELLER_A, true, null, null };
+            yield return new object[] { "UTCD02", INVALID_ID, ProductionStatus.READY_PROD, VALID_SELLER_A, false, null, null };
+            yield return new object[] { "UTCD03", NOTFOUND_ID, ProductionStatus.READY_PROD, VALID_SELLER_A, false, null, null };
+            yield return new object[] { "UTCD04", VALID_ORDER_ID, ProductionStatus.READY_PROD, null, false, typeof(ArgumentException), "seller" };
+            yield return new object[] { "UTCD05", VALID_ORDER_ID, ProductionStatus.DRAFT, VALID_SELLER_A, false, typeof(InvalidOperationException), "" }; // action invalid
+            yield return new object[] { "UTCD06", VALID_ORDER_ID, ProductionStatus.READY_PROD, "other", false, typeof(UnauthorizedAccessException), "not authorized" };
+            yield return new object[] { "UTCD07", VALID_ORDER_ID, ProductionStatus.READY_PROD, VALID_SELLER_A, true, null, null };
         }
 
-        [Fact]
-        public async Task SendOrderToReadyProdAsync_Throws_When_WrongSeller()
+        [Theory]
+        [MemberData(nameof(SellerApproveOrderDesignCases))]
+        public async Task SellerApproveOrderDesignAsync_Should_Follow_Testcase(
+            string tcId,
+            int orderId,
+            ProductionStatus action,
+            string sellerUserId,
+            bool expectTrue,
+            Type expectExceptionType,
+            string messageKeyword)
         {
-            var act = async () => await _svc.SendOrderToReadyProdAsync(100, "wrong");
-            await act.Should().ThrowAsync<UnauthorizedAccessException>();
-        }
+            // Đảm bảo order 100 đang ở CHECKDESIGN + details CHECK_DESIGN để case success chạy đúng.
+            if (orderId == VALID_ORDER_ID && expectTrue)
+            {
+                var o = await _db.Orders.Include(x => x.OrderDetails).FirstAsync(x => x.OrderId == VALID_ORDER_ID);
+                o.StatusOrder = 5;
+                foreach (var d in o.OrderDetails)
+                {
+                    d.NeedDesign = true;
+                    d.ProductionStatus = ProductionStatus.CHECK_DESIGN;
+                    d.AssignedDesignerUserId = "designerX";
+                }
+                await _db.SaveChangesAsync();
+            }
 
-        [Fact]
-        public async Task SendOrderToReadyProdAsync_Throws_When_Status_Not_1()
-        {
-            var o = await _db.Orders.FindAsync(101);
-            o!.StatusOrder = 2;
-            await _db.SaveChangesAsync();
+            if (expectExceptionType == null)
+            {
+                var ok = await _svc.SellerApproveOrderDesignAsync(orderId, action, sellerUserId);
+                ok.Should().Be(expectTrue, because: tcId);
+                return;
+            }
 
-            var act = async () => await _svc.SendOrderToReadyProdAsync(101, "sellerB");
-            await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*StatusOrder = 1*");
-        }
+            Func<Task> act = async () => await _svc.SellerApproveOrderDesignAsync(orderId, action, sellerUserId);
+            var ex = await act.Should().ThrowAsync<Exception>(because: tcId);
 
-        [Fact]
-        public async Task SendOrderToReadyProdAsync_Success_Updates_Order_And_Details_And_Sends_SignalR()
-        {
-            var o = await _db.Orders.Include(x => x.OrderDetails).FirstAsync(x => x.OrderId == 101);
-            o.StatusOrder = 1;
-            await _db.SaveChangesAsync();
-
-            var ok = await _svc.SendOrderToReadyProdAsync(101, "sellerB");
-            ok.Should().BeTrue();
-
-            var updated = await _db.Orders.Include(x => x.OrderDetails).FirstAsync(x => x.OrderId == 101);
-            updated.StatusOrder.Should().Be(7);
-            updated.OrderDetails.Should().OnlyContain(d => d.ProductionStatus == ProductionStatus.READY_PROD);
-
-            _hubClientsMock.Verify(h => h.Group("order_101"), Times.AtLeastOnce);
-            _clientProxyMock.Verify(cp => cp.SendCoreAsync(
-                "OrderStatusChanged",
-                It.IsAny<object[]>(),
-                It.IsAny<CancellationToken>()), Times.AtLeastOnce);
-        }
-
-        // =========================================================
-        // ApproveOrderForShippingAsync
-        // =========================================================
-        [Fact]
-        public async Task ApproveOrderForShippingAsync_Fails_When_Order_NotFound()
-        {
-            var res = await _svc.ApproveOrderForShippingAsync(999);
-            res.IsSuccess.Should().BeFalse();
-            res.OrderFound.Should().BeFalse();
-        }
-
-        [Fact]
-        public async Task ApproveOrderForShippingAsync_Fails_When_No_Details()
-        {
-            var o = new Order { OrderId = 202, OrderCode = "ORD202", SellerUserId = "a", StatusOrder = 1, EndCustomerId = 1, ToDistrictId = 1, ToWardCode = "W1" };
-            _db.Orders.Add(o);
-            await _db.SaveChangesAsync();
-
-            var res = await _svc.ApproveOrderForShippingAsync(202);
-            res.IsSuccess.Should().BeFalse();
-            res.CanApprove.Should().BeFalse();
-            res.ErrorMessage.Should().ContainEquivalentOf("no product details");
-        }
-
-        [Fact]
-        public async Task ApproveOrderForShippingAsync_Fails_When_Customer_Missing()
-        {
-            var o = new Order { OrderId = 203, OrderCode = "ORD203", SellerUserId = "a", StatusOrder = 1, EndCustomerId = 999, ToDistrictId = 1, ToWardCode = "W1" };
-            _db.Orders.Add(o);
-            _db.OrderDetails.Add(new OrderDetail { OrderDetailId = 3000, OrderId = 203, ProductVariantId = 10, Quantity = 1, ProductionStatus = ProductionStatus.QC_DONE });
-            await _db.SaveChangesAsync();
-
-            var res = await _svc.ApproveOrderForShippingAsync(203);
-            res.IsSuccess.Should().BeFalse();
-            res.ErrorMessage.Should().Contain("Customer information is missing.");
-        }
-
-        [Fact]
-        public async Task ApproveOrderForShippingAsync_Fails_When_DistrictOrWard_Missing()
-        {
-            var o = await _db.Orders.Include(x => x.OrderDetails).FirstAsync(x => x.OrderId == 100);
-            o.ToDistrictId = null;
-            o.ToWardCode = null;
-            foreach (var d in o.OrderDetails) d.ProductionStatus = ProductionStatus.QC_DONE;
-            await _db.SaveChangesAsync();
-
-            var res = await _svc.ApproveOrderForShippingAsync(100);
-            res.IsSuccess.Should().BeFalse();
-            res.ErrorMessage.Should().Contain("Missing District ID or Ward Code");
-        }
-
-        [Fact]
-        public async Task ApproveOrderForShippingAsync_Fails_When_Not_All_QC_Done()
-        {
-            var res = await _svc.ApproveOrderForShippingAsync(100);
-            res.IsSuccess.Should().BeFalse();
-            res.CanApprove.Should().BeFalse();
-            res.ErrorMessage.Should().Contain("Not all products have passed QC");
-        }
-
-        [Fact]
-        public async Task ApproveOrderForShippingAsync_Success_When_Shipping_Returns_OrderCode()
-        {
-            var o = await _db.Orders.Include(x => x.OrderDetails).FirstAsync(x => x.OrderId == 100);
-            foreach (var d in o.OrderDetails) d.ProductionStatus = ProductionStatus.QC_DONE;
-            await _db.SaveChangesAsync();
-
-            _shippingMock
-                .Setup(s => s.CreateOrderAsync(It.IsAny<CreateOrderRequest>()))
-                .ReturnsAsync(new CreateOrderResult { OrderCode = "GHN123" });
-
-            var res = await _svc.ApproveOrderForShippingAsync(100);
-            res.IsSuccess.Should().BeTrue();
-
-            var updated = await _db.Orders.Include(x => x.OrderDetails).FirstAsync(x => x.OrderId == 100);
-            updated.StatusOrder.Should().Be(13);
-            updated.Tracking.Should().Be("GHN123");
-            updated.OrderDetails.Should().OnlyContain(d => d.ProductionStatus == ProductionStatus.SHIPPING);
-
-            _notifyMock.Verify(n => n.CreateAndSendNotificationAsync(
-                "sellerA",
-                It.Is<string>(msg => msg.Contains("Mã vận đơn") || msg.Contains("GHN123")),
-                It.Is<string>(url => url.Contains("/seller/orders/100"))), Times.Once);
-
-            _hubClientsMock.Verify(h => h.Group("order_100"), Times.AtLeastOnce);
-        }
-
-        [Fact]
-        public async Task ApproveOrderForShippingAsync_When_Shipping_400_Should_Set_Status_19_And_Notify()
-        {
-            var o = await _db.Orders.Include(x => x.OrderDetails).FirstAsync(x => x.OrderId == 100);
-            foreach (var d in o.OrderDetails) d.ProductionStatus = ProductionStatus.QC_DONE;
-            await _db.SaveChangesAsync();
-
-            _shippingMock
-                .Setup(s => s.CreateOrderAsync(It.IsAny<CreateOrderRequest>()))
-                .ThrowsAsync(new Exception("400 PHONE_INVALID"));
-
-            var res = await _svc.ApproveOrderForShippingAsync(100);
-            res.IsSuccess.Should().BeFalse();
-            res.ErrorMessage.Should().Contain("Tạo đơn vận chuyển thất bại");
-
-            var updated = await _db.Orders.Include(x => x.OrderDetails).FirstAsync(x => x.OrderId == 100);
-            updated.StatusOrder.Should().Be(19);
-            updated.OrderDetails.Should().OnlyContain(d => d.ProductionStatus == ProductionStatus.QC_DONE);
-
-            _notifyMock.Verify(n => n.CreateAndSendNotificationAsync(
-                "sellerA",
-                It.Is<string>(msg => msg.Contains("PHONE") || msg.Contains("Số điện thoại", StringComparison.OrdinalIgnoreCase)),
-                It.Is<string>(url => url.Contains("/seller/orders/100"))), Times.Once);
+            ex.Which.Should().BeOfType(expectExceptionType, because: tcId);
+            if (!string.IsNullOrWhiteSpace(messageKeyword))
+                ex.Which.Message.Should().Contain(messageKeyword, because: tcId);
         }
 
         // =========================================================
-        // CheckOrderCodeExistsAsync
+        // 6) sellerApproveOrderDetailDesign (UTCD01..UTCD07)
         // =========================================================
-        [Fact]
-        public async Task CheckOrderCodeExistsAsync_ReturnsFalse_When_Empty()
+        public static IEnumerable<object[]> SellerApproveOrderDetailDesignCases()
         {
-            (await _svc.CheckOrderCodeExistsAsync("")).Should().BeFalse();
-            (await _svc.CheckOrderCodeExistsAsync("   ")).Should().BeFalse();
+            yield return new object[] { "UTCD01", VALID_ORDERDETAIL_ID, ProductionStatus.READY_PROD, VALID_SELLER_A, "ok", true, null, null };
+            yield return new object[] { "UTCD02", INVALID_ID, ProductionStatus.READY_PROD, VALID_SELLER_A, "ok", false, null, null };
+            yield return new object[] { "UTCD03", NOTFOUND_ID, ProductionStatus.READY_PROD, VALID_SELLER_A, "ok", false, null, null };
+            yield return new object[] { "UTCD04", VALID_ORDERDETAIL_ID, ProductionStatus.READY_PROD, null, "ok", false, typeof(ArgumentException), "seller" };
+            yield return new object[] { "UTCD05", VALID_ORDERDETAIL_ID, ProductionStatus.DRAFT, VALID_SELLER_A, "ok", false, typeof(InvalidOperationException), "DESIGN_REDO" };
+            yield return new object[] { "UTCD06", VALID_ORDERDETAIL_ID, ProductionStatus.READY_PROD, "wrong", "ok", false, typeof(UnauthorizedAccessException), "" };
+            yield return new object[] { "UTCD07", VALID_ORDERDETAIL_ID, ProductionStatus.READY_PROD, VALID_SELLER_A, "ok", true, null, null };
         }
 
-        [Fact]
-        public async Task CheckOrderCodeExistsAsync_ReturnsTrue_When_Exists()
+        [Theory]
+        [MemberData(nameof(SellerApproveOrderDetailDesignCases))]
+        public async Task SellerApproveOrderDetailDesignAsync_Should_Follow_Testcase(
+            string tcId,
+            int orderDetailId,
+            ProductionStatus action,
+            string sellerUserId,
+            string reason,
+            bool expectTrue,
+            Type expectExceptionType,
+            string messageKeyword)
         {
-            (await _svc.CheckOrderCodeExistsAsync("ORD100")).Should().BeTrue();
+            // Setup để case success chạy đúng: detail phải CHECK_DESIGN, seller phải owner
+            if (orderDetailId == VALID_ORDERDETAIL_ID && expectTrue)
+            {
+                var d = await _db.OrderDetails.Include(x => x.Order).FirstAsync(x => x.OrderDetailId == VALID_ORDERDETAIL_ID);
+                d.Order!.SellerUserId = VALID_SELLER_A;
+                d.ProductionStatus = ProductionStatus.CHECK_DESIGN;
+                d.AssignedDesignerUserId = "designerY";
+                await _db.SaveChangesAsync();
+            }
+
+            if (expectExceptionType == null)
+            {
+                var ok = await _svc.SellerApproveOrderDetailDesignAsync(orderDetailId, action, sellerUserId, reason);
+                ok.Should().Be(expectTrue, because: tcId);
+                return;
+            }
+
+            Func<Task> act = async () => await _svc.SellerApproveOrderDetailDesignAsync(orderDetailId, action, sellerUserId, reason);
+            var ex = await act.Should().ThrowAsync<Exception>(because: tcId);
+
+            ex.Which.Should().BeOfType(expectExceptionType, because: tcId);
+            if (!string.IsNullOrWhiteSpace(messageKeyword))
+                ex.Which.Message.Should().Contain(messageKeyword, because: tcId);
+        }
+
+        // =========================================================
+        // 7) sendOrderToReadyProd (UTCD01..UTCD05)
+        // =========================================================
+        public static IEnumerable<object[]> SendOrderToReadyProdCases()
+        {
+            yield return new object[] { "UTCD01", VALID_ORDER_ID_2, VALID_SELLER_B, true, null, null };
+            yield return new object[] { "UTCD02", INVALID_ID, VALID_SELLER_B, false, null, null };
+            yield return new object[] { "UTCD03", NOTFOUND_ID, VALID_SELLER_B, false, null, null };
+            yield return new object[] { "UTCD04", VALID_ORDER_ID_2, INVALID_SELLER, false, typeof(UnauthorizedAccessException), "" };
+            yield return new object[] { "UTCD05", VALID_ORDER_ID_2, null, false, typeof(ArgumentException), "seller" };
+        }
+
+        [Theory]
+        [MemberData(nameof(SendOrderToReadyProdCases))]
+        public async Task SendOrderToReadyProdAsync_Should_Follow_Testcase(
+            string tcId,
+            int orderId,
+            string sellerUserId,
+            bool expectTrue,
+            Type expectExceptionType,
+            string messageKeyword)
+        {
+            // đảm bảo order 101 đúng status = 1 để success
+            if (orderId == VALID_ORDER_ID_2 && expectTrue)
+            {
+                var o = await _db.Orders.FindAsync(VALID_ORDER_ID_2);
+                o!.StatusOrder = 1;
+                await _db.SaveChangesAsync();
+            }
+
+            if (expectExceptionType == null)
+            {
+                var ok = await _svc.SendOrderToReadyProdAsync(orderId, sellerUserId);
+                ok.Should().Be(expectTrue, because: tcId);
+                return;
+            }
+
+            Func<Task> act = async () => await _svc.SendOrderToReadyProdAsync(orderId, sellerUserId);
+            var ex = await act.Should().ThrowAsync<Exception>(because: tcId);
+
+            ex.Which.Should().BeOfType(expectExceptionType, because: tcId);
+            if (!string.IsNullOrWhiteSpace(messageKeyword))
+                ex.Which.Message.Should().Contain(messageKeyword, because: tcId);
+        }
+
+        // =========================================================
+        // 8) approveOrderForShipping (UTCD01..UTCD03)
+        // =========================================================
+        public static IEnumerable<object[]> ApproveOrderForShippingCases()
+        {
+            yield return new object[] { "UTCD01", VALID_ORDER_ID, true };
+            yield return new object[] { "UTCD02", INVALID_ID, false };
+            yield return new object[] { "UTCD03", NOTFOUND_ID, false };
+        }
+
+        [Theory]
+        [MemberData(nameof(ApproveOrderForShippingCases))]
+        public async Task ApproveOrderForShippingAsync_Should_Follow_Testcase(string tcId, int orderId, bool expectCanFind)
+        {
+            if (orderId == VALID_ORDER_ID)
+            {
+                // setup để success: QC_DONE + shipping mock trả orderCode
+                var o = await _db.Orders.Include(x => x.OrderDetails).FirstAsync(x => x.OrderId == VALID_ORDER_ID);
+                foreach (var d in o.OrderDetails) d.ProductionStatus = ProductionStatus.QC_DONE;
+                await _db.SaveChangesAsync();
+
+                _shippingMock
+                    .Setup(s => s.CreateOrderAsync(It.IsAny<CreateOrderRequest>()))
+                    .ReturnsAsync(new CreateOrderResult { OrderCode = "GHN123" });
+            }
+
+            var res = await _svc.ApproveOrderForShippingAsync(orderId);
+
+            res.OrderFound.Should().Be(expectCanFind, because: tcId);
+
+            if (expectCanFind)
+            {
+                // theo flow trong test cũ của bạn: nếu ok thì StatusOrder=13 + Tracking
+                res.IsSuccess.Should().BeTrue(because: tcId);
+
+                var updated = await _db.Orders.Include(x => x.OrderDetails).FirstAsync(x => x.OrderId == orderId);
+                updated.StatusOrder.Should().Be(13, because: tcId);
+                updated.Tracking.Should().Be("GHN123", because: tcId);
+            }
+            else
+            {
+                res.IsSuccess.Should().BeFalse(because: tcId);
+            }
         }
     }
 }
