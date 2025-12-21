@@ -260,7 +260,7 @@ builder.Services.AddQuartz(q =>
         .WithIdentity("groupOrdersTrigger", "OrderTriggers")
         .WithSchedule(
             CronScheduleBuilder
-                .DailyAtHourAndMinute(11, 5)
+                .DailyAtHourAndMinute(0, 5)
                 .InTimeZone(vietnamTimeZone)
                 .WithMisfireHandlingInstructionFireAndProceed()
         )
@@ -280,7 +280,7 @@ builder.Services.AddQuartz(q =>
         .WithIdentity("monthlyInvoiceTrigger", "InvoiceTriggers")
         .WithSchedule(
             CronScheduleBuilder
-                .MonthlyOnDayAndHourAndMinute(10, 0, 5)
+                .MonthlyOnDayAndHourAndMinute(22, 7, 5)
                 .InTimeZone(vietnamTimeZone)
                 .WithMisfireHandlingInstructionFireAndProceed()
         )
