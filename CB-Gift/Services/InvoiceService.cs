@@ -44,7 +44,6 @@ public class InvoiceService : IInvoiceService
         try
         {
             List<Order> uninvoicedOrders;
-            //huy
             // KỊCH BẢN 1: TẠO HÓA ĐƠN THEO DANH SÁCH ORDER ID
             if (request.OrderIds != null && request.OrderIds.Any())
             {
@@ -144,7 +143,7 @@ public class InvoiceService : IInvoiceService
                 appliedDiscountId = discount.DiscountId;
             }
 
-            // 4. [CẬP NHẬT CÔNG THỨC] - Tính TotalAmount (Tổng cộng)
+            // 4. - Tính TotalAmount (Tổng cộng)
             var totalAmount = subtotal - discountAmount;
             if (totalAmount < 0) totalAmount = 0;
             var newInvoice = new Invoice
@@ -181,7 +180,7 @@ public class InvoiceService : IInvoiceService
 
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
-            // ✅ BẮT ĐẦU GỬI THÔNG BÁO (SAU KHI COMMIT THÀNH CÔNG)
+            //  BẮT ĐẦU GỬI THÔNG BÁO (SAU KHI COMMIT THÀNH CÔNG)
             try
             {
                 // 1. Gửi thông báo (chuông) đến Seller
@@ -197,13 +196,25 @@ public class InvoiceService : IInvoiceService
                     "NewInvoiceCreated",
                     newInvoice // Gửi đi đối tượng hóa đơn vừa tạo
                 );
+                // 3. Gửi thông báo (chuông) đến Staff
+                await _notificationService.CreateAndSendNotificationAsync(
+                    staffId, // ID của nhân viên thực hiện
+                    $"Bạn đã tạo thành công hóa đơn #{newInvoice.InvoiceNumber} cho Seller.",
+                    $"/manager/invoices/{newInvoice.InvoiceId}" // ⚠️ Lưu ý: Hãy sửa đường dẫn này theo route FE của Staff/Manager
+                );
+
+                // 4. Gửi sự kiện real-time đến Staff (để cập nhật UI danh sách hóa đơn ngay lập tức)
+                await _hubContext.Clients.Group($"user_{staffId}").SendAsync(
+                    "InvoiceCreatedSuccess", // Tên sự kiện có thể khác để Staff xử lý riêng
+                    newInvoice
+                );
             }
             catch (Exception ex)
             {
                 // Ghi log lỗi nhưng không làm hỏng kết quả trả về
                 _logger.LogError(ex, "Lỗi khi gửi thông báo SignalR cho CreateInvoiceAsync (InvoiceID: {InvoiceId})", newInvoice.InvoiceId);
             }
-            // ✅ KẾT THÚC GỬI THÔNG BÁO
+            // KẾT THÚC GỬI THÔNG BÁO
             return newInvoice;
         }
         catch
@@ -660,11 +671,9 @@ public class InvoiceService : IInvoiceService
 
         try
         {
-            // [THAY ĐỔI] Logic xác thực cũ bị xóa
             // var payload = JsonConvert.DeserializeObject<WebhookType>(log.RawPayload);
             // WebhookData verifiedData = _payOS.verifyPaymentWebhookData(payload);
 
-            // [THAY ĐỔI] Logic xác thực mới
             var paymentGateway = _gatewayFactory.GetGateway(gatewayName);
             PaymentProcessingResult result = await paymentGateway.VerifyWebhookAsync(log.RawPayload, log.Signature);
 
@@ -680,14 +689,12 @@ public class InvoiceService : IInvoiceService
                     {
                         log.RelatedInvoiceId = failedPayment.InvoiceId;
 
-                        // ✅ Xử lý Cancel
                         if (result.Message != null &&
                             result.Message.Contains("cancel", StringComparison.OrdinalIgnoreCase))
                         {
                             failedPayment.Status = "Cancelled";
                             log.ProcessingStatus = "Processed_Cancelled";
                         }
-                        // ❌ Xử lý Failed
                         else
                         {
                             failedPayment.Status = "Failed";
@@ -742,9 +749,9 @@ public class InvoiceService : IInvoiceService
 
             // 4. Cập nhật bản ghi Payment
             payment.Status = "Completed";
-            payment.TransactionId = result.TransactionId; // <-- Dùng result
+            payment.TransactionId = result.TransactionId; 
 
-            if (payment.Amount != result.AmountPaid) // <-- Dùng result
+            if (payment.Amount != result.AmountPaid) 
             {
                 _logger.LogWarning("Payment (ID: {PaymentId}) amount mismatch. Expected: {ExpectedAmount}, Received: {ReceivedAmount}",
                     payment.PaymentId, payment.Amount, result.AmountPaid);
@@ -898,7 +905,7 @@ public class InvoiceService : IInvoiceService
             OverdueInvoiceId = overdueInvoice.InvoiceId
         };
     }
-    // [CẬP NHẬT] - Logic cho GetSellerReceivablesAsync
+    //  - Logic cho GetSellerReceivablesAsync
     public async Task<PaginatedResult<SellerReceivablesDto>> GetSellerReceivablesAsync(
         string? searchTerm, string? sortColumn, string? sortDirection, int page, int pageSize,
         decimal? minDebt, decimal? maxDebt, decimal? minSales, decimal? maxSales // [THÊM MỚI] Nhận tham số
@@ -942,7 +949,7 @@ public class InvoiceService : IInvoiceService
             );
         }
 
-        // 4. [THÊM MỚI] Áp dụng các filter theo khoảng giá trị
+        // 4.  Áp dụng các filter theo khoảng giá trị
         // Lọc theo Công nợ (Receivables)
         if (minDebt.HasValue)
         {
@@ -1046,7 +1053,7 @@ public class InvoiceService : IInvoiceService
             PageSize = pageSize
         };
     }
-    // [CẬP NHẬT] - Logic cho tab "Payment History"
+    //  - Logic cho tab "Payment History"
     public async Task<PaginatedResult<PaymentSummaryDto>> GetPaymentsForSellerAsync(string sellerId, int page, int pageSize)
     {
         var query = _context.Payments
@@ -1079,7 +1086,7 @@ public class InvoiceService : IInvoiceService
         return new PaginatedResult<PaymentSummaryDto> { Items = payments, Total = total, Page = page, PageSize = pageSize };
     }
 
-    // [THÊM MỚI] - Logic cho tab "Sales History" (Lấy danh sách các tháng)
+    //- Logic cho tab "Sales History" (Lấy danh sách các tháng)
     public async Task<List<SellerMonthlySalesDto>> GetSellerMonthlySalesAsync(string sellerId)
     {
         // 1. Lấy tất cả các order "Đã Ship" (SHIPPED) của seller
@@ -1117,7 +1124,7 @@ public class InvoiceService : IInvoiceService
         return monthlyGroups;
     }
 
-    // [THÊM MỚI] - Logic cho tab "Sales History" (Lấy order của 1 tháng)
+    //  - Logic cho tab "Sales History" (Lấy order của 1 tháng)
     public async Task<PaginatedResult<SellerOrderDto>> GetSellerOrdersForMonthAsync(string sellerId, int year, int month, int page, int pageSize)
     {
         var query = _context.Orders
@@ -1150,12 +1157,12 @@ public class InvoiceService : IInvoiceService
         return new PaginatedResult<SellerOrderDto> { Items = orders, Total = total, Page = page, PageSize = pageSize };
     }
 
-    // [THÊM MỚI] - Logic cho nút "Create Monthly Receipt"
+    // - Logic cho nút "Create Monthly Receipt"
     public async Task<Invoice> CreateInvoiceForMonthAsync(CreateMonthlyInvoiceRequest request, string staffId)
     {
-        // 1. Tìm tất cả các Order ID "Đã Ship" CHƯA được lập hóa đơn
+        // 1. Tìm tất cả các Order ID "Shipped" CHƯA được lập hóa đơn
         var orderIdsToInvoice = await _context.Orders
-            .Include(o => o.StatusOrderNavigation) // Cần để lọc "SHIPPED"
+            .Include(o => o.StatusOrderNavigation) //lọc "SHIPPED"
             .Where(o =>
                 o.SellerUserId == request.SellerId &&
                 o.OrderDate.Year == request.Year &&
@@ -1168,7 +1175,7 @@ public class InvoiceService : IInvoiceService
 
         if (orderIdsToInvoice == null || !orderIdsToInvoice.Any())
         {
-            throw new InvalidOperationException("Không có đơn hàng 'Đã Ship' nào mới (chưa lập hóa đơn) trong tháng này.");
+            throw new InvalidOperationException("There are no new 'Shipped' (uninvoiced) orders this month.");
         }
 
         // 2. Tạo request DTO cho hàm CreateInvoiceAsync CŨ
@@ -1177,7 +1184,7 @@ public class InvoiceService : IInvoiceService
 
             SellerId = request.SellerId,
             OrderIds = orderIdsToInvoice,
-            Notes = request.Notes ?? $"Hóa đơn tổng hợp tháng {request.Month}/{request.Year}",
+            Notes = request.Notes ?? $"Monthly summary invoice {request.Month}/{request.Year}",
             StartDate = new DateTime(request.Year, request.Month, 1),
             EndDate = new DateTime(request.Year, request.Month, 1).AddMonths(1).AddDays(-1)
         };
@@ -1216,7 +1223,7 @@ public class InvoiceService : IInvoiceService
                     SellerId = sellerId,
                     Year = year,
                     Month = month,
-                    Notes = $"Hóa đơn tổng hợp tự động tháng {month}/{year}"
+                    Notes = $"Automatic monthly consolidated invoice {month}/{year}"
                 };
 
                 try

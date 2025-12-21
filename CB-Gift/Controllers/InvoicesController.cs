@@ -17,7 +17,6 @@ namespace CB_Gift.Controllers
         {
             _invoiceService = invoiceService;
         }
-        // huy
         [HttpPost]
         [Authorize(Roles = "Staff,Manager")]
         public async Task<IActionResult> CreateInvoice([FromBody] CreateInvoiceRequest request)
@@ -178,7 +177,7 @@ namespace CB_Gift.Controllers
                 return StatusCode(500, new { message = "Đã xảy ra lỗi.", error = ex.Message }); 
             }
         }
-        // [CẬP NHẬT] - API cho trang Manager xem công nợ
+        //  - API cho trang Manager xem công nợ
         [HttpGet("seller-receivables")]
         [Authorize(Roles = "Staff, Manager, Admin")]
         public async Task<IActionResult> GetSellerReceivables(
@@ -228,7 +227,7 @@ namespace CB_Gift.Controllers
                 return StatusCode(500, new { message = "Lỗi khi lấy dữ liệu công nợ.", error = ex.Message });
             }
         }
-        // [CẬP NHẬT] - Endpoint cho tab "Payment History"
+        //  - Endpoint cho tab "Payment History"
         [HttpGet("seller-payments/{sellerId}")]
         //[Authorize(Roles = "Staff, Manager, Admin")]
         public async Task<IActionResult> GetPaymentsForSeller(string sellerId, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
@@ -244,7 +243,7 @@ namespace CB_Gift.Controllers
             }
         }
 
-        // [THÊM MỚI] - API CHO TAB "SALES HISTORY" - LẤY CÁC THÁNG
+        //  API CHO TAB "SALES HISTORY" - LẤY CÁC THÁNG
         [HttpGet("seller-monthly-sales/{sellerId}")]
        // [Authorize(Roles = "Staff, Manager, Admin")]
         public async Task<IActionResult> GetSellerMonthlySales(string sellerId)
@@ -260,7 +259,7 @@ namespace CB_Gift.Controllers
             }
         }
 
-        // [THÊM MỚI] - API CHO TAB "SALES HISTORY" - LẤY ORDER TRONG THÁNG
+        //  API CHO TAB "SALES HISTORY" - LẤY ORDER TRONG THÁNG
         [HttpGet("seller-monthly-orders/{sellerId}")]
        // [Authorize(Roles = "Staff, Manager, Admin")]
         public async Task<IActionResult> GetSellerOrdersForMonth(
