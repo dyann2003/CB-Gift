@@ -18,14 +18,12 @@ namespace CB_Gift.Services.Reports
             _userManager = userManager;
         }
 
-
-        // --- HELPER: Tạo Query chung để không lặp code ---
         private (IQueryable<Invoice>, IQueryable<Payment>, IQueryable<Refund>, IQueryable<Order>)PrepareQueries(ReportFilterDto filter)
         {
             var fromDate = filter.StartDate.Date;
             var toDate = filter.EndDate.Date.AddDays(1).AddTicks(-1);
 
-            // ✅ DOANH THU: chỉ Invoice khác canceled
+            // DOANH THU: chỉ Invoice khác canceled
             var invoiceQuery = _context.Invoices
                 .AsNoTracking()
                 .Where(i =>
@@ -33,7 +31,7 @@ namespace CB_Gift.Services.Reports
                     i.CreatedAt <= toDate &&
                     i.Status != "Canceled");
 
-            // ✅ TIỀN THU THỰC
+            //  TIỀN THU THỰC
             var paymentQuery = _context.Payments
                 .AsNoTracking()
                 .Where(p =>
@@ -41,12 +39,12 @@ namespace CB_Gift.Services.Reports
                     p.PaymentDate <= toDate &&
                     p.Status == "Completed");
 
-            // ✅ REFUND ĐÃ DUYỆT
+            //  REFUND ĐÃ DUYỆT
             var refundQuery = _context.Refunds
                 .AsNoTracking()
                 .Where(r =>
-                    r.CreatedAt >= fromDate &&
-                    r.CreatedAt <= toDate &&
+                    r.ReviewedAt >= fromDate &&
+                    r.ReviewedAt <= toDate &&
                     r.Status == "Approved");
 
             var orderQuery = _context.Orders
@@ -67,35 +65,35 @@ namespace CB_Gift.Services.Reports
         }
 
 
-        // 1. API KPI (Load siêu nhanh)
+        // 1. API KPI 
         public async Task<KpiDto> GetFinancialKpisAsync(ReportFilterDto filter)
         {
             var (invoiceQ, paymentQ, refundQ, orderQ) = PrepareQueries(filter);
 
-            // 🔹 DOANH THU của invoice
+            //  DOANH THU của invoice
             var grossRevenue = await invoiceQ.SumAsync(i => i.TotalAmount);
 
-            // 🔹 REFUND ĐÃ DUYỆT
+            //  REFUND ĐÃ DUYỆT
             var totalRefunds = await refundQ.SumAsync(r => r.Amount);
 
-            // 🔹 DOANH THU THỰC
+            //  DOANH THU THỰC
             var netRevenue = grossRevenue - totalRefunds;
 
-            // 🔹 TIỀN ĐÃ THU
+            //  TIỀN ĐÃ THU
             var cashCollected = await paymentQ.SumAsync(p => p.Amount);
 
             var totalOrders = await orderQ.CountAsync();
-            var reprintCount = await orderQ.CountAsync(o => o.StatusOrder == 11 || o.ActiveTts == true);
+            var reprintCount = await orderQ.CountAsync(o => o.StatusOrder == 11);
             var reprintRate = totalOrders > 0
                 ? Math.Round(((double)reprintCount / totalOrders) * 100, 1)
                 : 0;
 
             return new KpiDto
             {
-              //  TotalRevenue = Math.Max(0, netRevenue), // ✅ NET REVENUE
+                NetRevenue  = Math.Max(0, netRevenue), // NET REVENUE
                 TotalRevenue = grossRevenue,
                 CashCollected = cashCollected,
-                OutstandingDebt = 0, // ❌ Không tính ở KPI này
+                OutstandingDebt = 0, 
                 TotalRefunds = totalRefunds,
                 ReprintRate = reprintRate
             };
@@ -109,7 +107,7 @@ namespace CB_Gift.Services.Reports
                 .Where(i =>
                     i.CreatedAt >= fromDate &&
                     i.CreatedAt <= toDate &&
-                    i.Status != "Cancelled"); // ⬅️ KHÔNG loại Paid vội
+                    i.Status != "Cancelled"); 
 
             if (!string.IsNullOrEmpty(filter.SellerId) && filter.SellerId != "all")
                 query = query.Where(i => i.SellerUserId == filter.SellerId);
@@ -151,18 +149,18 @@ namespace CB_Gift.Services.Reports
                 {
                     Month = CultureInfo.CurrentCulture.DateTimeFormat.GetAbbreviatedMonthName(g.Key),
                     Refunds = g.Count(),
-                    Reprints = 0 // TODO: Cần query thêm bảng Reprint
+                    Reprints = 0 
                 }).ToListAsync();
 
             if (!data.Any()) data.Add(new FinancialIssueDto { Month = "Current", Refunds = 0, Reprints = 0 });
             return data;
         }
 
-        // 4. API Reprint Reasons (Pie Chart)
+        // 4. API Reprint Reasons
         public async Task<List<ReprintReasonDto>> GetReprintReasonsChartAsync(ReportFilterDto filter)
         {
             var (_, _, refundQ, _) = PrepareQueries(filter);
-            // Giả sử lấy lý do từ Refund (hoặc bảng Issue riêng)
+            
             var raw = await refundQ.GroupBy(r => r.Reason)
                 .Select(g => new { Name = g.Key, Value = g.Count() })
                 .OrderByDescending(x => x.Value).Take(5).ToListAsync();
@@ -190,7 +188,6 @@ namespace CB_Gift.Services.Reports
                 })
                 .OrderByDescending(x => x.Revenue).Take(5).ToListAsync();
 
-            // Lấy tên seller
             var ids = rawData.Select(x => x.Id).ToList();
             var names = await _context.Users.Where(u => ids.Contains(u.Id))
                 .ToDictionaryAsync(u => u.Id, u => u.FullName ?? u.UserName);
@@ -207,12 +204,10 @@ namespace CB_Gift.Services.Reports
         }
         public async Task<IEnumerable<SellerDto>> GetAllSellersAsync()
         {
-            // 1. Lấy tất cả user có role Seller
             var sellers = await _userManager.GetUsersInRoleAsync("Seller");
 
-            // 2. Lọc lấy user đang active và map sang DTO
             return sellers
-                .Where(user => user.IsActive) // <--- THÊM DÒNG NÀY
+                .Where(user => user.IsActive) 
                 .Select(user => new SellerDto
                 {
                     SellerId = user.Id,
@@ -220,7 +215,6 @@ namespace CB_Gift.Services.Reports
                 })
                 .ToList();
         }
-        // --- HELPER: Chuẩn bị Query (DRY - Don't Repeat Yourself) ---
         private IQueryable<Order> PrepareOrderQuery(ReportFilterDto filter)
         {
             var fromDate = filter.StartDate.Date;
@@ -246,7 +240,7 @@ namespace CB_Gift.Services.Reports
              .CountAsync();
 
             // Backlog: Đơn đang xử lý (Status từ 2 đến 7: NEED_DESIGN -> IN_PROD)
-            // Giả sử ID status khớp với PRODUCTION_STATUS_MAP bạn gửi
+            // Giả sử ID status khớp với PRODUCTION_STATUS_MAP
 
             var backlog = await query.CountAsync(o => o.StatusOrder >= 2 && o.StatusOrder <= 12);
 
@@ -260,7 +254,7 @@ namespace CB_Gift.Services.Reports
                 TotalOrders = totalOrders,
                 Backlog = backlog,
                 ProductionVelocity = velocity,
-                AvgFulfillmentTime = 3.5 // Tạm hard-code hoặc cần tính toán phức tạp từ Log
+                AvgFulfillmentTime = 3.5 
             };
         }
 
@@ -284,7 +278,7 @@ namespace CB_Gift.Services.Reports
         // API 3: Incoming vs Outgoing (Line Chart)
         public async Task<List<IncomingOutgoingDto>> GetIncomingOutgoingChartAsync(ReportFilterDto filter)
         {
-            // Incoming: Dựa trên CreationDate (Lấy từ PrepareOrderQuery)
+            // Dựa trên CreationDate (Lấy từ PrepareOrderQuery)
             var incomingQuery = PrepareOrderQuery(filter);
             var incomingData = await incomingQuery
                 .GroupBy(o => o.CreationDate.Value.Date)
