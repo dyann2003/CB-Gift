@@ -13,6 +13,7 @@
     public class KpiDto
     {
         public decimal TotalRevenue { get; set; }
+        public decimal NetRevenue { get; set; }
         public decimal CashCollected { get; set; }
         public decimal OutstandingDebt { get; set; }
         public decimal TotalRefunds { get; set; }
