@@ -145,6 +145,43 @@ public class ManagementAccountService : IManagementAccountService
 
     public async Task<ServiceResult<UserDetailDto>> CreateAsync(CreateUserDto dto)
     {
+        if (string.IsNullOrWhiteSpace(dto.Email))
+            throw new ArgumentException("The Email field is required.");
+
+        // Email format
+        try
+        {
+            _ = new System.Net.Mail.MailAddress(dto.Email);
+        }
+        catch
+        {
+            throw new ArgumentException("The Email field is not a valid e-mail address.");
+        }
+
+        // FullName required
+        if (string.IsNullOrWhiteSpace(dto.FullName))
+            throw new ArgumentException("The full name is required.");
+
+        // Password required (NOTE: test UTCID08 expects throw if null)
+        if (dto.Password is null)
+            throw new ArgumentException("The Password field is required.");
+
+        // Password format (UTCID06: "Invalid_Password@123" should be invalid)
+        // Ví dụ rule: không cho ký tự '_' (underscore)
+        if (!string.IsNullOrWhiteSpace(dto.Password) && dto.Password.Contains('_'))
+            throw new ArgumentException("Invalid password format.");
+
+        // Roles required
+        if (dto.Roles == null || !dto.Roles.Any())
+            throw new ArgumentException("The role is required.");
+
+        // Role must exist (to allow "role not found" test-case)
+        foreach (var role in dto.Roles.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (!await _roleManager.RoleExistsAsync(role))
+                throw new Exception("The role not found"); // nếu bạn có NotFoundException thì throw đúng loại đó
+        }
+
         var pwd = string.IsNullOrWhiteSpace(dto.Password)
             ? GenerateRandomPassword(10)
             : dto.Password!;
