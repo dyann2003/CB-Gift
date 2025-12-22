@@ -280,7 +280,7 @@ builder.Services.AddQuartz(q =>
         .WithIdentity("monthlyInvoiceTrigger", "InvoiceTriggers")
         .WithSchedule(
             CronScheduleBuilder
-                .MonthlyOnDayAndHourAndMinute(22, 20, 15)
+                .MonthlyOnDayAndHourAndMinute(23, 16, 30)
                 .InTimeZone(vietnamTimeZone)
                 .WithMisfireHandlingInstructionFireAndProceed()
         )
