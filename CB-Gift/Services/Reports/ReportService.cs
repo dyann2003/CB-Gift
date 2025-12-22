@@ -81,7 +81,7 @@ namespace CB_Gift.Services.Reports
 
             //  TIỀN ĐÃ THU
             var cashCollected = await paymentQ.SumAsync(p => p.Amount);
-
+            var netCash= cashCollected- totalRefunds; // số tiền thực tế nhận được trừ đi refund
             var totalOrders = await orderQ.CountAsync();
             var reprintCount = await orderQ.CountAsync(o => o.StatusOrder == 11);
             var reprintRate = totalOrders > 0
@@ -92,7 +92,7 @@ namespace CB_Gift.Services.Reports
             {
                 NetRevenue  = Math.Max(0, netRevenue), // NET REVENUE
                 TotalRevenue = grossRevenue,
-                CashCollected = cashCollected,
+                CashCollected = netCash,  // số tiền thực tế nhận được trừ đi refund
                 OutstandingDebt = 0, 
                 TotalRefunds = totalRefunds,
                 ReprintRate = reprintRate

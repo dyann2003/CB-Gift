@@ -26,7 +26,7 @@ namespace CB_Gift.Jobs
 
             // 2. Gọi phương thức service
             // "system" là User ID đại diện cho việc Job tự động tạo
-            await _invoiceService.RunMonthlyInvoiceCreationJobAsync("system", year, month);
+            await _invoiceService.RunMonthlyInvoiceCreationJobAsync("b6117d90-95b8-4adc-be57-697437045a18", year, month);
         }
     }
 }
