@@ -86,7 +86,7 @@ public class InvoiceService : IInvoiceService
 
                 uninvoicedOrders = requestedOrders;
             }
-            // KỊCH BẢN 2: TẠO HÓA ĐƠN THEO NGÀY THÁNG (LOGIC CŨ)
+            // KỊCH BẢN 2: TẠO HÓA ĐƠN THEO NGÀY THÁNG
             else if (request.StartDate.HasValue && request.EndDate.HasValue)
             {
                 uninvoicedOrders = await _context.Orders
@@ -154,7 +154,7 @@ public class InvoiceService : IInvoiceService
                 // Sử dụng ngày của đơn hàng đầu tiên và cuối cùng nếu tạo theo OrderID
                 InvoicePeriodStart = request.StartDate ?? uninvoicedOrders.Min(o => o.OrderDate),
                 InvoicePeriodEnd = request.EndDate ?? uninvoicedOrders.Max(o => o.OrderDate),
-                DueDate = (request.EndDate ?? uninvoicedOrders.Max(o => o.OrderDate)).AddDays(15), // DueDate cong 15 ngay.
+                DueDate = DateTime.UtcNow.AddDays(15), // ngày tạo hóa đơn + 15 ngày = Duedate. DueDate cong 15 ngay.
                 Subtotal = subtotal,
                 DiscountAmount = discountAmount,  
                 TotalAmount = totalAmount,         
@@ -196,18 +196,46 @@ public class InvoiceService : IInvoiceService
                     "NewInvoiceCreated",
                     newInvoice // Gửi đi đối tượng hóa đơn vừa tạo
                 );
-                // 3. Gửi thông báo (chuông) đến Staff
-                await _notificationService.CreateAndSendNotificationAsync(
-                    staffId, // ID của nhân viên thực hiện
-                    $"Bạn đã tạo thành công hóa đơn #{newInvoice.InvoiceNumber} cho Seller.",
-                    $"/manager/invoices/{newInvoice.InvoiceId}" // ⚠️ Lưu ý: Hãy sửa đường dẫn này theo route FE của Staff/Manager
-                );
+                if (staffId == "system")
+                {
+                    // --- TRƯỜNG HỢP CHẠY TỰ ĐỘNG ---
+                    // Tìm tất cả ID của người dùng có role Staff hoặc Manager
+                    var recipientIds = await _context.UserRoles
+                        .Join(_context.Roles,
+                              ur => ur.RoleId,
+                              r => r.Id,
+                              (ur, r) => new { ur.UserId, RoleName = r.Name })
+                        .Where(x => x.RoleName == "Staff" || x.RoleName == "Manager")
+                        .Select(x => x.UserId)
+                        .Distinct()
+                        .ToListAsync();
 
-                // 4. Gửi sự kiện real-time đến Staff (để cập nhật UI danh sách hóa đơn ngay lập tức)
-                await _hubContext.Clients.Group($"user_{staffId}").SendAsync(
-                    "InvoiceCreatedSuccess", // Tên sự kiện có thể khác để Staff xử lý riêng
-                    newInvoice
-                );
+                    if (recipientIds.Any())
+                    {
+                        var notiMessage = $"Hệ thống đã tự động tạo hóa đơn #{newInvoice.InvoiceNumber} (Tháng {newInvoice.InvoicePeriodStart:MM/yyyy}).";
+                        var notiLink = $"/manager/invoices/{newInvoice.InvoiceId}";
+
+                        // Tạo thông báo cho từng người
+                        foreach (var userId in recipientIds)
+                        {
+                            await _notificationService.CreateAndSendNotificationAsync(
+                                userId,
+                                notiMessage,
+                                notiLink
+                            );
+                        }
+                    }
+                }
+                else
+                {
+                    // --- TRƯỜNG HỢP CHẠY TAY (User cụ thể) ---
+                    // Chỉ báo cho người vừa ấn nút
+                    await _notificationService.CreateAndSendNotificationAsync(
+                        staffId,
+                        $"Bạn đã tạo thành công hóa đơn #{newInvoice.InvoiceNumber} cho Seller.",
+                        $"/manager/invoices/{newInvoice.InvoiceId}"
+                    );
+                }
             }
             catch (Exception ex)
             {
@@ -422,18 +450,17 @@ public class InvoiceService : IInvoiceService
         // 3. Lấy tổng số (total) SAU KHI đã lọc
         var total = await query.CountAsync();
 
-        // 4. BÂY GIỜ mới áp dụng Include, Sắp xếp, Phân trang, và Chọn cột
         var invoices = await query
-            .Include(i => i.AppliedDiscount) // <-- Include ở đây
+            .Include(i => i.AppliedDiscount) 
             .OrderByDescending(i => i.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(i => new InvoiceSummaryDto // Ánh xạ thủ công
+            .Select(i => new InvoiceSummaryDto
             {
                 InvoiceId = i.InvoiceId,
                 InvoiceNumber = i.InvoiceNumber,
                 SellerUserId = i.SellerUserId,
-                SellerName = null, // Không cần tên của chính mình
+                SellerName = null, 
                 CreatedAt = i.CreatedAt,
                 DueDate = i.DueDate,
                 TotalAmount = i.TotalAmount,
@@ -489,12 +516,12 @@ public class InvoiceService : IInvoiceService
 
         // 4. BÂY GIỜ mới áp dụng Include, Sắp xếp, Phân trang, và Chọn cột
         var invoices = await query
-            .Include(i => i.SellerUser)       // <-- Include ở đây
-            .Include(i => i.AppliedDiscount)  // <-- Include ở đây
+            .Include(i => i.SellerUser)       
+            .Include(i => i.AppliedDiscount)  
             .OrderByDescending(i => i.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(i => new InvoiceSummaryDto // Ánh xạ thủ công
+            .Select(i => new InvoiceSummaryDto 
             {
                 InvoiceId = i.InvoiceId,
                 InvoiceNumber = i.InvoiceNumber,
@@ -712,7 +739,6 @@ public class InvoiceService : IInvoiceService
                 return;
             }
 
-            // Từ đây, code gần như giữ nguyên, chỉ thay `verifiedData` bằng `result`
             log.ProcessingStatus = "Verified";
 
             // 1. LẤY PAYMENT ID TỪ KẾT QUẢ
@@ -786,8 +812,8 @@ public class InvoiceService : IInvoiceService
             {
                 // - Thanh toán một phần (CÔNG NỢ)
                 invoice.Status = "PartiallyPaid";
-                // Cộng thêm 15 ngày vào hạn thanh toán (DueDate)
-                invoice.DueDate = invoice.DueDate.AddDays(15);
+                // Cộng thêm 15 ngày vào hạn thanh toán tính từ ngày thanh toán lần 1
+                invoice.DueDate = DateTime.UtcNow.AddDays(15);
                 historyNote = $" (DueDate extended to {invoice.DueDate:dd/MM/yyyy})";
                 log.ProcessingStatus = "Processed_Partial";
             }
@@ -795,7 +821,7 @@ public class InvoiceService : IInvoiceService
             _context.InvoiceHistories.Add(new InvoiceHistory
             {
                 InvoiceId = invoice.InvoiceId,
-                // [THAY ĐỔI] Dùng tên cổng động
+                //  Dùng tên cổng động
                 Action = $"Payment {payment.Amount:N0} received via {gatewayName}. (PaymentID: {payment.PaymentId}){historyNote}",
                 UserId = null
             });
@@ -846,7 +872,6 @@ public class InvoiceService : IInvoiceService
                 $"/seller/invoices/{invoice.InvoiceId}"
             );
 
-            // Gửi sự kiện real-time cập nhật Giao diện Hóa đơn (cho Seller)
             await _hubContext.Clients.Group($"user_{invoice.SellerUserId}").SendAsync(
                 "InvoiceUpdated",
                 new
@@ -908,7 +933,7 @@ public class InvoiceService : IInvoiceService
     //  - Logic cho GetSellerReceivablesAsync
     public async Task<PaginatedResult<SellerReceivablesDto>> GetSellerReceivablesAsync(
         string? searchTerm, string? sortColumn, string? sortDirection, int page, int pageSize,
-        decimal? minDebt, decimal? maxDebt, decimal? minSales, decimal? maxSales // [THÊM MỚI] Nhận tham số
+        decimal? minDebt, decimal? maxDebt, decimal? minSales, decimal? maxSales 
     )
     {
         // 1. Lấy thông tin tổng hợp từ Invoices, nhóm theo Seller
@@ -969,7 +994,6 @@ public class InvoiceService : IInvoiceService
         {
             query = query.Where(s => s.TotalSales <= maxSales.Value);
         }
-        // (Kết thúc phần thêm mới)
 
         // 5. Áp dụng Sắp xếp (Sorting)
         // (Mặc định sắp xếp theo công nợ giảm dần)
@@ -1012,7 +1036,7 @@ public class InvoiceService : IInvoiceService
         // Giả định: Bảng User của bạn là 'Users' và có 'FullName', 'PhoneNumber'
         var query = _context.Users
             .Join(sellerStats,
-                  user => user.Id,       // Key từ bảng Users
+                  user => user.Id,     
                   stats => stats.SellerId, // Key từ bảng sellerStats
                   (user, stats) => new SellerReceivablesDto
                   {
