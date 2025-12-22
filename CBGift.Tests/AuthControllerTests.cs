@@ -65,13 +65,13 @@ public class AuthControllerTests
     }
 
     private static (AuthController ctl,
-        DefaultHttpContext http,
-        Mock<UserManager<AppUser>> um,
-        Mock<SignInManager<AppUser>> sm,
-        Mock<ITokenService> tokens,
-        Mock<IAccountService> accounts,
-        Mock<IInvoiceService> invoice,
-        IConfiguration config) BuildSut()
+     DefaultHttpContext http,
+     Mock<UserManager<AppUser>> um,
+     Mock<SignInManager<AppUser>> sm,
+     Mock<ITokenService> tokens,
+     Mock<IAccountService> accounts,
+     Mock<IInvoiceService> invoice,
+     IConfiguration config) BuildSut()
     {
         var http = new DefaultHttpContext();
 
@@ -95,8 +95,13 @@ public class AuthControllerTests
             ControllerContext = new ControllerContext { HttpContext = http }
         };
 
+        // ✅ IMPORTANT: Remove constructor-time noise (e.g., SignInManager.Logger = null)
+        sm.Invocations.Clear();
+        um.Invocations.Clear();
+
         return (ctl, http, um, sm, tokens, accounts, invoice, config);
     }
+
 
     private void LogResult(string label, IActionResult result)
     {
