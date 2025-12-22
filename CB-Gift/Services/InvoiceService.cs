@@ -212,7 +212,15 @@ public class InvoiceService : IInvoiceService
 
                     if (recipientIds.Any())
                     {
-                        var notiMessage = $"Hệ thống đã tự động tạo hóa đơn #{newInvoice.InvoiceNumber} (Tháng {newInvoice.InvoicePeriodStart:MM/yyyy}).";
+                        var vietnamTimeZone = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
+
+                        var vietnamNow = TimeZoneInfo.ConvertTimeFromUtc(
+                            DateTime.UtcNow,
+                            vietnamTimeZone
+                        );
+
+                        //var notiMessage = $"Hệ thống đã tự động tạo hóa đơn #{newInvoice.InvoiceNumber} vào lúc: {vietnamNow:HH:mm dd/MM/yyyy}. Vui lòng kiểm tra. (Tháng {newInvoice.InvoicePeriodStart:MM/yyyy}).";
+                        var notiMessage = $"Hệ thống đã tự động tạo hóa đơn #{newInvoice.InvoiceNumber} vào lúc: {vietnamNow:HH:mm dd/MM/yyyy}. Vui lòng kiểm tra.";
                         var notiLink = $"/manager/invoices/{newInvoice.InvoiceId}";
 
                         // Tạo thông báo cho từng người
