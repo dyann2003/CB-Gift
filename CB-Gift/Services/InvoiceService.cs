@@ -236,11 +236,15 @@ public class InvoiceService : IInvoiceService
                 }
                 else
                 {
-                    // --- TRƯỜNG HỢP CHẠY TAY (User cụ thể) ---
-                    // Chỉ báo cho người vừa ấn nút
+                    var vietnamTimeZone = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
+
+                    var vietnamNow = TimeZoneInfo.ConvertTimeFromUtc(
+                        DateTime.UtcNow,
+                        vietnamTimeZone
+                    );
                     await _notificationService.CreateAndSendNotificationAsync(
                         staffId,
-                        $"Bạn đã tạo thành công hóa đơn #{newInvoice.InvoiceNumber} cho Seller.",
+                        $"Bạn đã tạo thành công hóa đơn #{newInvoice.InvoiceNumber} cho Seller vào lúc: {vietnamNow:HH:mm dd/MM/yyyy}. Vui lòng kiểm tra.",
                         $"/manager/invoices/{newInvoice.InvoiceId}"
                     );
                 }
